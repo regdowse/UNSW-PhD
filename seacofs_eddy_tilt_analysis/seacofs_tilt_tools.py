@@ -195,6 +195,63 @@ def angle_diff_180(a, b):
     return np.abs((a - b + 180.0) % 360.0 - 180.0)
 
 
+# def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
+#     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
+
+#     out = df.copy()
+#     out["f"] = grid.f[out.ic, out.jc]
+#     if core_mean:
+#         out = compute_core_mean(
+#             out, grid,
+#             fixed_field=grid.h,
+#             colname="h"
+#         )
+#     else:
+#         out["h"] = grid.h[out.ic, out.jc]
+
+#     dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
+#     dh_dN = -(np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy)
+#     dh_dE = -(np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy)
+#     if core_mean:
+#         out = compute_core_mean(
+#             out, grid,
+#             fixed_field=dh_dE,
+#             colname="dhdx"
+#         )
+#         out = compute_core_mean(
+#             out, grid,
+#             fixed_field=dh_dN,
+#             colname="dhdy"
+#         )
+#     else:
+#         out["dhdx"] = dh_dE[out.ic, out.jc]
+#         out["dhdy"] = dh_dN[out.ic, out.jc]
+
+#     dfdx, dfdy = phys_grad(grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
+#     df_dN = -(np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy)
+#     out["beta"] = df_dN[out.ic, out.jc]
+
+#     omega_f = out["w"] + out["f"]
+#     out['abs_vort'] = omega_f
+#     out['PV'] = omega_f / out["h"]
+    
+#     out["PV_grad_plan_x"] = 0.0
+#     out["PV_grad_plan_y"] = out["beta"] / out["h"]
+#     out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2
+#     out["PV_grad_topo_y"] = -omega_f * out["dhdy"] / out["h"] ** 2
+#     out["PV_grad_x"] = out["PV_grad_plan_x"] + out["PV_grad_topo_x"]
+#     out["PV_grad_y"] = out["PV_grad_plan_y"] + out["PV_grad_topo_y"]
+
+#     for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
+#         out[f"{prefix}_mag"] = np.hypot(out[f"{prefix}_x"], out[f"{prefix}_y"])
+#         out[f"{prefix}_theta"] = bearing_from_xy(out[f"{prefix}_x"], out[f"{prefix}_y"])
+
+#     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
+#     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
+#     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
+#     out["Ro"] = np.abs(out["w"] / out["f"])
+#     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
+#     return out
 def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
 
@@ -232,6 +289,8 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
     out["beta"] = df_dN[out.ic, out.jc]
 
     omega_f = out["w"] + out["f"]
+    out["abs_vort"] = omega_f
+    out["PV"] = omega_f / out["h"]
     out["PV_grad_plan_x"] = 0.0
     out["PV_grad_plan_y"] = out["beta"] / out["h"]
     out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2

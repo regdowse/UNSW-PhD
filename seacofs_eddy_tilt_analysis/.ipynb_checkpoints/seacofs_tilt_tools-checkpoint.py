@@ -195,6 +195,63 @@ def angle_diff_180(a, b):
     return np.abs((a - b + 180.0) % 360.0 - 180.0)
 
 
+# def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
+#     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
+
+#     out = df.copy()
+#     out["f"] = grid.f[out.ic, out.jc]
+#     if core_mean:
+#         out = compute_core_mean(
+#             out, grid,
+#             fixed_field=grid.h,
+#             colname="h"
+#         )
+#     else:
+#         out["h"] = grid.h[out.ic, out.jc]
+
+#     dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
+#     dh_dN = -(np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy)
+#     dh_dE = -(np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy)
+#     if core_mean:
+#         out = compute_core_mean(
+#             out, grid,
+#             fixed_field=dh_dE,
+#             colname="dhdx"
+#         )
+#         out = compute_core_mean(
+#             out, grid,
+#             fixed_field=dh_dN,
+#             colname="dhdy"
+#         )
+#     else:
+#         out["dhdx"] = dh_dE[out.ic, out.jc]
+#         out["dhdy"] = dh_dN[out.ic, out.jc]
+
+#     dfdx, dfdy = phys_grad(grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
+#     df_dN = -(np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy)
+#     out["beta"] = df_dN[out.ic, out.jc]
+
+#     omega_f = out["w"] + out["f"]
+#     out['abs_vort'] = omega_f
+#     out['PV'] = omega_f / out["h"]
+    
+#     out["PV_grad_plan_x"] = 0.0
+#     out["PV_grad_plan_y"] = out["beta"] / out["h"]
+#     out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2
+#     out["PV_grad_topo_y"] = -omega_f * out["dhdy"] / out["h"] ** 2
+#     out["PV_grad_x"] = out["PV_grad_plan_x"] + out["PV_grad_topo_x"]
+#     out["PV_grad_y"] = out["PV_grad_plan_y"] + out["PV_grad_topo_y"]
+
+#     for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
+#         out[f"{prefix}_mag"] = np.hypot(out[f"{prefix}_x"], out[f"{prefix}_y"])
+#         out[f"{prefix}_theta"] = bearing_from_xy(out[f"{prefix}_x"], out[f"{prefix}_y"])
+
+#     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
+#     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
+#     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
+#     out["Ro"] = np.abs(out["w"] / out["f"])
+#     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
+#     return out
 def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
 
@@ -232,6 +289,8 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
     out["beta"] = df_dN[out.ic, out.jc]
 
     omega_f = out["w"] + out["f"]
+    out["abs_vort"] = omega_f
+    out["PV"] = omega_f / out["h"]
     out["PV_grad_plan_x"] = 0.0
     out["PV_grad_plan_y"] = out["beta"] / out["h"]
     out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2
@@ -897,6 +956,42 @@ def match_old_eddies(sample_eddies_old, df_eddies_old, df_eddies, min_overlap_fr
             matches.append({"old_eddy": eddy_old, "new_eddy": np.nan, "overlap_frac": 0.0, "mean_dist_km": np.nan, "n_overlap": 0})
     return pd.DataFrame(matches)
 
+def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False):
+    """Return ocean-grid indices inside an eddy's core contour."""
+
+    if circle_region_flag:
+        if not (hasattr(row, "rmax") and np.isfinite(row.rmax) and row.rmax > 0):
+            return np.array([], dtype=int), np.array([], dtype=int)
+        q = np.eye(2)
+        threshold = float(row.rmax) ** 2
+    else:
+        if hasattr(row, "q11") and np.isfinite(row.q11):
+            q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
+        elif hasattr(row, "Q"):
+            q = np.asarray(row.Q, dtype=float)
+        else:
+            return np.array([], dtype=int), np.array([], dtype=int)
+        if q.shape != (2, 2) or not np.isfinite(q).all() or not np.isfinite(row.Rc) or row.Rc <= 0:
+            return np.array([], dtype=int), np.array([], dtype=int)
+        threshold = float(row.Rc) ** 2 / 2.0
+    eigenvalues = np.linalg.eigvalsh(q)
+    if not np.isfinite(eigenvalues).all() or eigenvalues.min() <= 0:
+        return np.array([], dtype=int), np.array([], dtype=int)
+    radius = np.sqrt(threshold / eigenvalues.min())
+    i0 = max(0, int(np.searchsorted(grid.x_grid, row.xc - radius, side="left")))
+    i1 = min(len(grid.x_grid), int(np.searchsorted(grid.x_grid, row.xc + radius, side="right")))
+    j0 = max(0, int(np.searchsorted(grid.y_grid, row.yc - radius, side="left")))
+    j1 = min(len(grid.y_grid), int(np.searchsorted(grid.y_grid, row.yc + radius, side="right")))
+    if i0 >= i1 or j0 >= j1:
+        return np.array([], dtype=int), np.array([], dtype=int)
+    ii, jj = np.meshgrid(np.arange(i0, i1), np.arange(j0, j1), indexing="ij")
+    dx = grid.x_grid[ii] - float(row.xc)
+    dy = grid.y_grid[jj] - float(row.yc)
+    rho2 = q[0, 0] * dx**2 + 2.0 * q[0, 1] * dx * dy + q[1, 1] * dy**2
+    use = (rho2 <= threshold) & grid.mask_rho[ii, jj].astype(bool)
+    return ii[use].astype(int), jj[use].astype(int)
+
+
 def compute_core_mean(
     df_data: pd.DataFrame,
     grid: Grid,
@@ -933,37 +1028,14 @@ def compute_core_mean(
         df_loc = df_loc.copy().reset_index(drop=False)
         core_vals = np.full(len(df_loc), np.nan)
         for idx, row in enumerate(df_loc.itertuples(index=False)):
-            dx = grid.X_grid - row.xc
-            dy = grid.Y_grid - row.yc
-            if circle_region_flag:
-                if hasattr(row, 'rmax') and np.isfinite(row.rmax):
-                    rho2 = (dx**2 + dy**2)
-                    core_mask = rho2 <= row.rmax**2
-                else:
-                    rho2 = np.full_like(dx, np.nan, dtype=float)
-            else:
-                if hasattr(row, 'q11') and np.isfinite(row.q11):
-                    rho2 = (
-                        row.q11 * dx**2
-                        + 2 * row.q12 * dx * dy
-                        + row.q22 * dy**2
-                    )
-                elif isinstance(row.Q, np.ndarray) and row.Q.shape == (2, 2) and np.isfinite(row.Q).all():
-                    rho2 = (
-                        row.Q[0, 0] * dx**2
-                        + 2 * row.Q[1, 0] * dx * dy
-                        + row.Q[1, 1] * dy**2
-                    )
-                else:
-                    rho2 = np.full_like(dx, np.nan, dtype=float)
-                core_mask = rho2 <= row.Rc**2 / 2
-            if not core_mask.any():
+            ii, jj = core_grid_indices(row, grid, circle_region_flag=circle_region_flag)
+            if not len(ii):
                 continue
             if mode_2d:
-                vals = field2d[core_mask]
+                vals = field2d[ii, jj]
             else:
                 t_idx = int(row.Day - base_day)
-                vals = data3d[:, :, t_idx][core_mask]
+                vals = data3d[ii, jj, t_idx]
             core_vals[idx] = np.nanmean(vals)
         chunks.append(pd.DataFrame({
             "Eddy": df_loc["Eddy"].to_numpy(),
@@ -1033,81 +1105,7 @@ def binned_median(x, y, v, xbins, ybins):
         out[j, i] = np.nanmedian(vals)
 
     return out
-    
-# def plot_binned_median_map(
-#     df_data: pd.DataFrame,
-#     grid: Grid,
-#     *,
-#     metric='Rc',
-#     vmin=0,
-#     vmax=120,
-#     rule='fd',
-#     levels_lat=[-40, -35, -30, -25],
-#     levels_lon=[150, 155, 160],
-#     cmaps={'AE': 'Reds', 'CE': 'Blues'},
-#     units='km',
-#     figsize=(9, 8)
-# ):
-#     df_data = df_data.copy()
-#     xbins = bin_edges_fd(pd.to_numeric(df_data.xc, errors='coerce').to_numpy(dtype=float), grid.X_grid, rule=rule)
-#     ybins = bin_edges_fd(pd.to_numeric(df_data.yc, errors='coerce').to_numpy(dtype=float), grid.Y_grid, rule=rule)
-
-#     norm = Normalize(vmin=vmin, vmax=vmax)
-
-#     fig, axs = plt.subplots(1, 2, figsize=figsize, sharey=True)
-
-#     for ax, cyc in zip(axs, ['AE', 'CE']):
-
-#         df = (
-#             df_data[df_data.Cyc.eq(cyc)]
-#             .dropna(subset=['xc', 'yc', metric])
-#             .sort_values(metric, kind='mergesort', ignore_index=True)
-#         )
-
-#         ax.contour(grid.X_grid, grid.Y_grid, grid.h, levels=[4000], colors='k')
-
-#         H = binned_median(
-#             df.xc.to_numpy(dtype=float),
-#             df.yc.to_numpy(dtype=float),
-#             df[metric].to_numpy(dtype=float),
-#             xbins,
-#             ybins
-#         )
-
-#         m = ax.pcolormesh(
-#             xbins, ybins, H,
-#             cmap=cmaps[cyc],
-#             norm=norm,
-#             shading='auto',
-#             rasterized=True
-#         )
-
-#         cb = fig.colorbar(m, ax=ax, location='top', shrink=0.9, pad=0.02)
-#         cb.set_label(fr'{cyc} median surface ${metric}$ ({units})', fontsize=12)
-#         cb.set_ticks(np.linspace(vmin, vmax, 5))
-
-#         ax.contourf(
-#             grid.X_grid, grid.Y_grid, np.where(grid.mask_rho == 0, 1, np.nan),
-#             levels=[0.5, 1.5], colors=['k'], alpha=0.5
-#         )
-
-#         c1 = ax.contour(grid.X_grid, grid.Y_grid, lat_rho, levels=levels_lat, colors='k', linewidths=0.5)
-#         ax.clabel(c1, fmt=lambda v: f"{-v:.0f}°S", inline=True, colors='k')
-
-#         c2 = ax.contour(grid.X_grid, grid.Y_grid, lon_rho, levels=levels_lon, colors='k', linewidths=0.5)
-#         ax.clabel(c2, fmt=lambda v: f"{v:.0f}°E", inline=True, colors='k')
-
-#         ax.axis('equal')
-#         ax.set_xlim(15, grid.X_grid.max())
-#         ax.set_ylim(grid.Y_grid.min(), grid.Y_grid.max())
-#         ax.set_xlabel('x (km)', fontsize=11)
-
-#     axs[0].set_ylabel('y (km)', fontsize=11)
-
-#     plt.tight_layout()
-#     plt.show()
-
-#     return fig, axs
+   
 def plot_binned_median_map(
     df_data: pd.DataFrame,
     grid: Grid,
@@ -1310,15 +1308,6 @@ def plot_pv_dominance(
     cb.set_label(clabel, fontsize=13)
 
     return fig, axs
-
-def circular_mean_deg_true_north(deg):
-    deg = np.asarray(deg)
-    r = np.deg2rad(deg)
-
-    C = np.mean(np.cos(r))
-    S = np.mean(np.sin(r))
-
-    return np.rad2deg(np.arctan2(S, C)) % 360
 
 def tilt_t(df_data, grid, add_field='PV_grad_mag', field_label='PV grad.',
            figsize=(10,20), nlargest=10, width_ratios=[3, 1]):
