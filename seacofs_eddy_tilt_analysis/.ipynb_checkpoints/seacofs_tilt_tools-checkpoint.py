@@ -1015,7 +1015,7 @@ def compute_core_mean(
             colname = "field_core"
         else:
             colname = f"{varname}"
-    df = df_data[~df_data["TiltDis"].isna()].copy()
+    df = df_data.copy()
     chunks = []
     if mode_2d:
         field2d = np.where(grid.mask_rho, fixed_field, np.nan)
