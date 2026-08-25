@@ -1,0 +1,84 @@
+paths:
+  # Directory containing outer_avg_*.nc model files.
+  model_root: /srv/scratch/z3533156/26year_BRAN2020
+  # Parent directory where all pipeline outputs are written.
+  output_root: /srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular
+  # Reference depth array used by vertical profile interpolation.
+  z_r: /srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy 
+  # Directory containing ESP_zonodo/functions.py for DOPPIO fitting.
+  esp_zonodo: /home/z5297792/ESP_zonodo
+
+files:
+  grid_reference: outer_avg_01461.nc
+  model_pattern: outer_avg_*.nc
+
+parallel:
+  # Number of model files to process at once for file-level stages.
+  workers: 16
+  # Use "process" for CPU-heavy work; use "thread" only when memory sharing is useful.
+  backend: process
+  # If true, existing output partitions are skipped on rerun.
+  skip_existing: false
+
+nencioli:
+  a: 4
+  b: 3
+  interpolation_resolution_km: 1.0
+
+surface_fit:
+  transect_radius_km: 30.0
+  rho_max_km: 200.0
+  rho_min_km: 30.0
+  # Reject surface candidates unless the fitted DOPPIO centre can be followed
+  # vertically to at least this depth.
+  require_vertical_profile: true
+  vertical_check_depth_m: 50.0
+  vertical_check_max_jump_km: 100.0
+  vertical_check_target_depths: null # preset is z_r[150,150,1:] i.e., center of model (x,y,z)
+  # Applied to w, Omega0, and Omega when surface_eddies partitions are written.
+  omega_units_scale: 1.0e-3
+  # Threshold is applied to the scaled surface_eddies Omega0 values.
+  omega0_abs_threshold: 5.0e-5
+  center_error_mad_threshold: 4.0
+  local_limit_factor: 3
+  out_core_fac: 1.75
+
+tracking:
+  length_scale_km: 50.0
+  omega0_scale: 1.0e-5
+  radius_threshold: 1.0
+  lookback_days: 4
+
+processing:
+  min_duration_days: 21
+  ar_max: 5.0
+  rc_max_km: 300.0
+  rc_r_ratio_max: 1.75
+  omega_abs_max: 5.0e-5
+  psi0_abs_max: 300.0
+  mean_radius_min_km: 15.0
+  max_outer_gap_days: null
+  date_origin: "1990-01-01"
+  file_start_fnumber: 1461
+  file_stride_days: 30
+  file_day_offset: 1462
+
+vertical_profiles:
+  transect_radius_km: 30.0
+  max_jump_km: 100.0
+  rho_max_km: 200.0
+  rho_min_km: 30.0
+  local_limit_factor: 3
+  out_core_fac: 1.75
+  max_depth_levels: null
+  target_depths: null # preset is z_r[150,150,1:] i.e., center of model
+
+tilt:
+  min_profile_depth_count: 3
+  min_track_length_days: 2
+  smoothing_days: 6
+  depth_interval_m: 10
+  max_depth_m: 1000
+  min_depth_range_m: 200
+  min_points: 5
+  bearing_offset_deg: 20.0

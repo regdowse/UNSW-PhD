@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seacofs-eddy-dataset"
+version = "0.1.0"
+description = "Modular, parallel SEACOFS eddy detection, tracking, vertical profile, and tilt pipeline."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "netCDF4",
+    "xarray",
+    "pyarrow",
+    "zarr",
+    "pyyaml",
+    "joblib",
+    "tqdm",
+]
+
+[project.scripts]
+seacofs-eddy = "seacofs_eddy_dataset.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
