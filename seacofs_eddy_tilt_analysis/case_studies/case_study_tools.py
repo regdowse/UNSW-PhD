@@ -221,7 +221,7 @@ def plot_topographic_transition(track: pd.DataFrame, grid, *, title=None):
         "Day", "lon", "lat", "h", "dhdx", "dhdy", "TiltDis", "TiltDir",
         "topo_plan_ratio", "topo_plan_ratio_smooth", "PV_grad_plan_mag",
         "PV_grad_topo_mag", "PV_grad_mag", "PV_grad_plan_theta",
-        "PV_grad_topo_theta", "PV_grad_theta", "w", "abs_vort", "Ro",
+        "PV_grad_topo_theta", "PV_grad_theta", "w", "PV",
     }
     missing = required - set(df.columns)
     if missing:
@@ -250,9 +250,11 @@ def plot_topographic_transition(track: pd.DataFrame, grid, *, title=None):
     axes[1].set_ylabel("Tilt distance (km)")
 
     axes[2].scatter(day, df["TiltDir"] % 360, c=df["topo_plan_ratio_smooth"],
-                    cmap="coolwarm", vmin=-2, vmax=2, s=22)
+                    cmap="coolwarm", vmin=-2, vmax=2, s=22, label='tilt theta')
+    axes[2].plot(day, df["PV_grad_theta"], color="black", label='PV_grad_theta')
     axes[2].set(ylim=(0, 360), yticks=[0, 90, 180, 270, 360],
-                ylabel="Tilt bearing (°)")
+                ylabel="Bearing (°)")
+    axes[2].legend(ncol=2, fontsize=8, frameon=False, loc="upper left")
 
     axes[3].semilogy(day, df["PV_grad_plan_mag"], label="Planetary", color="tab:blue")
     axes[3].semilogy(day, df["PV_grad_topo_mag"], label="Topographic", color="tab:orange")
@@ -260,11 +262,12 @@ def plot_topographic_transition(track: pd.DataFrame, grid, *, title=None):
     axes[3].set_ylabel("PV-gradient magnitude")
     axes[3].legend(ncol=3, fontsize=8, frameon=False)
 
-    axes[4].scatter(day, df["PV_grad_plan_theta"] % 360, s=14, label="Planetary")
-    axes[4].scatter(day, df["PV_grad_topo_theta"] % 360, s=14, label="Topographic")
-    axes[4].scatter(day, df["PV_grad_theta"] % 360, s=14, label="Total", color="black")
+    # axes[4].scatter(day, df["PV_grad_plan_theta"] % 360, s=14, label="Planetary")
+    # axes[4].scatter(day, df["PV_grad_topo_theta"] % 360, s=14, label="Topographic")
+    # axes[4].scatter(day, df["PV_grad_theta"] % 360, s=14, label="Total", color="black")
+    axes[4].scatter(day, df["dtheta_PV_grad"] % 360, s=14, label="Total", color="black")
     axes[4].set(ylim=(0, 360), yticks=[0, 90, 180, 270, 360],
-                ylabel="PV-gradient bearing (°)")
+                ylabel="|tilt - PV-gradient| bearing (°)")
     axes[4].legend(ncol=3, fontsize=8, frameon=False)
 
     axes[5].plot(day, df["h"], color="saddlebrown", label="Depth")
@@ -275,12 +278,12 @@ def plot_topographic_transition(track: pd.DataFrame, grid, *, title=None):
     axes[5].invert_yaxis()
 
     axes[6].plot(day, df["w"], label="Relative vorticity", color="tab:red")
-    axes[6].plot(day, df["abs_vort"], label="Absolute vorticity", color="black")
+    # axes[6].plot(day, df["PV"], label="Potential vorticity", color="black")
     axes[6].set_ylabel("Vorticity (s$^{-1}$)")
     axes[6].set_xlabel("Day")
     ax_ro = axes[6].twinx()
-    ax_ro.plot(day, df["Ro"], color="tab:green", alpha=0.65, label="Ro")
-    ax_ro.set_ylabel("Rossby number", color="tab:green")
+    ax_ro.plot(day, df["PV"], color="tab:green", alpha=0.65, label="PV")
+    ax_ro.set_ylabel("Potential vorticity", color="tab:green")
     axes[6].legend(ncol=2, fontsize=8, frameon=False, loc="upper left")
 
     for ax in axes:
