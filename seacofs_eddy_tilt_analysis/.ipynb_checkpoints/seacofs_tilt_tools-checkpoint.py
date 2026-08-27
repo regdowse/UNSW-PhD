@@ -632,6 +632,42 @@ def assign_six_regions(
     out["bin_id"] = out["bin_id"].astype(int)
     return out, bin_grid
 
+def lat_lon_contours(ax, grid,
+                     levels_lat=LEVELS_LAT,
+                     levels_lon=LEVELS_LON):
+    # Latitude contours
+    c1 = ax.contour(
+        grid.X_grid,
+        grid.Y_grid,
+        grid.lat_rho,
+        levels=levels_lat,
+        colors='k',
+        linewidths=0.5
+    )
+    ax.clabel(
+        c1,
+        fmt=lambda v: f"{-v:.0f}°S",
+        inline=True,
+        colors='k'
+    )
+
+    # Longitude contours
+    c2 = ax.contour(
+        grid.X_grid,
+        grid.Y_grid,
+        grid.lon_rho,
+        levels=levels_lon,
+        colors='k',
+        linewidths=0.5
+    )
+    ax.clabel(
+        c2,
+        fmt=lambda v: f"{v:.0f}°E",
+        inline=True,
+        colors='k'
+    )
+    return ax
+
 
 def rose_plot(
     df_data: pd.DataFrame,
@@ -860,12 +896,13 @@ def rose_plot(
             norm=norm_bins,
             alpha=0.25,
         )
-        c1 = ax.contour(grid.X_grid, grid.Y_grid, grid.lat_rho, levels=LEVELS_LAT,
-                        colors="k", linewidths=0.5, linestyles='-')
-        ax.clabel(c1, fmt=lambda v: f"{np.abs(v):.0f} °S", inline=True, colors="k")
-        c2 = ax.contour(grid.X_grid, grid.Y_grid, grid.lon_rho, levels=LEVELS_LON,
-                        colors="k", linewidths=0.5, linestyles='-')
-        ax.clabel(c2, fmt=lambda v: f"{v:.0f} °E", inline=True, colors="k")
+        # c1 = ax.contour(grid.X_grid, grid.Y_grid, grid.lat_rho, levels=LEVELS_LAT,
+        #                 colors="k", linewidths=0.5, linestyles='-')
+        # ax.clabel(c1, fmt=lambda v: f"{np.abs(v):.0f} °S", inline=True, colors="k")
+        # c2 = ax.contour(grid.X_grid, grid.Y_grid, grid.lon_rho, levels=LEVELS_LON,
+        #                 colors="k", linewidths=0.5, linestyles='-')
+        # ax.clabel(c2, fmt=lambda v: f"{v:.0f} °E", inline=True, colors="k")
+        ax = lat_lon_contours(ax, grid)
         ax.contour(grid.X_grid, grid.Y_grid, grid.h, levels=[4000], colors="k", linewidths=1)
         ax.contour(grid.X_grid, grid.Y_grid, region_mask_grid.astype(float), levels=[0.5],
                    colors="magenta", linewidths=2, linestyles='-')
@@ -1199,37 +1236,38 @@ def plot_binned_median_map(
             alpha=0.5
         )
 
-        # Latitude contours
-        c1 = ax.contour(
-            grid.X_grid,
-            grid.Y_grid,
-            grid.lat_rho,
-            levels=levels_lat,
-            colors='k',
-            linewidths=0.5
-        )
-        ax.clabel(
-            c1,
-            fmt=lambda v: f"{-v:.0f}°S",
-            inline=True,
-            colors='k'
-        )
+        ax = lat_lon_contours(ax, grid)
+        # # Latitude contours
+        # c1 = ax.contour(
+        #     grid.X_grid,
+        #     grid.Y_grid,
+        #     grid.lat_rho,
+        #     levels=levels_lat,
+        #     colors='k',
+        #     linewidths=0.5
+        # )
+        # ax.clabel(
+        #     c1,
+        #     fmt=lambda v: f"{-v:.0f}°S",
+        #     inline=True,
+        #     colors='k'
+        # )
 
-        # Longitude contours
-        c2 = ax.contour(
-            grid.X_grid,
-            grid.Y_grid,
-            grid.lon_rho,
-            levels=levels_lon,
-            colors='k',
-            linewidths=0.5
-        )
-        ax.clabel(
-            c2,
-            fmt=lambda v: f"{v:.0f}°E",
-            inline=True,
-            colors='k'
-        )
+        # # Longitude contours
+        # c2 = ax.contour(
+        #     grid.X_grid,
+        #     grid.Y_grid,
+        #     grid.lon_rho,
+        #     levels=levels_lon,
+        #     colors='k',
+        #     linewidths=0.5
+        # )
+        # ax.clabel(
+        #     c2,
+        #     fmt=lambda v: f"{v:.0f}°E",
+        #     inline=True,
+        #     colors='k'
+        # )
 
         ax.set_xlim(15, grid.X_grid.max())
         ax.set_ylim(grid.Y_grid.min(), grid.Y_grid.max())
