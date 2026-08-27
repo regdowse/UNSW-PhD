@@ -335,7 +335,8 @@ class PVAlignmentConfig:
     min_sustained_run: int = 5
     dominance_factor: float = 2.0
     angle_tolerance_deg: float = 45.0
-    min_open_ocean_depth_m: float = 2000.0
+    min_open_ocean_depth_m: float = 0.0
+    max_topo_depth_m: float = 2000.0
     min_tilt_distance_km: float = 5.0
 
 
@@ -389,10 +390,14 @@ def add_pv_alignment_diagnostics(
 
     threshold = float(np.log(config.dominance_factor))
     out["planetary_strong"] = out["topo_plan_ratio_smooth"] <= -threshold
-    out["topographic_strong"] = out["topo_plan_ratio_smooth"] >= threshold
     out["open_ocean_planetary"] = (
         out["planetary_strong"]
         & (pd.to_numeric(out["h"], errors="coerce") >= config.min_open_ocean_depth_m)
+    )
+    out["topographic_strong"] = out["topo_plan_ratio_smooth"] >= threshold
+    out["shallow_ocean_topographic"] = (
+        out["topographic_strong"]
+        & (pd.to_numeric(out["h"], errors="coerce") <= config.max_topo_depth_m)
     )
     out["signed_dtheta_PV_grad"] = signed_angle_difference(
         out["TiltDir"], out["PV_grad_theta"]
