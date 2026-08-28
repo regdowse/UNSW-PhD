@@ -195,63 +195,6 @@ def angle_diff_180(a, b):
     return np.abs((a - b + 180.0) % 360.0 - 180.0)
 
 
-# def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
-#     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
-
-#     out = df.copy()
-#     out["f"] = grid.f[out.ic, out.jc]
-#     if core_mean:
-#         out = compute_core_mean(
-#             out, grid,
-#             fixed_field=grid.h,
-#             colname="h"
-#         )
-#     else:
-#         out["h"] = grid.h[out.ic, out.jc]
-
-#     dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
-#     dh_dN = -(np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy)
-#     dh_dE = -(np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy)
-#     if core_mean:
-#         out = compute_core_mean(
-#             out, grid,
-#             fixed_field=dh_dE,
-#             colname="dhdx"
-#         )
-#         out = compute_core_mean(
-#             out, grid,
-#             fixed_field=dh_dN,
-#             colname="dhdy"
-#         )
-#     else:
-#         out["dhdx"] = dh_dE[out.ic, out.jc]
-#         out["dhdy"] = dh_dN[out.ic, out.jc]
-
-#     dfdx, dfdy = phys_grad(grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
-#     df_dN = -(np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy)
-#     out["beta"] = df_dN[out.ic, out.jc]
-
-#     omega_f = out["w"] + out["f"]
-#     out['abs_vort'] = omega_f
-#     out['PV'] = omega_f / out["h"]
-    
-#     out["PV_grad_plan_x"] = 0.0
-#     out["PV_grad_plan_y"] = out["beta"] / out["h"]
-#     out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2
-#     out["PV_grad_topo_y"] = -omega_f * out["dhdy"] / out["h"] ** 2
-#     out["PV_grad_x"] = out["PV_grad_plan_x"] + out["PV_grad_topo_x"]
-#     out["PV_grad_y"] = out["PV_grad_plan_y"] + out["PV_grad_topo_y"]
-
-#     for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
-#         out[f"{prefix}_mag"] = np.hypot(out[f"{prefix}_x"], out[f"{prefix}_y"])
-#         out[f"{prefix}_theta"] = bearing_from_xy(out[f"{prefix}_x"], out[f"{prefix}_y"])
-
-#     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
-#     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
-#     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
-#     out["Ro"] = np.abs(out["w"] / out["f"])
-#     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
-#     return out
 def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
 
@@ -454,27 +397,74 @@ def shared_bins(*arrays, min_bins: int = 12, max_bins: int = 500):
     return np.linspace(np.nanmin(vals), np.nanmax(vals), n + 1)
 
 
-def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel="Frequency", colors=("r", "b"),
-                  alpha=.8, xlim=None, ):
-    """Plot AE above zero and CE below zero using shared bins."""
+# def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel="Frequency", colors=("r", "b"),
+#                   alpha=.8, xlim=None, ):
+#     """Plot AE above zero and CE below zero using shared bins."""
+#     if xlim is not None:
+#         ae = ae[(ae>=xlim[0])&(ae<=xlim[1])]
+#         ce = ce[(ce>=xlim[0])&(ce<=xlim[1])]
+#     ae_counts, edges = np.histogram(np.asarray(ae, float)[np.isfinite(ae)], bins=bins)
+#     ce_counts, _ = np.histogram(np.asarray(ce, float)[np.isfinite(ce)], bins=bins)
+#     centers = 0.5 * (edges[:-1] + edges[1:])
+#     widths = np.diff(edges)
+#     ax.bar(centers, ae_counts, width=widths, align="center", color=colors[0], alpha=alpha, label="AE")
+#     ax.bar(centers, -ce_counts, width=widths, align="center", color=colors[1], alpha=alpha, label="CE")
+#     ax.axhline(0, color="0.3", lw=0.8)
+#     ax.set_xlabel(xlabel)
+#     ax.set_ylabel(ylabel)
+#     ax.spines["top"].set_visible(False)
+#     ax.spines["right"].set_visible(False)
+#     ylim_abs_max = max(np.abs(ax.get_ylim()))
+#     ax.set_ylim(-ylim_abs_max, ylim_abs_max)
+#     if xlim is not None:
+#         ax.set_xlim(xlim)
+#     return ax
+def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel=None,
+                  colors=("r", "b"), alpha=.8, xlim=None,
+                  normalize=False):
+    """Plot AE above zero and CE below zero using shared bins.
+
+    If normalize=True, each histogram is normalized independently
+    so that its bin heights sum to 1.
+    """
+    ae = np.asarray(ae, float)
+    ce = np.asarray(ce, float)
+
+    ae = ae[np.isfinite(ae)]
+    ce = ce[np.isfinite(ce)]
+
     if xlim is not None:
-        ae = ae[(ae>=xlim[0])&(ae<=xlim[1])]
-        ce = ce[(ce>=xlim[0])&(ce<=xlim[1])]
-    ae_counts, edges = np.histogram(np.asarray(ae, float)[np.isfinite(ae)], bins=bins)
-    ce_counts, _ = np.histogram(np.asarray(ce, float)[np.isfinite(ce)], bins=bins)
+        ae = ae[(ae >= xlim[0]) & (ae <= xlim[1])]
+        ce = ce[(ce >= xlim[0]) & (ce <= xlim[1])]
+
+    ae_counts, edges = np.histogram(ae, bins=bins)
+    ce_counts, _ = np.histogram(ce, bins=edges)
+
+    if normalize:
+        ae_counts = ae_counts / ae_counts.sum()
+        ce_counts = ce_counts / ce_counts.sum()
+
     centers = 0.5 * (edges[:-1] + edges[1:])
     widths = np.diff(edges)
-    ax.bar(centers, ae_counts, width=widths, align="center", color=colors[0], alpha=alpha, label="AE")
-    ax.bar(centers, -ce_counts, width=widths, align="center", color=colors[1], alpha=alpha, label="CE")
+
+    ax.bar(centers,  ae_counts, width=widths, align="center",
+           color=colors[0], alpha=alpha, label="AE")
+    ax.bar(centers, -ce_counts, width=widths, align="center",
+           color=colors[1], alpha=alpha, label="CE")
+
     ax.axhline(0, color="0.3", lw=0.8)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    ax.set_ylabel(ylabel or ("Probability" if normalize else "Frequency"))
+
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+
     ylim_abs_max = max(np.abs(ax.get_ylim()))
     ax.set_ylim(-ylim_abs_max, ylim_abs_max)
+
     if xlim is not None:
         ax.set_xlim(xlim)
+
     return ax
 
 

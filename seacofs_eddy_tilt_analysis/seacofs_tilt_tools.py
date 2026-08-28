@@ -397,27 +397,74 @@ def shared_bins(*arrays, min_bins: int = 12, max_bins: int = 500):
     return np.linspace(np.nanmin(vals), np.nanmax(vals), n + 1)
 
 
-def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel="Frequency", colors=("r", "b"),
-                  alpha=.8, xlim=None, ):
-    """Plot AE above zero and CE below zero using shared bins."""
+# def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel="Frequency", colors=("r", "b"),
+#                   alpha=.8, xlim=None, ):
+#     """Plot AE above zero and CE below zero using shared bins."""
+#     if xlim is not None:
+#         ae = ae[(ae>=xlim[0])&(ae<=xlim[1])]
+#         ce = ce[(ce>=xlim[0])&(ce<=xlim[1])]
+#     ae_counts, edges = np.histogram(np.asarray(ae, float)[np.isfinite(ae)], bins=bins)
+#     ce_counts, _ = np.histogram(np.asarray(ce, float)[np.isfinite(ce)], bins=bins)
+#     centers = 0.5 * (edges[:-1] + edges[1:])
+#     widths = np.diff(edges)
+#     ax.bar(centers, ae_counts, width=widths, align="center", color=colors[0], alpha=alpha, label="AE")
+#     ax.bar(centers, -ce_counts, width=widths, align="center", color=colors[1], alpha=alpha, label="CE")
+#     ax.axhline(0, color="0.3", lw=0.8)
+#     ax.set_xlabel(xlabel)
+#     ax.set_ylabel(ylabel)
+#     ax.spines["top"].set_visible(False)
+#     ax.spines["right"].set_visible(False)
+#     ylim_abs_max = max(np.abs(ax.get_ylim()))
+#     ax.set_ylim(-ylim_abs_max, ylim_abs_max)
+#     if xlim is not None:
+#         ax.set_xlim(xlim)
+#     return ax
+def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel=None,
+                  colors=("r", "b"), alpha=.8, xlim=None,
+                  normalize=False):
+    """Plot AE above zero and CE below zero using shared bins.
+
+    If normalize=True, each histogram is normalized independently
+    so that its bin heights sum to 1.
+    """
+    ae = np.asarray(ae, float)
+    ce = np.asarray(ce, float)
+
+    ae = ae[np.isfinite(ae)]
+    ce = ce[np.isfinite(ce)]
+
     if xlim is not None:
-        ae = ae[(ae>=xlim[0])&(ae<=xlim[1])]
-        ce = ce[(ce>=xlim[0])&(ce<=xlim[1])]
-    ae_counts, edges = np.histogram(np.asarray(ae, float)[np.isfinite(ae)], bins=bins)
-    ce_counts, _ = np.histogram(np.asarray(ce, float)[np.isfinite(ce)], bins=bins)
+        ae = ae[(ae >= xlim[0]) & (ae <= xlim[1])]
+        ce = ce[(ce >= xlim[0]) & (ce <= xlim[1])]
+
+    ae_counts, edges = np.histogram(ae, bins=bins)
+    ce_counts, _ = np.histogram(ce, bins=edges)
+
+    if normalize:
+        ae_counts = ae_counts / ae_counts.sum()
+        ce_counts = ce_counts / ce_counts.sum()
+
     centers = 0.5 * (edges[:-1] + edges[1:])
     widths = np.diff(edges)
-    ax.bar(centers, ae_counts, width=widths, align="center", color=colors[0], alpha=alpha, label="AE")
-    ax.bar(centers, -ce_counts, width=widths, align="center", color=colors[1], alpha=alpha, label="CE")
+
+    ax.bar(centers,  ae_counts, width=widths, align="center",
+           color=colors[0], alpha=alpha, label="AE")
+    ax.bar(centers, -ce_counts, width=widths, align="center",
+           color=colors[1], alpha=alpha, label="CE")
+
     ax.axhline(0, color="0.3", lw=0.8)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    ax.set_ylabel(ylabel or ("Probability" if normalize else "Frequency"))
+
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+
     ylim_abs_max = max(np.abs(ax.get_ylim()))
     ax.set_ylim(-ylim_abs_max, ylim_abs_max)
+
     if xlim is not None:
         ax.set_xlim(xlim)
+
     return ax
 
 
