@@ -159,7 +159,7 @@ def plot_direction(data):
             ax.set(xlim=(0,90), ylim=(0,histmax), xticks=[0,30,60,90],
                    xlabel='Tilt–major-axis angle (°)', ylabel='Probability per 5° bin (%)')
             if row == 0:
-                ax.set_title('Surface alignment', loc='left')
+                # ax.set_title('Surface alignment', loc='left')
             g = data['ar'].loc[data['ar'].Cyc.eq(cyc)]
             ax = axes[row, 1]
             # Equally spaced categorical classes avoid implying a fitted continuous curve.
@@ -170,7 +170,7 @@ def plot_direction(data):
             ax.tick_params(axis='x', labelsize=6.5)
             ax.axhline(0, color='.4', ls='--', lw=.8)
             if row == 0:
-                ax.set_title('Alignment vs deformation', loc='left')
+                # ax.set_title('Alignment vs deformation', loc='left')
             for xi, r in zip(x, g.itertuples()):
                 if np.isfinite(r.estimate):
                     ax.annotate(f'{r.eddies:,}', (xi,r.high), xytext=(0,5), textcoords='offset points',
@@ -187,7 +187,7 @@ def plot_direction(data):
                     va='top', ha='right', fontsize=7,
                     bbox=dict(facecolor='white', edgecolor='none', alpha=.85, pad=1))
             if row == 0:
-                ax.set_title('Alignment vs depth', loc='left')
+                # ax.set_title('Alignment vs depth', loc='left')
         for letter, ax in zip(string.ascii_lowercase, axes.flat):
             _panel(ax, letter)
         return fig
