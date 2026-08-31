@@ -29,6 +29,30 @@ class PublicationTests(unittest.TestCase):
         part=pub.eligible(frame.loc[frame.AxisRatio>2],min_days=5)
         self.assertEqual(part.Eddy.unique().tolist(),[2])
 
+    def test_ar_histograms_region_depth_and_class_boundaries(self):
+        rows=[]
+        for ar in [1.1, 1.3, 1.6, 2., 5., 6.]:
+            for eddy in range(3):
+                for day in range(5):
+                    for depth in [0, 100]:
+                        rows.append(dict(Eddy=f'{ar}_{eddy}',Day=day,Cyc='AE',ShapeDepth=depth,
+                                         Region='S1',AxisRatio=ar,TiltDis=20,Q_valid=True,
+                                         AlignmentDeg=0))
+        g=pd.DataFrame(rows)
+        r=pub.ar_histogram_data(g, regions=['S1','S2'], min_eddies=3,n_boot=30)
+        counts=r['coverage'].query("Cyc=='AE'")
+        self.assertEqual(counts.eddies.tolist(),[3,3,3,6])
+        self.assertEqual(counts.observations.tolist(),[15,15,15,30])
+        sums=r['histograms'].query("Cyc=='AE'").groupby('ar_class').estimate.sum()
+        np.testing.assert_allclose(sums,100.)
+        self.assertEqual(counts.label.iloc[-1],'≥2')
+        empty=pub.ar_histogram_data(g,regions=['U1'],min_eddies=3,n_boot=30)
+        self.assertFalse(empty['coverage'].plotted.any())
+        fig=pub.plot_ar_histograms(r)
+        self.assertEqual(len(fig.axes),2)
+        import matplotlib.pyplot as plt
+        plt.close(fig)
+
     def test_paired_depth_differences_and_sparse_plot(self):
         records=[]
         for eddy in range(4):

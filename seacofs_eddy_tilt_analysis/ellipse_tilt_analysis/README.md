@@ -74,3 +74,12 @@ CSV statistics and coverage, draft captions and settings to
 These ignored output files are generated on Katana and are not committed.
 Existing notebook cells and saved outputs were preserved when this section
 was added. New publication cells are delivered unexecuted.
+
+Section 11 adds separate 1x2 surface-angle distribution figures for all
+regions, shelf, and off-shelf. Each AE panel uses red shades and each CE
+panel blue shades, with darker lines for higher AR. The fixed 5-degree
+histograms use equal-eddy weights within each region/class, pointwise
+bootstrap bands, common y-limits, and explicit per-line sample counts.
+Set `ARH_SHOW_CI=False` to hide bands or `ARH_SAVE=True` to export the three
+figures, probability/coverage CSVs, captions and settings. No existing
+publication figures need to be rerun for this section.

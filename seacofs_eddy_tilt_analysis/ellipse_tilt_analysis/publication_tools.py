@@ -158,8 +158,7 @@ def plot_direction(data):
             ax.text(.96, .94, f'{cyc} · n = {n:,}', ha='right', va='top', transform=ax.transAxes, color=colour)
             ax.set(xlim=(0,90), ylim=(0,histmax), xticks=[0,30,60,90],
                    xlabel='Tilt–major-axis angle (°)', ylabel='Probability per 5° bin (%)')
-            if row == 0:
-                # ax.set_title('Surface alignment', loc='left')
+            # Column titles intentionally hidden.
             g = data['ar'].loc[data['ar'].Cyc.eq(cyc)]
             ax = axes[row, 1]
             # Equally spaced categorical classes avoid implying a fitted continuous curve.
@@ -169,8 +168,7 @@ def plot_direction(data):
                    ylim=(ymin,ymax), xlabel='Surface axis-ratio class', ylabel='Major-axis alignment score')
             ax.tick_params(axis='x', labelsize=6.5)
             ax.axhline(0, color='.4', ls='--', lw=.8)
-            if row == 0:
-                # ax.set_title('Alignment vs deformation', loc='left')
+            # Column titles intentionally hidden.
             for xi, r in zip(x, g.itertuples()):
                 if np.isfinite(r.estimate):
                     ax.annotate(f'{r.eddies:,}', (xi,r.high), xytext=(0,5), textcoords='offset points',
@@ -186,8 +184,7 @@ def plot_direction(data):
             ax.text(.96,label_y,f'Matched n = {n:,}', transform=ax.transAxes,
                     va='top', ha='right', fontsize=7,
                     bbox=dict(facecolor='white', edgecolor='none', alpha=.85, pad=1))
-            if row == 0:
-                # ax.set_title('Alignment vs depth', loc='left')
+            # Column titles intentionally hidden.
         for letter, ax in zip(string.ascii_lowercase, axes.flat):
             _panel(ax, letter)
         return fig
@@ -248,4 +245,80 @@ def plot_magnitude(data):
         ax.xaxis.set_major_locator(MaxNLocator(4))
         for letter, ax in zip(string.ascii_lowercase,axes):
             _panel(ax,letter)
+        return fig
+
+
+def ar_histogram_data(all_shapes, *, regions=None, min_ar=1.1, min_tilt=5,
+                      max_ar=5, ar_edges=(1.1, 1.3, 1.6, 2, np.inf),
+                      min_days=5, **bootstrap):
+    """Surface-only 5-degree distributions, equal weight within each AR class.
+
+    Region, direction QC and AR-class selection precede minimum-day filtering.
+    All classes use the same angle bins. An infinite final AR edge still
+    respects max_ar. Sparse classes remain in the audit with NaN estimates.
+    """
+    edges = np.asarray(ar_edges, float)
+    if (len(edges) < 2 or not np.isfinite(edges[:-1]).all()
+            or np.isnan(edges[-1]) or np.any(np.diff(edges) <= 0)
+            or edges[0] > min_ar or edges[-1] < max_ar):
+        raise ValueError('Increasing AR edges must cover the admitted AR range')
+    surface = all_shapes.loc[all_shapes.ShapeDepth.eq(0)]
+    if regions is not None:
+        surface = surface.loc[surface.Region.isin(regions)]
+    selected = et.select_rows(surface, directional=True, min_ar=min_ar,
+                               min_tilt=min_tilt, max_ar=max_ar)
+    selected = selected.loc[selected.TiltDis.gt(0)]
+    tables, coverage = [], []
+    for cyc in et.COLOURS:
+        group = selected.loc[selected.Cyc.eq(cyc)]
+        for i, (lo, hi) in enumerate(zip(edges[:-1], edges[1:])):
+            use = group.AxisRatio.ge(lo) & (group.AxisRatio.le(hi) if i == len(edges)-2 else group.AxisRatio.lt(hi))
+            part = eligible(group.loc[use], min_days)
+            label = f'≥{lo:g}' if np.isinf(hi) else f'{lo:g}–{hi:g}'
+            h = histogram_estimate(part, np.arange(0, 91, 5), **bootstrap)
+            h = h.assign(Cyc=cyc, ar_class=i, label=label, lower=lo, upper=hi,
+                         eddies=part.Eddy.nunique(), observations=len(part))
+            tables.append(h)
+            coverage.append(dict(Cyc=cyc, ar_class=i, label=label,
+                                 eddies=part.Eddy.nunique(), observations=len(part),
+                                 plotted=h.estimate.notna().any()))
+    return dict(histograms=pd.concat(tables, ignore_index=True), coverage=pd.DataFrame(coverage),
+                settings=dict(min_ar=min_ar, min_tilt=min_tilt, max_ar=max_ar,
+                              ar_edges=list(ar_edges), min_days=min_days, regions=regions,
+                              **bootstrap))
+
+
+def plot_ar_histograms(data, *, title='All regions', show_ci=True, ymax=None):
+    """One row, AE red shades / CE blue shades; darker means greater AR."""
+    table = data['histograms']
+    n_classes = len(data['settings']['ar_edges'])-1
+    if ymax is None:
+        peak = table['high' if show_ci else 'estimate'].max()
+        ymax = max(10., float(peak)*1.18) if np.isfinite(peak) else 10.
+    with plt.rc_context(STYLE):
+        fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.1), sharex=True, sharey=True,
+                                 layout='constrained')
+        for ax, cyc, cmap in zip(axes, ['AE', 'CE'], ['Reds', 'Blues']):
+            colours = plt.get_cmap(cmap)(np.linspace(.48, .9, n_classes))
+            for i in range(n_classes):
+                h = table.loc[table.Cyc.eq(cyc) & table.ar_class.eq(i)]
+                if h.empty or not h.estimate.notna().any():
+                    continue
+                label = f'{h.label.iloc[0]}  (n={int(h.eddies.iloc[0]):,})'
+                ax.plot(h.angle, h.estimate, color=colours[i], lw=1.6, label=label)
+                if show_ci:
+                    ax.fill_between(h.angle, h.low, h.high, color=colours[i], alpha=.1, lw=0)
+            ax.axhline(100/18, color='.45', ls='--', lw=.8, zorder=0)
+            ax.set(xlim=(0,90), ylim=(0,ymax), xticks=[0,15,30,45,60,75,90],
+                   xlabel='Tilt–major-axis angle (°)', title=cyc)
+            handles, labels = ax.get_legend_handles_labels()
+            if handles:
+                ax.legend(handles, labels, title='Axis ratio (eddy count)', frameon=False,
+                          loc='upper right', fontsize=7, title_fontsize=7)
+            else:
+                ax.text(.5,.5,'Insufficient sample',ha='center',transform=ax.transAxes)
+        axes[0].set_ylabel('Probability per 5° bin (%)')
+        for letter, ax in zip('ab', axes):
+            _panel(ax, letter)
+        fig.suptitle(title, fontsize=10)
         return fig
