@@ -157,7 +157,7 @@ def plot_direction(data):
             n = data['coverage'].query("Cyc == @cyc and sample == 'surface'").eddies.iloc[0]
             ax.text(.96, .94, f'{cyc} · n = {n:,}', ha='right', va='top', transform=ax.transAxes, color=colour)
             ax.set(xlim=(0,90), ylim=(0,histmax), xticks=[0,30,60,90],
-                   xlabel='Tilt–major-axis angle (°)', ylabel='Probability per 5° bin (%)')
+                   xlabel='Tilt–major-axis angle (°)', ylabel='Probability (%)')# per 5° bin (%)')
             # Column titles intentionally hidden.
             g = data['ar'].loc[data['ar'].Cyc.eq(cyc)]
             ax = axes[row, 1]
@@ -310,15 +310,15 @@ def plot_ar_histograms(data, *, title='All regions', show_ci=True, ymax=None):
                     ax.fill_between(h.angle, h.low, h.high, color=colours[i], alpha=.1, lw=0)
             ax.axhline(100/18, color='.45', ls='--', lw=.8, zorder=0)
             ax.set(xlim=(0,90), ylim=(0,ymax), xticks=[0,15,30,45,60,75,90],
-                   xlabel='Tilt–major-axis angle (°)', title=cyc)
+                   xlabel=r'$|\theta_{\text{tilt}}–\theta_MA$ (°)')
             handles, labels = ax.get_legend_handles_labels()
             if handles:
-                ax.legend(handles, labels, title='Axis ratio (eddy count)', frameon=False,
+                ax.legend(handles, labels, title=f'{cyc} axis ratio', frameon=False,
                           loc='upper right', fontsize=7, title_fontsize=7)
             else:
                 ax.text(.5,.5,'Insufficient sample',ha='center',transform=ax.transAxes)
-        axes[0].set_ylabel('Probability per 5° bin (%)')
+        axes[0].set_ylabel('Probability (%)')
         for letter, ax in zip('ab', axes):
-            _panel(ax, letter)
+            _panel(ax, f'{letter})')
         fig.suptitle(title, fontsize=10)
         return fig
