@@ -532,7 +532,7 @@ def build_n2_cache_xroms(
     model_root: Path | str | None = None,
     output_path: Path | str | None = None,
     *,
-    depths=(200, 500),
+    depths=(300, 500),
     rho0=1025.0,
     workers=4,
     point_batch_size=128,

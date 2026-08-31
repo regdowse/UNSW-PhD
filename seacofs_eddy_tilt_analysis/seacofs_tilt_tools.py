@@ -18,6 +18,9 @@ from scipy.spatial import cKDTree
 from scipy.stats import linregress
 from scipy.stats import binned_statistic_2d
 from matplotlib.colors import Normalize
+from scipy.ndimage import gaussian_filter1d
+
+
 
 DEFAULT_EDDY_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/processed/eddy_dataset_processed.parquet")
 DEFAULT_TILT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/tilt/tilt_dataset.parquet")
@@ -397,39 +400,60 @@ def shared_bins(*arrays, min_bins: int = 12, max_bins: int = 500):
     return np.linspace(np.nanmin(vals), np.nanmax(vals), n + 1)
 
 
-# def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel="Frequency", colors=("r", "b"),
-#                   alpha=.8, xlim=None, ):
-#     """Plot AE above zero and CE below zero using shared bins."""
+# def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel=None,
+#                   colors=("r", "b"), alpha=.8, xlim=None,
+#                   normalize=False):
+#     """Plot AE above zero and CE below zero using shared bins.
+
+#     If normalize=True, each histogram is normalized independently
+#     so that its bin heights sum to 1.
+#     """
+#     ae = np.asarray(ae, float)
+#     ce = np.asarray(ce, float)
+
+#     ae = ae[np.isfinite(ae)]
+#     ce = ce[np.isfinite(ce)]
+
 #     if xlim is not None:
-#         ae = ae[(ae>=xlim[0])&(ae<=xlim[1])]
-#         ce = ce[(ce>=xlim[0])&(ce<=xlim[1])]
-#     ae_counts, edges = np.histogram(np.asarray(ae, float)[np.isfinite(ae)], bins=bins)
-#     ce_counts, _ = np.histogram(np.asarray(ce, float)[np.isfinite(ce)], bins=bins)
+#         ae = ae[(ae >= xlim[0]) & (ae <= xlim[1])]
+#         ce = ce[(ce >= xlim[0]) & (ce <= xlim[1])]
+
+#     ae_counts, edges = np.histogram(ae, bins=bins)
+#     ce_counts, _ = np.histogram(ce, bins=edges)
+
+#     if normalize:
+#         ae_counts = ae_counts / ae_counts.sum()
+#         ce_counts = ce_counts / ce_counts.sum()
+
 #     centers = 0.5 * (edges[:-1] + edges[1:])
 #     widths = np.diff(edges)
-#     ax.bar(centers, ae_counts, width=widths, align="center", color=colors[0], alpha=alpha, label="AE")
-#     ax.bar(centers, -ce_counts, width=widths, align="center", color=colors[1], alpha=alpha, label="CE")
+
+#     ax.bar(centers,  ae_counts, width=widths, align="center",
+#            color=colors[0], alpha=alpha, label="AE")
+#     ax.bar(centers, -ce_counts, width=widths, align="center",
+#            color=colors[1], alpha=alpha, label="CE")
+
 #     ax.axhline(0, color="0.3", lw=0.8)
 #     ax.set_xlabel(xlabel)
-#     ax.set_ylabel(ylabel)
+#     ax.set_ylabel(ylabel or ("Probability" if normalize else "Frequency"))
+
 #     ax.spines["top"].set_visible(False)
 #     ax.spines["right"].set_visible(False)
+
 #     ylim_abs_max = max(np.abs(ax.get_ylim()))
 #     ax.set_ylim(-ylim_abs_max, ylim_abs_max)
+
 #     if xlim is not None:
 #         ax.set_xlim(xlim)
-#     return ax
-def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel=None,
-                  colors=("r", "b"), alpha=.8, xlim=None,
-                  normalize=False):
-    """Plot AE above zero and CE below zero using shared bins.
 
-    If normalize=True, each histogram is normalized independently
-    so that its bin heights sum to 1.
-    """
+#     return ax
+def mirrored_hist(ax, ae, ce, bins='fd', xlabel='', *, ylabel=None,
+                  colors=('r', 'b'), alpha=.45, xlim=None,
+                  normalize=False, smooth=True, sigma=1.2):
+    """Mirrored AE/CE histogram with optional automatic bins and smoothing."""
+
     ae = np.asarray(ae, float)
     ce = np.asarray(ce, float)
-
     ae = ae[np.isfinite(ae)]
     ce = ce[np.isfinite(ce)]
 
@@ -437,36 +461,44 @@ def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel=None,
         ae = ae[(ae >= xlim[0]) & (ae <= xlim[1])]
         ce = ce[(ce >= xlim[0]) & (ce <= xlim[1])]
 
-    ae_counts, edges = np.histogram(ae, bins=bins)
+    # Shared bin edges
+    edges = np.histogram_bin_edges(np.r_[ae, ce], bins=bins, range=xlim)
+
+    ae_counts, _ = np.histogram(ae, bins=edges)
     ce_counts, _ = np.histogram(ce, bins=edges)
 
     if normalize:
         ae_counts = ae_counts / ae_counts.sum()
         ce_counts = ce_counts / ce_counts.sum()
 
-    centers = 0.5 * (edges[:-1] + edges[1:])
+    centers = (edges[:-1] + edges[1:]) / 2
     widths = np.diff(edges)
 
-    ax.bar(centers,  ae_counts, width=widths, align="center",
-           color=colors[0], alpha=alpha, label="AE")
-    ax.bar(centers, -ce_counts, width=widths, align="center",
-           color=colors[1], alpha=alpha, label="CE")
+    ax.bar(centers,  ae_counts, widths, color=colors[0], alpha=alpha,
+           label='AE', edgecolor='none')
+    ax.bar(centers, -ce_counts, widths, color=colors[1], alpha=alpha,
+           label='CE', edgecolor='none')
 
-    ax.axhline(0, color="0.3", lw=0.8)
+    if smooth:
+        ae_smooth = gaussian_filter1d(ae_counts.astype(float), sigma)
+        ce_smooth = gaussian_filter1d(ce_counts.astype(float), sigma)
+
+        ax.plot(centers,  ae_smooth, color=colors[0], lw=2)
+        ax.plot(centers, -ce_smooth, color=colors[1], lw=2)
+
+    ax.axhline(0, color='0.3', lw=.8)
     ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel or ("Probability" if normalize else "Frequency"))
+    ax.set_ylabel(ylabel or ('Probability' if normalize else 'Frequency'))
 
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.spines[['top', 'right']].set_visible(False)
 
-    ylim_abs_max = max(np.abs(ax.get_ylim()))
-    ax.set_ylim(-ylim_abs_max, ylim_abs_max)
+    ymax = max(ae_counts.max(), ce_counts.max()) * 1.08
+    ax.set_ylim(-ymax, ymax)
 
     if xlim is not None:
         ax.set_xlim(xlim)
 
     return ax
-
 
 def choose_dir_bins_cardinal(*dfs, col: str = "TiltDir", min_bins: int = 8, max_bins: int = 36, min_avg_per_sector: int = 8):
     """Choose circular direction bins while keeping cardinal directions aligned."""
