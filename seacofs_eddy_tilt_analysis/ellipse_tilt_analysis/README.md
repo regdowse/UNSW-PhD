@@ -51,3 +51,26 @@ MPLBACKEND=Agg python3 -m unittest test_ellipse_tilt_tools.py
 
 Production data are not bundled. Locally validated notebook execution uses
 synthetic input and cannot establish the scientific result on Katana data.
+
+## Publication section
+
+Section 10 appends a six-panel alignment figure and a separate magnitude
+figure, plus observation-weighted and stricter-QC alignment sensitivity
+figures. `publication_tools.py` contains the associated plotting and bootstrap
+helpers. The section needs only the earlier imports and data loading through
+`all_shapes`; it does not depend on intermediate exploratory plots.
+
+The primary direction sample requires tilt >=5 km and AR >=1.1; magnitude
+plots retain small tilts and nearly circular ellipses. Estimates require
+five valid days per eddy within each actual sample/AR class and at least
+20 eddies. Unsupported bins are left blank and retain counts in the tables.
+The depth panels use identical eddy-days at all depths. Paired
+alignment-score differences relative to the surface are exported as well.
+Both weighting schemes resample whole eddies for uncertainty.
+
+`PUB_SAVE=True` writes vector PDFs (rasterized scatter points), 600 dpi PNGs,
+CSV statistics and coverage, draft captions and settings to
+`outputs/publication/` when run. Set it to `False` for a display-only pass.
+These ignored output files are generated on Katana and are not committed.
+Existing notebook cells and saved outputs were preserved when this section
+was added. New publication cells are delivered unexecuted.
