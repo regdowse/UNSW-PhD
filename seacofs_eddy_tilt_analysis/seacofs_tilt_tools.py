@@ -213,8 +213,8 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
         out["h"] = grid.h[out.ic, out.jc]
 
     dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
-    dh_dN = -(np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy)
-    dh_dE = -(np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy)
+    dh_dN = np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy
+    dh_dE = np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy
     if core_mean:
         out = compute_core_mean(
             out, grid,
@@ -231,7 +231,7 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
         out["dhdy"] = dh_dN[out.ic, out.jc]
 
     dfdx, dfdy = phys_grad(grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
-    df_dN = -(np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy)
+    df_dN = np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy
     out["beta"] = df_dN[out.ic, out.jc]
 
     omega_f = out["w"] + out["f"]
