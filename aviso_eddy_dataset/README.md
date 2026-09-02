@@ -75,6 +75,11 @@ Run the complete pipeline:
 aviso-eddy run-all --config aviso_eddy_dataset/config/example.yaml
 ```
 
+Alternatively, use the concise Katana control notebook at
+`aviso_eddy_dataset/notebooks/run_pipeline.ipynb` to load configuration, run
+individual or selected stages, and inspect detection, tracking, and processing
+outputs.
+
 Detection and surface fitting write one resumable Parquet partition per annual
 source file. Tracking reads every partition together, sorts by the continuous
 day coordinate, and therefore tracks across year boundaries.
