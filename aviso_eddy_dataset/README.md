@@ -85,6 +85,10 @@ After processing, open
 dataset overview, missing-value checks, lifetime and radius distributions,
 spatial and temporal coverage, and inspection of an individual eddy track.
 
+Use `aviso_eddy_dataset/notebooks/compare_original_esp_reconstruction.ipynb`
+to compare native AVISO `ugos`/`vgos` with the ESP reconstruction for three
+AEs and three CEs at early, middle, and late stages of their tracked lives.
+
 Detection and surface fitting write one resumable Parquet partition per annual
 source file. Tracking reads every partition together, sorts by the continuous
 day coordinate, and therefore tracks across year boundaries.
