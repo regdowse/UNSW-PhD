@@ -80,6 +80,11 @@ Alternatively, use the concise Katana control notebook at
 individual or selected stages, and inspect detection, tracking, and processing
 outputs.
 
+After processing, open
+`aviso_eddy_dataset/notebooks/analyse_processed_dataset.ipynb` for a simple
+dataset overview, missing-value checks, lifetime and radius distributions,
+spatial and temporal coverage, and inspection of an individual eddy track.
+
 Detection and surface fitting write one resumable Parquet partition per annual
 source file. Tracking reads every partition together, sorts by the continuous
 day coordinate, and therefore tracks across year boundaries.

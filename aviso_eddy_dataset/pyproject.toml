@@ -16,6 +16,7 @@ dependencies = [
     "pyarrow",
     "pyyaml",
     "joblib",
+    "matplotlib",
     "seacofs-eddy-dataset",
 ]
 
