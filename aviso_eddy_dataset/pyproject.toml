@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aviso-eddy-dataset"
+version = "0.1.0"
+description = "Surface eddy detection, DOPPIO fitting, tracking, and processing for AVISO altimetry."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "xarray",
+    "netCDF4",
+    "pyarrow",
+    "pyyaml",
+    "joblib",
+    "seacofs-eddy-dataset",
+]
+
+[project.scripts]
+aviso-eddy = "aviso_eddy_dataset.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "../seacofs_eddy_dataset_modular/src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
