@@ -576,7 +576,7 @@ def plot_windrose(ax, df: pd.DataFrame, *, title: str = "", mag_bins=(0, 10, 20,
     bottom = np.zeros(counts.shape[1])
     for i in range(counts.shape[0]):
         hi = "inf" if np.isinf(mag_bins[i + 1]) else f"{mag_bins[i + 1]:g}"
-        ax.bar(angles, counts[i], width=width, bottom=bottom, color=colors[i], edgecolor=(0, 0, 0, 0.2), label=f"{mag_bins[i]:g}-{hi}")
+        ax.bar(angles, counts[i], width=width, bottom=bottom, color=colors[i], edgecolor=(0, 0, 0, 0.2), label=f"[{mag_bins[i]:g}-{hi})")
         bottom += counts[i]
     ax.set_theta_zero_location("N")
     ax.set_theta_direction(-1)
