@@ -12,10 +12,15 @@ import pandas as pd
 
 SECONDS_PER_DAY = 86400.0
 DATE_ORIGIN = pd.Timestamp("1990-01-01")
-FIELD_NAMES = ("u_surface", "v_surface", "u_500", "v_500")
+FIELD_NAMES = (
+    "u_surface", "v_surface",
+    "u_200", "v_200",
+    "u_500", "v_500",
+)
 ANNULUS_COLUMNS = (
     "Eddy", "Day", "month", "ic", "jc",
     "ann_surface_east_ms", "ann_surface_north_ms",
+    "ann_200_east_ms", "ann_200_north_ms",
     "ann_500_east_ms", "ann_500_north_ms",
 )
 
@@ -24,8 +29,9 @@ ANNULUS_COLUMNS = (
 class BackgroundConfig:
     model_root: Path = Path("/srv/scratch/z3533156/26year_BRAN2020")
     cache_root: Path = Path(
-        "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset/background_flow_cache_v2"
+        "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset/background_flow_cache_all_eddies_v3"
     )
+    shallow_depth_m: float = 200.0
     depth_max_m: float = 500.0
     annulus_inner_rc: float = 1.5
     annulus_outer_rc: float = 3.0
@@ -136,7 +142,7 @@ def depth_weighted_mean(values_surface_first, weights):
     )
 
 
-def read_velocity_fields(dataset, t, weights, k_read):
+def read_velocity_fields(dataset, t, weights_by_depth, k_read):
     """Read geographic surface and thickness-weighted upper-ocean velocity."""
 
     u_surface = clean(dataset["u_eastward"][t, -1, :, :].T)
@@ -146,10 +152,14 @@ def read_velocity_fields(dataset, t, weights, k_read):
     # upper levels, transpose to x/y/s, then reverse to surface-to-bottom.
     u_sigma = np.flip(clean(dataset["u_eastward"][t, -k_read:, :, :].T), axis=2)
     v_sigma = np.flip(clean(dataset["v_northward"][t, -k_read:, :, :].T), axis=2)
-    local_weights = weights[..., :k_read]
-    u_500 = depth_weighted_mean(u_sigma, local_weights)
-    v_500 = depth_weighted_mean(v_sigma, local_weights)
-    return u_surface, v_surface, u_500, v_500
+    output = [u_surface, v_surface]
+    for depth in (200, 500):
+        local_weights = weights_by_depth[depth][..., :k_read]
+        output.extend([
+            depth_weighted_mean(u_sigma, local_weights),
+            depth_weighted_mean(v_sigma, local_weights),
+        ])
+    return tuple(output)
 
 
 def local_annulus_slices(row, x_grid, y_grid, config):
@@ -208,7 +218,7 @@ def _save_climatology_partial(path, sums, counts):
     np.savez_compressed(path, **payload)
 
 
-def process_model_file(model_path, eddy_rows, x_grid, y_grid, weights, k_read, config):
+def process_model_file(model_path, eddy_rows, x_grid, y_grid, weights_by_depth, k_read, config):
     """Process one model file once, producing restartable partial outputs."""
 
     annulus_path, climatology_path = _partition_paths(model_path, config)
@@ -220,7 +230,7 @@ def process_model_file(model_path, eddy_rows, x_grid, y_grid, weights, k_read, c
     with nc.Dataset(model_path) as dataset:
         days = np.rint(clean(dataset["ocean_time"][:]) / SECONDS_PER_DAY).astype(int)
         for t, day in enumerate(days):
-            fields = read_velocity_fields(dataset, t, weights, k_read)
+            fields = read_velocity_fields(dataset, t, weights_by_depth, k_read)
             month = (DATE_ORIGIN + pd.Timedelta(days=int(day))).month
             for name, field in zip(FIELD_NAMES, fields):
                 key = (month, name)
@@ -241,8 +251,10 @@ def process_model_file(model_path, eddy_rows, x_grid, y_grid, weights, k_read, c
                     "jc": int(row.jc),
                     "ann_surface_east_ms": values[0],
                     "ann_surface_north_ms": values[1],
-                    "ann_500_east_ms": values[2],
-                    "ann_500_north_ms": values[3],
+                    "ann_200_east_ms": values[2],
+                    "ann_200_north_ms": values[3],
+                    "ann_500_east_ms": values[4],
+                    "ann_500_north_ms": values[5],
                 })
 
     annulus_path.parent.mkdir(parents=True, exist_ok=True)
@@ -269,6 +281,22 @@ def reduce_monthly_climatology(partial_paths, output_path):
         suffix: np.divide(total, counts[suffix], out=np.full_like(total, np.nan), where=counts[suffix] > 0)
         for suffix, total in totals.items()
     }
+    # Also form an exact full-archive mean from the original sums and counts.
+    # This is count-weighted, rather than an unweighted mean of twelve monthly
+    # means, so unequal month lengths and missing values are handled correctly.
+    for name in FIELD_NAMES:
+        month_keys = [f"m{month:02d}_{name}" for month in range(1, 13)]
+        available = [key for key in month_keys if key in totals]
+        if not available:
+            continue
+        annual_total = sum((totals[key] for key in available), start=np.zeros_like(totals[available[0]]))
+        annual_count = sum((counts[key] for key in available), start=np.zeros_like(counts[available[0]]))
+        climatology[f"full_{name}"] = np.divide(
+            annual_total,
+            annual_count,
+            out=np.full_like(annual_total, np.nan),
+            where=annual_count > 0,
+        )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(output_path, **climatology)
     return climatology
@@ -286,8 +314,12 @@ def attach_climatology(annulus_table, climatology):
             field = climatology[key]
             values[use] = field[out.loc[use, "ic"].astype(int), out.loc[use, "jc"].astype(int)]
         component = "east" if name.startswith("u_") else "north"
-        level = "surface" if name.endswith("surface") else "500"
+        level = name.split("_", 1)[1]
         out[f"clim_{level}_{component}_ms"] = values
+        full_field = climatology[f"full_{name}"]
+        out[f"full_{level}_{component}_ms"] = full_field[
+            out["ic"].astype(int), out["jc"].astype(int)
+        ]
     return out
 
 
@@ -296,12 +328,23 @@ def build_background_cache(eddy_table, grid, config=BackgroundConfig(), workers=
 
     from joblib import Parallel, delayed
 
+    if not np.isclose(config.shallow_depth_m, 200.0) or not np.isclose(config.depth_max_m, 500.0):
+        raise ValueError("This cache schema labels its fixed depth ranges as 0-200 m and 0-500 m.")
+
     selected = eddy_table.copy()
     domain = analysis_domain_mask(selected, grid.x_grid, grid.y_grid, config.annulus_outer_rc)
-    weights = sigma_layer_weights(grid.z_r, grid.h, config.depth_max_m)
-    k_read = required_surface_sigma_levels(weights, domain)
-    print(f"Reading {k_read}/{weights.shape[2]} surface sigma levels.")
-    if k_read == weights.shape[2]:
+    weights_by_depth = {
+        200: sigma_layer_weights(grid.z_r, grid.h, config.shallow_depth_m),
+        500: sigma_layer_weights(grid.z_r, grid.h, config.depth_max_m),
+    }
+    levels_by_depth = {
+        depth: required_surface_sigma_levels(weights, domain)
+        for depth, weights in weights_by_depth.items()
+    }
+    k_read = max(levels_by_depth.values())
+    nz = grid.z_r.shape[2]
+    print(f"Required levels by depth: {levels_by_depth}; reading {k_read}/{nz} surface sigma levels.")
+    if k_read == nz:
         print("All sigma levels are required because sampled shallow columns lie entirely above the depth limit.")
 
     grouped = {}
@@ -319,7 +362,7 @@ def build_background_cache(eddy_table, grid, config=BackgroundConfig(), workers=
 
     results = Parallel(n_jobs=workers, prefer="processes", verbose=10)(
         delayed(process_model_file)(
-            path, rows, grid.x_grid, grid.y_grid, weights, k_read, config
+            path, rows, grid.x_grid, grid.y_grid, weights_by_depth, k_read, config
         )
         for path in model_paths
         for rows in [file_rows.get(path, empty_rows)]
