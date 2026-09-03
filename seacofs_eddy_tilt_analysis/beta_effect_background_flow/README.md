@@ -9,6 +9,7 @@ Files:
 - `build_background_cache.py`: command-line entry point for a Katana batch job.
 - `background_relative_beta_effect.ipynb`: residual propagation, vorticity-budget, and tilt tests.
 - `vorticity_loss_during_beta_drift.ipynb`: off-shelf beta-aligned drift, daily weakening, cumulative `Delta w = -Delta f`, and whole-eddy bootstrap tests.
+- `planetary_eddy_vertical_flow_shear.ipynb`: tests whether surface-to-deep zonal and meridional background-flow differences are consistent with the observed tilt of the planetary-dominated eddies.
 
 The primary background estimate is the instantaneous surface velocity in an annulus around each eddy. In the same model-file pass, the workflow calculates surface, thickness-weighted 0–200 m, and thickness-weighted 0–500 m velocities for the instantaneous annulus, monthly climatology, and exact count-weighted full-archive mean. The cache is built for all eddies; PV-dominance filtering is applied later in the analysis notebook.
 
@@ -17,7 +18,7 @@ The primary background estimate is the instantaneous surface velocity in an annu
 Run the cache builder on a compute node before executing the notebook:
 
 ```bash
-cd ~/UNSW-MRes/MRes/seacofs_eddy_tilt_analysis/beta_effect_background_flow
+cd ~/UNSW-PhD/seacofs_eddy_tilt_analysis/beta_effect_background_flow
 python build_background_cache.py --workers 4
 ```
 
