@@ -8,9 +8,6 @@ import pandas as pd
 
 KM_DAY_TO_M_S = 1000.0 / 86400.0
 METHODS = {
-    "ann_surface": ("ann_surface_east_ms", "ann_surface_north_ms"),
-    "ann_200": ("ann_200_east_ms", "ann_200_north_ms"),
-    "ann_500": ("ann_500_east_ms", "ann_500_north_ms"),
     "clim_surface": ("clim_surface_east_ms", "clim_surface_north_ms"),
     "clim_200": ("clim_200_east_ms", "clim_200_north_ms"),
     "clim_500": ("clim_500_east_ms", "clim_500_north_ms"),
@@ -101,7 +98,7 @@ def propagation_summary(df, n_boot=5000, vec='north'):
     )
 
 
-def vorticity_budget_summary(df, method="ann_surface", n_boot=5000):
+def vorticity_budget_summary(df, method="clim_surface", n_boot=5000):
     """Compare observed dw/dt with the planetary-advection term -beta*v_res."""
 
     out = df.sort_values(["Eddy", "Day"]).copy()

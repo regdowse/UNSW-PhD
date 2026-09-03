@@ -18,8 +18,7 @@ from background_flow_tools import BackgroundConfig, build_background_cache
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--annulus-inner", type=float, default=1.5)
-    parser.add_argument("--annulus-outer", type=float, default=3.0)
+    parser.add_argument("--clim-window-days", type=int, default=91)
     args = parser.parse_args()
 
     paths = tilt.Paths()
@@ -27,10 +26,7 @@ def main():
     eddies, _ = tilt.load_tilt_tables(paths)
     eddies = tilt.add_pv_gradient_terms(eddies, grid)
 
-    config = BackgroundConfig(
-        annulus_inner_rc=args.annulus_inner,
-        annulus_outer_rc=args.annulus_outer,
-    )
+    config = BackgroundConfig(climatology_window_days=args.clim_window_days)
     result = build_background_cache(eddies, grid, config=config, workers=args.workers)
     print(config.background_table_path)
     print(f"Rows: {len(result):,}; eddies: {result['Eddy'].nunique():,}")

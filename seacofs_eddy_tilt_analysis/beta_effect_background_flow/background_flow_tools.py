@@ -17,26 +17,15 @@ FIELD_NAMES = (
     "u_200", "v_200",
     "u_500", "v_500",
 )
-ANNULUS_COLUMNS = (
-    "Eddy", "Day", "month", "ic", "jc",
-    "ann_surface_east_ms", "ann_surface_north_ms",
-    "ann_200_east_ms", "ann_200_north_ms",
-    "ann_500_east_ms", "ann_500_north_ms",
-)
-
-
 @dataclass(frozen=True)
 class BackgroundConfig:
     model_root: Path = Path("/srv/scratch/z3533156/26year_BRAN2020")
     cache_root: Path = Path(
-        "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset/background_flow_cache_all_eddies_v3"
+        "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset/background_flow_cache_all_eddies_v4"
     )
     shallow_depth_m: float = 200.0
     depth_max_m: float = 500.0
-    annulus_inner_rc: float = 1.5
-    annulus_outer_rc: float = 3.0
-    min_annulus_points: int = 20
-    trimmed_percentiles: tuple[float, float] = (10.0, 90.0)
+    climatology_window_days: int = 91
 
     @property
     def partition_root(self) -> Path:
@@ -97,19 +86,13 @@ def sigma_layer_weights(z_r, h, depth_max_m=500.0):
     return weights
 
 
-def analysis_domain_mask(eddy_table, x_grid, y_grid, outer_factor=3.0):
-    """Union of rectangular outer-annulus windows used by selected eddies."""
+def analysis_domain_mask(eddy_table, x_grid, y_grid):
+    """Grid cells required to sample the climatology at eddy centres."""
 
     mask = np.zeros((len(x_grid), len(y_grid)), dtype=bool)
-    for row in eddy_table[["xc", "yc", "Rc"]].dropna().itertuples(index=False):
-        radius = float(outer_factor * row.Rc)
-        if not np.isfinite(radius) or radius <= 0:
-            continue
-        i0 = max(0, int(np.searchsorted(x_grid, row.xc - radius, side="left")))
-        i1 = min(len(x_grid), int(np.searchsorted(x_grid, row.xc + radius, side="right")))
-        j0 = max(0, int(np.searchsorted(y_grid, row.yc - radius, side="left")))
-        j1 = min(len(y_grid), int(np.searchsorted(y_grid, row.yc + radius, side="right")))
-        mask[i0:i1, j0:j1] = True
+    rows = eddy_table[["ic", "jc"]].dropna().astype(int)
+    valid = rows.ic.between(0, len(x_grid) - 1) & rows.jc.between(0, len(y_grid) - 1)
+    mask[rows.loc[valid, "ic"], rows.loc[valid, "jc"]] = True
     return mask
 
 
@@ -162,51 +145,8 @@ def read_velocity_fields(dataset, t, weights_by_depth, k_read):
     return tuple(output)
 
 
-def local_annulus_slices(row, x_grid, y_grid, config):
-    outer = float(config.annulus_outer_rc * row.Rc)
-    inner = float(config.annulus_inner_rc * row.Rc)
-    if not np.isfinite(outer) or outer <= 0:
-        return None
-    i0 = max(0, int(np.searchsorted(x_grid, row.xc - outer, side="left")))
-    i1 = min(len(x_grid), int(np.searchsorted(x_grid, row.xc + outer, side="right")))
-    j0 = max(0, int(np.searchsorted(y_grid, row.yc - outer, side="left")))
-    j1 = min(len(y_grid), int(np.searchsorted(y_grid, row.yc + outer, side="right")))
-    if i1 <= i0 or j1 <= j0:
-        return None
-    return slice(i0, i1), slice(j0, j1), inner, outer
-
-
-def annulus_backgrounds(row, fields, x_grid, y_grid, config):
-    """Calculate one cropped annulus mask and apply it to all fields."""
-
-    bounds = local_annulus_slices(row, x_grid, y_grid, config)
-    if bounds is None:
-        return [np.nan] * len(fields)
-    islice, jslice, inner, outer = bounds
-    x_local = x_grid[islice][:, None]
-    y_local = y_grid[jslice][None, :]
-    distance = np.hypot(x_local - row.xc, y_local - row.yc)
-    annulus = (distance >= inner) & (distance <= outer)
-    results = []
-    for field in fields:
-        values = field[islice, jslice]
-        use = annulus & np.isfinite(values)
-        if int(use.sum()) < config.min_annulus_points:
-            results.append(np.nan)
-            continue
-        selected = values[use]
-        low, high = np.nanpercentile(selected, config.trimmed_percentiles)
-        selected = selected[(selected >= low) & (selected <= high)]
-        results.append(float(np.nanmedian(selected)))
-    return results
-
-
 def _partition_paths(model_path, config):
-    stem = model_path.stem
-    return (
-        config.partition_root / "annulus" / f"{stem}.parquet",
-        config.partition_root / "climatology" / f"{stem}.npz",
-    )
+    return config.partition_root / "climatology" / f"{model_path.stem}.npz"
 
 
 def _save_climatology_partial(path, sums, counts):
@@ -218,15 +158,14 @@ def _save_climatology_partial(path, sums, counts):
     np.savez_compressed(path, **payload)
 
 
-def process_model_file(model_path, eddy_rows, x_grid, y_grid, weights_by_depth, k_read, config):
+def process_model_file(model_path, weights_by_depth, k_read, config):
     """Process one model file once, producing restartable partial outputs."""
 
-    annulus_path, climatology_path = _partition_paths(model_path, config)
-    if annulus_path.exists() and climatology_path.exists():
-        return str(annulus_path), str(climatology_path), "cached"
+    climatology_path = _partition_paths(model_path, config)
+    if climatology_path.exists():
+        return str(climatology_path), "cached"
 
-    day_groups = {int(day): part for day, part in eddy_rows.groupby("Day", sort=False)}
-    sums, counts, output_rows = {}, {}, []
+    sums, counts = {}, {}
     with nc.Dataset(model_path) as dataset:
         days = np.rint(clean(dataset["ocean_time"][:]) / SECONDS_PER_DAY).astype(int)
         for t, day in enumerate(days):
@@ -241,26 +180,8 @@ def process_model_file(model_path, eddy_rows, x_grid, y_grid, weights_by_depth, 
                 sums[key][valid] += field[valid]
                 counts[key][valid] += 1
 
-            for row in day_groups.get(int(day), pd.DataFrame()).itertuples(index=False):
-                values = annulus_backgrounds(row, fields, x_grid, y_grid, config)
-                output_rows.append({
-                    "Eddy": row.Eddy,
-                    "Day": int(day),
-                    "month": month,
-                    "ic": int(row.ic),
-                    "jc": int(row.jc),
-                    "ann_surface_east_ms": values[0],
-                    "ann_surface_north_ms": values[1],
-                    "ann_200_east_ms": values[2],
-                    "ann_200_north_ms": values[3],
-                    "ann_500_east_ms": values[4],
-                    "ann_500_north_ms": values[5],
-                })
-
-    annulus_path.parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(output_rows, columns=ANNULUS_COLUMNS).to_parquet(annulus_path, index=False)
     _save_climatology_partial(climatology_path, sums, counts)
-    return str(annulus_path), str(climatology_path), "computed"
+    return str(climatology_path), "computed"
 
 
 def reduce_monthly_climatology(partial_paths, output_path):
@@ -302,17 +223,39 @@ def reduce_monthly_climatology(partial_paths, output_path):
     return climatology
 
 
-def attach_climatology(annulus_table, climatology):
-    out = annulus_table.copy()
+def _window_month_weights(day, window_days):
+    """Number of days from each month in a centred climatological window."""
+
+    if window_days < 1 or window_days % 2 != 1:
+        raise ValueError("climatology_window_days must be a positive odd integer")
+    date = DATE_ORIGIN + pd.Timedelta(days=int(day))
+    # A non-leap reference year makes the climatological calendar circular.
+    ref_day = min(date.day, 28) if date.month == 2 else date.day
+    centre = pd.Timestamp(2001, date.month, ref_day)
+    offsets = np.arange(-(window_days // 2), window_days // 2 + 1)
+    months = pd.DatetimeIndex(centre + pd.to_timedelta(offsets, unit="D")).month
+    return np.bincount(months, minlength=13)[1:].astype(float)
+
+
+def attach_climatology(eddy_table, climatology, window_days=91):
+    """Attach a moving seasonal climatology and full-archive mean.
+
+    Monthly climatological fields are weighted by the number of days from
+    each month falling inside a centred window about the eddy day. This is a
+    smoothly moving monthly-resolution climatology, not a daily climatology.
+    """
+
+    out = eddy_table[["Eddy", "Day", "ic", "jc"]].copy()
+    weights = np.vstack([_window_month_weights(day, window_days) for day in out.Day])
     for name in FIELD_NAMES:
-        values = np.full(len(out), np.nan)
-        for month in range(1, 13):
-            use = out["month"].eq(month).to_numpy()
-            if not use.any():
-                continue
-            key = f"m{month:02d}_{name}"
-            field = climatology[key]
-            values[use] = field[out.loc[use, "ic"].astype(int), out.loc[use, "jc"].astype(int)]
+        monthly = np.column_stack([
+            climatology[f"m{month:02d}_{name}"][out.ic.to_numpy(int), out.jc.to_numpy(int)]
+            for month in range(1, 13)
+        ])
+        valid = np.isfinite(monthly)
+        numerator = np.nansum(monthly * weights, axis=1)
+        denominator = np.sum(weights * valid, axis=1)
+        values = np.divide(numerator, denominator, out=np.full(len(out), np.nan), where=denominator > 0)
         component = "east" if name.startswith("u_") else "north"
         level = name.split("_", 1)[1]
         out[f"clim_{level}_{component}_ms"] = values
@@ -332,7 +275,7 @@ def build_background_cache(eddy_table, grid, config=BackgroundConfig(), workers=
         raise ValueError("This cache schema labels its fixed depth ranges as 0-200 m and 0-500 m.")
 
     selected = eddy_table.copy()
-    domain = analysis_domain_mask(selected, grid.x_grid, grid.y_grid, config.annulus_outer_rc)
+    domain = analysis_domain_mask(selected, grid.x_grid, grid.y_grid)
     weights_by_depth = {
         200: sigma_layer_weights(grid.z_r, grid.h, config.shallow_depth_m),
         500: sigma_layer_weights(grid.z_r, grid.h, config.depth_max_m),
@@ -347,31 +290,17 @@ def build_background_cache(eddy_table, grid, config=BackgroundConfig(), workers=
     if k_read == nz:
         print("All sigma levels are required because sampled shallow columns lie entirely above the depth limit.")
 
-    grouped = {}
-    for day, part in selected.groupby("Day", sort=False):
-        grouped.setdefault(model_file_for_day(int(day), config.model_root), []).append(part)
-    file_rows = {path: pd.concat(parts, ignore_index=True) for path, parts in grouped.items()}
-
-    # The monthly climatology must include the complete archive, including
-    # months/days on which no selected eddy is present. Empty eddy tables still
-    # produce climatology partials but no annulus rows.
+    # The climatology includes the complete archive, including days without eddies.
     model_paths = sorted(config.model_root.glob("outer_avg_*.nc"))
     if not model_paths:
         raise FileNotFoundError(f"No outer_avg_*.nc files found in {config.model_root}")
-    empty_rows = selected.iloc[0:0].copy()
-
     results = Parallel(n_jobs=workers, prefer="processes", verbose=10)(
-        delayed(process_model_file)(
-            path, rows, grid.x_grid, grid.y_grid, weights_by_depth, k_read, config
-        )
+        delayed(process_model_file)(path, weights_by_depth, k_read, config)
         for path in model_paths
-        for rows in [file_rows.get(path, empty_rows)]
     )
-    annulus_paths = [result[0] for result in results]
-    climatology_paths = [result[1] for result in results]
+    climatology_paths = [result[0] for result in results]
     climatology = reduce_monthly_climatology(climatology_paths, config.monthly_climatology_path)
-    annulus = pd.concat([pd.read_parquet(path) for path in annulus_paths], ignore_index=True)
-    background = attach_climatology(annulus, climatology)
+    background = attach_climatology(selected, climatology, config.climatology_window_days)
     if background.duplicated(["Eddy", "Day"]).any():
         raise ValueError("Background output contains duplicate Eddy-Day rows.")
     config.cache_root.mkdir(parents=True, exist_ok=True)
