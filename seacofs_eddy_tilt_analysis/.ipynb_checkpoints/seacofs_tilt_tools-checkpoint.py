@@ -656,7 +656,8 @@ def assign_six_regions(
 
 def lat_lon_contours(ax, grid,
                      levels_lat=LEVELS_LAT,
-                     levels_lon=LEVELS_LON):
+                     levels_lon=LEVELS_LON,
+                     land_mask=False, land_clr='k'):
     # Latitude contours
     c1 = ax.contour(
         grid.X_grid,
@@ -688,6 +689,21 @@ def lat_lon_contours(ax, grid,
         inline=True,
         colors='k'
     )
+
+    if land_mask:
+        ax.contourf(
+            grid.X_grid, grid.Y_grid, np.where(grid.mask_rho == 0, 1, np.nan),
+            levels=[0.5, 1.5], colors=land_clr, alpha=.25
+        )
+        ax.contourf(
+            grid.X_grid,
+            grid.Y_grid,
+            np.where(grid.mask_rho == 0, 1, np.nan),
+            levels=[0.5, 1.5],
+            colors=land_clr,
+            alpha=0.5,
+        )
+    
     return ax
 
 
@@ -918,12 +934,6 @@ def rose_plot(
             norm=norm_bins,
             alpha=0.25,
         )
-        # c1 = ax.contour(grid.X_grid, grid.Y_grid, grid.lat_rho, levels=LEVELS_LAT,
-        #                 colors="k", linewidths=0.5, linestyles='-')
-        # ax.clabel(c1, fmt=lambda v: f"{np.abs(v):.0f} °S", inline=True, colors="k")
-        # c2 = ax.contour(grid.X_grid, grid.Y_grid, grid.lon_rho, levels=LEVELS_LON,
-        #                 colors="k", linewidths=0.5, linestyles='-')
-        # ax.clabel(c2, fmt=lambda v: f"{v:.0f} °E", inline=True, colors="k")
         ax = lat_lon_contours(ax, grid)
         ax.contour(grid.X_grid, grid.Y_grid, grid.h, levels=[4000], colors="k", linewidths=1)
         ax.contour(grid.X_grid, grid.Y_grid, region_mask_grid.astype(float), levels=[0.5],
@@ -1259,38 +1269,7 @@ def plot_binned_median_map(
         )
 
         ax = lat_lon_contours(ax, grid)
-        # # Latitude contours
-        # c1 = ax.contour(
-        #     grid.X_grid,
-        #     grid.Y_grid,
-        #     grid.lat_rho,
-        #     levels=levels_lat,
-        #     colors='k',
-        #     linewidths=0.5
-        # )
-        # ax.clabel(
-        #     c1,
-        #     fmt=lambda v: f"{-v:.0f}°S",
-        #     inline=True,
-        #     colors='k'
-        # )
-
-        # # Longitude contours
-        # c2 = ax.contour(
-        #     grid.X_grid,
-        #     grid.Y_grid,
-        #     grid.lon_rho,
-        #     levels=levels_lon,
-        #     colors='k',
-        #     linewidths=0.5
-        # )
-        # ax.clabel(
-        #     c2,
-        #     fmt=lambda v: f"{v:.0f}°E",
-        #     inline=True,
-        #     colors='k'
-        # )
-
+        
         ax.set_xlim(15, grid.X_grid.max())
         ax.set_ylim(grid.Y_grid.min(), grid.Y_grid.max())
         ax.set_xlabel('x (km)', fontsize=11)
@@ -1353,10 +1332,8 @@ def plot_pv_dominance(
         )
 
         if cyc == 'AE':
-            # ax.set_title(cyc, fontweight='bold', color='r')
             ax.text(100, 900, cyc, fontweight='bold', color='r', fontsize=14)
         else:
-            # ax.set_title(cyc, fontweight='bold', color='b')
             ax.text(100, 900, cyc, fontweight='bold', color='b', fontsize=14)
         ax.axis('equal')
         ax.set_xlabel('x (km)')
