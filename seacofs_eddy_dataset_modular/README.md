@@ -146,6 +146,14 @@ There is also a concise notebook control panel at
 `notebooks/run_pipeline.ipynb`. It loads `config/local.yaml`, runs selected
 pipeline stages, and shows quick output summaries.
 
+Two visual QC notebooks mirror the AVISO overlay workflow:
+
+- `notebooks/eddy_velocity_overlay.ipynb` plots one model day of rotated
+  SEACOFS surface velocity with processed eddy centres, IDs, and ESP contours.
+- `notebooks/generate_daily_overlay_frames.ipynb` writes one PNG per model day
+  to `output_root/daily_overlay_frames` and records the frame order in a CSV
+  manifest.
+
 All stages are now implemented as runnable Python modules. The long-running
 file-level stages (`detect_nencioli`, `fit_doppio_surface`, and
 `compute_vertical_profiles`) write one parquet partition per `outer_avg_*.nc`
