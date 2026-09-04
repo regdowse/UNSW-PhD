@@ -89,6 +89,12 @@ Use `aviso_eddy_dataset/notebooks/compare_original_esp_reconstruction.ipynb`
 to compare native AVISO `ugos`/`vgos` with the ESP reconstruction for three
 AEs and three CEs at early, middle, and late stages of their tracked lives.
 
+Use `aviso_eddy_dataset/notebooks/generate_daily_overlay_frames.ipynb` to
+render a continuous sequence of daily overlay PNGs under
+`/srv/scratch/z5297792/aviso_eddy_dataset/daily_overlay_frames`. It uses one
+shared speed colour scale, resumes by skipping existing frames, and writes a
+CSV manifest in animation order.
+
 Detection and surface fitting write one resumable Parquet partition per annual
 source file. Tracking reads every partition together, sorts by the continuous
 day coordinate, and therefore tracks across year boundaries.
