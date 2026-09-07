@@ -21,6 +21,15 @@ and full-archive means, are predefined sensitivity tests. Run
 `beta_effect_background_flow/01_build_background_cache.ipynb` first if the v4
 background cache is not already available on Katana.
 
+The primary mechanism subset is open-ocean planetary dominated: the centred
+seven-day median planetary PV-gradient magnitude must exceed the topographic
+term by at least a factor of two and bathymetry must be at least 3000 m. Strongly
+topographic days form the explicit complication/comparison group; mixed days
+are audited but not pooled with either extreme. Additional models distinguish
+within-eddy from between-eddy shear, allow a nonlinear shear response, test
+scaling with fitted rotation strength, and control lagged tests for the current
+tilt state, latitude and region.
+
 `shear_lift_tools.py` contains only the new shear-coordinate geometry, exact-lag
 matching and compact binned summaries. Positive cross-shear displacement means
 left of the upper-minus-deep shear vector. Polarity is not embedded in that
