@@ -420,72 +420,83 @@ def plot_paper_case(
     if missing:
         raise KeyError(f"Missing plotting columns: {sorted(missing)}")
     cyc = df["Cyc"].iloc[0]
-    day = df["Day"]
+    # Eddy-relative time makes cases with different model start dates comparable.
+    day = pd.to_numeric(df["Day"], errors="coerce")
+    age = day - day.iloc[0]
     fig = plt.figure(figsize=(14, 12), constrained_layout=True)
     gs = fig.add_gridspec(6, 2, width_ratios=[2.25, 1.35])
     axes = [fig.add_subplot(gs[i, 0]) for i in range(6)]
     ax_map = fig.add_subplot(gs[:, 1])
 
-    axes[0].scatter(day, df["TiltDir"] % 360, s=22, color="tab:purple", label="Tilt")
-    axes[0].scatter(day, df["PV_grad_theta"] % 360, s=18, marker="x",
-                    color="black", label="Signed PV gradient")
-    axes[0].scatter(day, df["expected_tilt_theta"] % 360, s=14, marker="|",
-                    color="tab:green", label=f"{cyc} expected target")
-    axes[0].set(ylim=(0, 360), yticks=[0, 90, 180, 270, 360],
-                ylabel="Compass bearing (deg)")
-    axes[0].legend(ncol=3, fontsize=8, frameon=False)
+    axes[0].plot(age, df["TiltDis"], "o-", ms=3, color="tab:purple",
+                 label="Tilt distance")
+    axes[0].set_ylabel("Tilt distance (km)")
+    axes[0].legend(frameon=False, fontsize=8)
 
     tol = config.angle_tolerance_deg
-    axes[1].plot(day, df["preference_error_deg"], "o-", ms=3, color="black")
-    axes[1].axhspan(0, tol, color="tab:green", alpha=0.12,
-                    label=f"Expected +/- {tol:g} deg")
-    axes[1].set(ylim=(0, 180), yticks=[0, 45, 90, 135, 180],
-                ylabel="Polarity-aware error (deg)")
-    axes[1].legend(frameon=False, fontsize=8)
-
     ratio_limit = np.log(config.dominance_factor)
-    axes[2].plot(day, df["topo_plan_ratio"], color="0.72", lw=1, label="Raw")
-    axes[2].plot(day, df["topo_plan_ratio_smooth"], color="black", lw=2,
+    axes[1].plot(age, df["topo_plan_ratio"], color="0.65", lw=1, label="Raw")
+    axes[1].plot(age, df["topo_plan_ratio_smooth"], color="black", lw=2,
                  label="Smoothed")
-    axes[2].axhline(-ratio_limit, color="tab:blue", ls="--", lw=1,
+    axes[1].axhline(-ratio_limit, color="tab:blue", ls="--", lw=1,
                     label=f"Planetary >= {config.dominance_factor:g}x")
-    axes[2].axhline(ratio_limit, color="tab:orange", ls="--", lw=1,
+    axes[1].axhline(ratio_limit, color="tab:orange", ls="--", lw=1,
                     label=f"Topographic >= {config.dominance_factor:g}x")
-    axes[2].axhline(0, color="0.35", ls=":", lw=0.8)
-    axes[2].set_ylabel("log topo/planetary")
-    axes[2].legend(ncol=4, fontsize=8, frameon=False)
+    axes[1].axhline(0, color="0.35", ls=":", lw=0.8)
+    axes[1].set_ylabel("ln(|topographic| / |planetary|)")
+    axes[1].legend(ncol=2, fontsize=8, frameon=False)
 
-    axes[3].semilogy(day, df["PV_grad_plan_mag"], color="tab:blue", label="Planetary")
-    axes[3].semilogy(day, df["PV_grad_topo_mag"], color="tab:orange", label="Topographic")
-    axes[3].semilogy(day, df["PV_grad_mag"], color="black", lw=1.5, label="Total")
-    axes[3].set_ylabel("PV-gradient magnitude")
-    axes[3].legend(ncol=3, fontsize=8, frameon=False)
-
-    axes[4].plot(day, df["TiltDis"], color="tab:purple", lw=1.5,
-                 label="Tilt distance")
-    axes[4].set_ylabel("Tilt distance (km)")
-    ax_depth = axes[4].twinx()
-    ax_depth.plot(day, df["h"], color="saddlebrown", alpha=0.65)
-    ax_depth.set_ylabel("Depth (m)", color="saddlebrown")
-    ax_depth.invert_yaxis()
+    axes[2].semilogy(age, df["PV_grad_plan_mag"], color="tab:blue",
+                     label="Planetary")
+    axes[2].semilogy(age, df["PV_grad_topo_mag"], color="tab:orange",
+                     label="Topographic")
+    axes[2].semilogy(age, df["PV_grad_mag"], color="tab:green", lw=1.5,
+                     label="Total")
+    axes[2].set_ylabel("PV-gradient magnitude")
+    axes[2].legend(ncol=3, fontsize=8, frameon=False)
 
     if "Ro" in df:
-        axes[5].plot(day, df["Ro"], color="tab:red", label="|Ro|")
-        axes[5].axhline(1, color="0.3", ls="--", lw=1)
-        axes[5].set_ylabel("Rossby number")
-    elif "w" in df:
-        axes[5].plot(day, df["w"], color="tab:red", label="Relative vorticity")
-        axes[5].set_ylabel("Relative vorticity (s$^{-1}$)")
-    axes[5].set_xlabel("Day")
+        axes[3].plot(age, df["Ro"], color="tab:red", label="Rossby number")
+        axes[3].axhline(1, color="tab:red", ls="--", lw=1, alpha=0.65,
+                        label="Ro = 1")
+        axes[3].set_ylabel("Rossby number", color="tab:red")
+        axes[3].tick_params(axis="y", colors="tab:red")
+    ax_depth = axes[3].twinx()
+    ax_depth.plot(age, df["h"], color="saddlebrown", alpha=0.8,
+                  label="Depth")
+    ax_depth.set_ylabel("Depth (m)", color="saddlebrown")
+    ax_depth.tick_params(axis="y", colors="saddlebrown")
+    ax_depth.invert_yaxis()
+    handles, labels = axes[3].get_legend_handles_labels()
+    h2, l2 = ax_depth.get_legend_handles_labels()
+    axes[3].legend(handles + h2, labels + l2, ncol=3, frameon=False,
+                   fontsize=8)
+
+    axes[4].scatter(age, df["TiltDir"] % 360, s=22, color="tab:purple",
+                    label="Tilt")
+    axes[4].scatter(age, df["PV_grad_theta"] % 360, s=18, marker="x",
+                    color="tab:blue", label="Signed PV gradient")
+    axes[4].scatter(age, df["expected_tilt_theta"] % 360, s=18, marker="|",
+                    color="tab:green", label=f"{cyc} target")
+    axes[4].set(ylim=(0, 360), yticks=[0, 90, 180, 270, 360],
+                ylabel="Compass bearing (deg)")
+    axes[4].legend(ncol=3, fontsize=8, frameon=False)
+
+    axes[5].plot(age, df["preference_error_deg"], "o-", ms=3,
+                 color="tab:cyan", label="Error from expected target")
+    axes[5].axhspan(0, tol, color="tab:green", alpha=0.14,
+                    label=f"Expected +/- {tol:g} deg")
+    axes[5].set(ylim=(0, 180), yticks=[0, 45, 90, 135, 180],
+                xlabel="Eddy age (days)", ylabel="Target error (deg)")
     axes[5].legend(frameon=False, fontsize=8)
 
     for ax in axes:
         ax.grid(alpha=0.2)
         ymin, ymax = ax.get_ylim()
-        ax.fill_between(day, ymin, ymax, where=df["planetary_regime"],
-                        color="tab:blue", alpha=0.035, step="mid")
-        ax.fill_between(day, ymin, ymax, where=df["topographic_regime"],
-                        color="tab:orange", alpha=0.035, step="mid")
+        ax.fill_between(age, ymin, ymax, where=df["planetary_regime"],
+                        color="tab:blue", alpha=0.075, step="mid")
+        ax.fill_between(age, ymin, ymax, where=df["topographic_regime"],
+                        color="tab:orange", alpha=0.075, step="mid")
         ax.set_ylim(ymin, ymax)
 
     ratio = df["topo_plan_ratio_smooth"]
