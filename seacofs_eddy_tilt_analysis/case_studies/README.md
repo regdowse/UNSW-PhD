@@ -20,6 +20,9 @@ reference days, and `h <= 2000 m` for topographic days. Rankings are screening
 tools, not statistical evidence by themselves. Inspect every selected track for
 coverage, boundary effects, and physical coherence before using it in a paper.
 
-The older `case_study_tools.py` supports the exploratory notebooks and retains
-their historical directional definitions. New paper notebooks must use
-`paper_case_study_tools.py`, which encodes the corrected signed-PV convention.
+The older `case_study_tools.py` supports the exploratory notebooks. Its
+directional diagnostics have also been updated to the corrected signed-PV
+convention, although the historical output identifier
+`topographic_ce_alignment` is retained for notebook compatibility and now means
+coherent CE opposition to signed `grad(PV)`. New paper notebooks use the more
+focused ranking workflow in `paper_case_study_tools.py`.

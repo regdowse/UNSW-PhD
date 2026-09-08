@@ -1,4 +1,8 @@
-"""Selection and plotting tools for SEACOFS eddy case studies."""
+"""Selection and plotting tools for SEACOFS eddy case studies.
+
+Directional diagnostics use the mathematical gradient of signed PV: AEs are
+expected along ``grad(PV)`` and CEs opposite ``grad(PV)``.
+"""
 
 from __future__ import annotations
 
@@ -360,7 +364,13 @@ def add_pv_alignment_diagnostics(
     df: pd.DataFrame,
     config: PVAlignmentConfig = PVAlignmentConfig(),
 ) -> pd.DataFrame:
-    """Add smoothed PV dominance and polarity-aware alignment diagnostics."""
+    """Add smoothed PV dominance and polarity-aware alignment diagnostics.
+
+    The convention is AE along signed ``grad(PV)`` and CE opposite it.  The
+    absolute ``dtheta_PV_grad`` column remains the raw separation from the PV
+    gradient; ``expected_direction_error`` is separation from the
+    polarity-dependent target.
+    """
     required = {
         "Eddy", "Day", "Cyc", "h", "TiltDis", "TiltDir",
         "PV_grad_theta", "topo_plan_ratio",
@@ -404,13 +414,12 @@ def add_pv_alignment_diagnostics(
     )
     out["dtheta_PV_grad"] = np.abs(out["signed_dtheta_PV_grad"])
     out["expected_PV_theta"] = np.where(
-        out["Cyc"].eq("AE"), (out["PV_grad_theta"] + 180.0) % 360.0,
-        out["PV_grad_theta"] % 360.0,
+        out["Cyc"].eq("AE"), out["PV_grad_theta"] % 360.0,
+        (out["PV_grad_theta"] + 180.0) % 360.0,
     )
-    out["expected_direction_error"] = np.where(
-        out["Cyc"].eq("AE"), 180.0 - out["dtheta_PV_grad"],
-        out["dtheta_PV_grad"],
-    )
+    out["expected_direction_error"] = np.abs(signed_angle_difference(
+        out["TiltDir"], out["expected_PV_theta"]
+    ))
     directional = (
         out[["TiltDir", "PV_grad_theta"]].notna().all(axis=1)
         & (pd.to_numeric(out["TiltDis"], errors="coerce") >= config.min_tilt_distance_km)
@@ -436,9 +445,11 @@ def _summarise_alignment_case(
         target_metric = part.loc[regime, "expected_direction_error"]
         dispersion = np.nan
     elif group_name == "topographic_ce_alignment":
+        # Retain the historical group identifier for notebook compatibility;
+        # scientifically this now selects coherent CE opposition to signed PV.
         regime = part["topographic_strong"] & part["direction_valid"]
-        match = regime & (part["dtheta_PV_grad"] <= config.angle_tolerance_deg)
-        target_metric = part.loc[regime, "dtheta_PV_grad"]
+        match = regime & part["expected_match"]
+        target_metric = part.loc[regime, "expected_direction_error"]
         dispersion = np.nan
     elif group_name == "topographic_ae_no_preference":
         regime = part["topographic_strong"] & part["direction_valid"]
@@ -523,7 +534,11 @@ def rank_pv_alignment_cases(
     df: pd.DataFrame,
     config: PVAlignmentConfig = PVAlignmentConfig(),
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Rank open-ocean expected-direction and slope-response case studies."""
+    """Rank open-ocean expected-direction and slope-response case studies.
+
+    ``topographic_ce_alignment`` is retained as a legacy output identifier but
+    now represents CE opposition to the signed PV gradient.
+    """
     diagnosed = add_pv_alignment_diagnostics(df, config)
     rows = []
     for _, part in diagnosed.groupby("Eddy", sort=False):
@@ -617,9 +632,9 @@ def plot_pv_alignment_case(
     axes[0].scatter(day, df["TiltDir"] % 360, s=25, color="tab:purple", label="Tilt")
     axes[0].scatter(day, df["PV_grad_theta"] % 360, s=20, marker="x",
                     color="black", label="PV gradient")
-    if cyc == "AE":
+    if cyc == "CE":
         axes[0].scatter(day, df["expected_PV_theta"], s=14, marker="|",
-                        color="tab:green", label="Opposite PV target")
+                        color="tab:green", label="Opposite-PV target")
     axes[0].set(ylim=(0, 360), yticks=[0, 90, 180, 270, 360],
                 ylabel="Compass bearing (°)")
     axes[0].legend(ncol=3, fontsize=8, frameon=False)
