@@ -706,3 +706,47 @@ def plot_pv_alignment_case(
         title = f"{cyc} eddy {df['Eddy'].iloc[0]}"
     fig.suptitle(title, fontsize=15)
     return fig, axes, ax_map
+
+
+def plot_eddy_timeline(
+    eddy,
+    df_data: pd.DataFrame,
+    grid,
+    *,
+    config: PVAlignmentConfig = PVAlignmentConfig(),
+    title: str | None = None,
+):
+    """Plot one eddy with the common, publication-oriented time layout.
+
+    This compatibility wrapper lets exploratory notebooks use the clearer
+    shared case-study plot without maintaining local copies of ``time_plot``.
+    Dominance shading is based on magnitude alone (not the optional depth
+    filters): blue is planetary and orange is topographic.
+    """
+    track = df_data.loc[df_data["Eddy"].eq(eddy)].copy()
+    if track.empty:
+        raise ValueError(f"Eddy {eddy!r} is not present in df_data")
+
+    needed = {
+        "topo_plan_ratio_smooth", "planetary_strong", "topographic_strong",
+        "expected_PV_theta", "expected_direction_error",
+    }
+    if not needed.issubset(track.columns):
+        track = add_pv_alignment_diagnostics(track, config)
+
+    # Names used by the newer paper plotting API.
+    track["planetary_regime"] = track["planetary_strong"]
+    track["topographic_regime"] = track["topographic_strong"]
+    track["expected_tilt_theta"] = track["expected_PV_theta"]
+    track["preference_error_deg"] = track["expected_direction_error"]
+
+    from paper_case_study_tools import PaperCaseConfig, plot_paper_case
+
+    paper_config = PaperCaseConfig(
+        smooth_window=config.smooth_window,
+        min_periods=config.min_periods,
+        dominance_factor=config.dominance_factor,
+        min_tilt_distance_km=config.min_tilt_distance_km,
+        angle_tolerance_deg=config.angle_tolerance_deg,
+    )
+    return plot_paper_case(track, grid, config=paper_config, title=title)
