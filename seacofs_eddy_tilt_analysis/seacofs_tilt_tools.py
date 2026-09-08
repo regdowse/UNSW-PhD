@@ -251,7 +251,7 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
-    out["Ro"] = np.abs(out["w"] / out["f"])
+    out["Ro"] = out["w"] / out["f"]
     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
     return out
 

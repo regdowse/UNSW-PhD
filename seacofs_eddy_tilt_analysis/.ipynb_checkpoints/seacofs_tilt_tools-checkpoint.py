@@ -251,7 +251,7 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
-    out["Ro"] = np.abs(out["w"] / out["f"])
+    out["Ro"] = out["w"] / out["f"]
     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
     return out
 
@@ -399,54 +399,6 @@ def shared_bins(*arrays, min_bins: int = 12, max_bins: int = 500):
     n = int(np.clip(np.ceil((np.nanmax(vals) - np.nanmin(vals)) / width), min_bins, max_bins))
     return np.linspace(np.nanmin(vals), np.nanmax(vals), n + 1)
 
-
-# def mirrored_hist(ax, ae, ce, bins, xlabel, *, ylabel=None,
-#                   colors=("r", "b"), alpha=.8, xlim=None,
-#                   normalize=False):
-#     """Plot AE above zero and CE below zero using shared bins.
-
-#     If normalize=True, each histogram is normalized independently
-#     so that its bin heights sum to 1.
-#     """
-#     ae = np.asarray(ae, float)
-#     ce = np.asarray(ce, float)
-
-#     ae = ae[np.isfinite(ae)]
-#     ce = ce[np.isfinite(ce)]
-
-#     if xlim is not None:
-#         ae = ae[(ae >= xlim[0]) & (ae <= xlim[1])]
-#         ce = ce[(ce >= xlim[0]) & (ce <= xlim[1])]
-
-#     ae_counts, edges = np.histogram(ae, bins=bins)
-#     ce_counts, _ = np.histogram(ce, bins=edges)
-
-#     if normalize:
-#         ae_counts = ae_counts / ae_counts.sum()
-#         ce_counts = ce_counts / ce_counts.sum()
-
-#     centers = 0.5 * (edges[:-1] + edges[1:])
-#     widths = np.diff(edges)
-
-#     ax.bar(centers,  ae_counts, width=widths, align="center",
-#            color=colors[0], alpha=alpha, label="AE")
-#     ax.bar(centers, -ce_counts, width=widths, align="center",
-#            color=colors[1], alpha=alpha, label="CE")
-
-#     ax.axhline(0, color="0.3", lw=0.8)
-#     ax.set_xlabel(xlabel)
-#     ax.set_ylabel(ylabel or ("Probability" if normalize else "Frequency"))
-
-#     ax.spines["top"].set_visible(False)
-#     ax.spines["right"].set_visible(False)
-
-#     ylim_abs_max = max(np.abs(ax.get_ylim()))
-#     ax.set_ylim(-ylim_abs_max, ylim_abs_max)
-
-#     if xlim is not None:
-#         ax.set_xlim(xlim)
-
-#     return ax
 def mirrored_hist(ax, ae, ce, bins='fd', xlabel='', *, ylabel=None,
                   colors=('r', 'b'), alpha=.45, xlim=None,
                   normalize=False, smooth=True, sigma=1.2):
