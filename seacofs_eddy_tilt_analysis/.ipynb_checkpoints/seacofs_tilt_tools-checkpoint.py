@@ -197,6 +197,20 @@ def angle_diff_180(a, b):
 
     return np.abs((a - b + 180.0) % 360.0 - 180.0)
 
+def add_topo_plan_ratio_smooth(df, smooth_window=3, min_periods=3):
+    out = df.sort_values(['Eddy', 'Day']).copy()
+    out['topo_plan_ratio'] = pd.to_numeric(
+        out.topo_plan_ratio, errors='coerce'
+    ).replace([np.inf, -np.inf], np.nan)
+
+    out['topo_plan_ratio_smooth'] = (
+        out.groupby('Eddy', sort=False).topo_plan_ratio
+        .transform(lambda x: x.rolling(
+            smooth_window, center=True,
+            min_periods=min(min_periods, smooth_window)
+        ).median())
+    )
+    return out
 
 def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
     """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
@@ -253,6 +267,7 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
     out["Ro"] = out["w"] / out["f"]
     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
+    out = add_topo_plan_ratio_smooth(out, smooth_window=3)
     return out
 
 
@@ -1335,3 +1350,4 @@ def tilt_t(df_data, grid, add_field='PV_grad_mag', field_label='PV grad.',
     
     plt.tight_layout()
     return fig, axs
+
