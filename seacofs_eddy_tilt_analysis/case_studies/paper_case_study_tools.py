@@ -20,8 +20,8 @@ class PaperCaseConfig:
     dominance_factor: float = 2.0
     min_planetary_depth_m: float = 3000.0
     max_topographic_depth_m: float = 2000.0
-    min_tilt_distance_km: float = 5.0
-    min_lifetime_days: float = 60.0
+    min_tilt_distance_km: float = 0.0
+    min_lifetime_days: float = 40.0
     min_directional_observations: int = 20
     min_regime_observations: int = 10
     min_sustained_run: int = 5

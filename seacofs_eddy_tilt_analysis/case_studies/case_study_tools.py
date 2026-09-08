@@ -17,7 +17,7 @@ import pandas as pd
 class TransitionConfig:
     """Criteria used to rank planetary/topographic transition cases."""
 
-    smooth_window: int = 7
+    smooth_window: int = 3
     min_periods: int = 5
     min_lifetime_days: float = 100.0
     min_regime_observations: int = 10
@@ -331,7 +331,7 @@ def plot_topographic_transition(track: pd.DataFrame, grid, *, title=None):
 class PVAlignmentConfig:
     """Criteria for ranking PV-gradient/tilt directional case studies."""
 
-    smooth_window: int = 7
+    smooth_window: int = 3
     min_periods: int = 5
     min_lifetime_days: float = 60.0
     min_valid_observations: int = 20
