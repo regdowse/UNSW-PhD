@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from pathlib import Path
+from unittest.mock import patch
 
 import seacofs_tilt_tools as tilt
 
@@ -87,3 +89,26 @@ def test_default_surface_api_still_returns_one_dataframe():
     assert isinstance(result, pd.DataFrame)
     assert len(result) == 1
     assert np.isfinite(result.loc[0, "PV_grad_mag"])
+
+
+def test_cached_sources_load_the_selected_dataframe():
+    root = Path("/tmp/pv-cache-test")
+    expected = pd.DataFrame({"Eddy": [1], "Day": [2]})
+    cases = {
+        "depth_snapshot": tilt.DEPTH_PV_SNAPSHOT_NAME,
+        "depth": tilt.DEPTH_PV_DEPTH_NAME,
+    }
+    for source, filename in cases.items():
+        with patch.object(tilt, "read_table", return_value=expected) as reader:
+            result = tilt.add_pv_gradient_terms(source=source, cache_root=root)
+        assert result is expected
+        reader.assert_called_once_with(root / filename)
+
+
+def test_unknown_source_is_rejected():
+    try:
+        tilt.add_pv_gradient_terms(source="unknown")
+    except ValueError as exc:
+        assert "source must be one of" in str(exc)
+    else:
+        raise AssertionError("Expected source validation")

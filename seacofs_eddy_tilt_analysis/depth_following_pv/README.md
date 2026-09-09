@@ -27,3 +27,21 @@ snapshot_df, depth_df = tilt.add_pv_gradient_terms(
 ```
 
 Calls without `depth_following=True` remain unchanged and return one DataFrame.
+
+After the cache has been built, all three analysis inputs can be selected from
+the same public function:
+
+```python
+# Calculate the original surface-centred result.
+original_df = tilt.add_pv_gradient_terms(
+    eddies, grid, core_mean=True, source="original"
+)
+
+# Load the saved one-row-per-eddy/day depth-following result.
+snapshot_df = tilt.add_pv_gradient_terms(source="depth_snapshot")
+
+# Load the saved one-row-per-eddy/day/depth result.
+depth_df = tilt.add_pv_gradient_terms(source="depth")
+```
+
+Pass `cache_root=...` to load an equivalent cache from another directory.

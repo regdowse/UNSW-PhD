@@ -27,6 +27,12 @@ DEFAULT_TILT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modula
 DEFAULT_VERT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/vertical_profiles_confirmed/profiles.parquet")
 DEFAULT_GRID_PATH = Path("/srv/scratch/z3533156/26year_BRAN2020/outer_avg_01461.nc")
 DEFAULT_ZR_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy")
+DEFAULT_DEPTH_PV_ROOT = Path(
+    "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
+    "pv_gradient_depth_following"
+)
+DEPTH_PV_SNAPSHOT_NAME = "pv_gradient_depth_following_snapshot_0_1000m.parquet"
+DEPTH_PV_DEPTH_NAME = "pv_gradient_depth_following_depth_0_1000m.parquet"
 
 KM_PER_DAY_TO_M_PER_S = 1000.0 / 86400.0
 LEVELS_LAT = [-40, -35, -30, -25]
@@ -213,10 +219,12 @@ def add_topo_plan_ratio_smooth(df, smooth_window=3, min_periods=3):
     return out
 
 def add_pv_gradient_terms(
-    df: pd.DataFrame,
-    grid: Grid,
+    df: pd.DataFrame | None = None,
+    grid: Grid | None = None,
     core_mean: bool = False,
     *,
+    source: str = "original",
+    cache_root: Path | str = DEFAULT_DEPTH_PV_ROOT,
     depth_following: bool = False,
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
@@ -224,12 +232,30 @@ def add_pv_gradient_terms(
 ):
     """Compute planetary, topographic, and total shallow-water PV gradients.
 
-    The default surface-centred calculation retains its original return type.
+    ``source='original'`` (the default) runs the surface-centred calculation.
+    ``source='depth_snapshot'`` or ``source='depth'`` loads the corresponding
+    precomputed depth-following Parquet table and does not require ``df`` or
+    ``grid``.
+
     With ``depth_following=True``, every valid vertical level is sampled using
     its own displaced ellipse and relative vorticity; the return value is
     ``(snapshot_df, depth_df)``.  The snapshot vectors are thickness-weighted
     over the sampled column before magnitudes and bearings are reconstructed.
     """
+    valid_sources = {"original", "depth_snapshot", "depth"}
+    if source not in valid_sources:
+        raise ValueError(f"source must be one of {sorted(valid_sources)}")
+    if source != "original":
+        if depth_following:
+            raise ValueError("depth_following cannot be combined with a cached source")
+        filename = (
+            DEPTH_PV_SNAPSHOT_NAME if source == "depth_snapshot"
+            else DEPTH_PV_DEPTH_NAME
+        )
+        return read_table(Path(cache_root) / filename)
+
+    if df is None or grid is None:
+        raise ValueError("source='original' requires both df and grid")
     if depth_following:
         if not core_mean:
             raise ValueError("depth_following=True requires core_mean=True")
