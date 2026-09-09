@@ -212,8 +212,33 @@ def add_topo_plan_ratio_smooth(df, smooth_window=3, min_periods=3):
     )
     return out
 
-def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False) -> pd.DataFrame:
-    """Compute planetary, topographic, and total shallow-water PV-gradient terms."""
+def add_pv_gradient_terms(
+    df: pd.DataFrame,
+    grid: Grid,
+    core_mean: bool = False,
+    *,
+    depth_following: bool = False,
+    vertical: pd.DataFrame | None = None,
+    max_depth_m: float = 1000.0,
+    progress_every: int | None = None,
+):
+    """Compute planetary, topographic, and total shallow-water PV gradients.
+
+    The default surface-centred calculation retains its original return type.
+    With ``depth_following=True``, every valid vertical level is sampled using
+    its own displaced ellipse and relative vorticity; the return value is
+    ``(snapshot_df, depth_df)``.  The snapshot vectors are thickness-weighted
+    over the sampled column before magnitudes and bearings are reconstructed.
+    """
+    if depth_following:
+        if not core_mean:
+            raise ValueError("depth_following=True requires core_mean=True")
+        if vertical is None:
+            raise ValueError("Pass tilt.load_vert(..., dic_form=False) as vertical")
+        return _add_depth_following_pv_gradient_terms(
+            df, vertical, grid, max_depth_m=max_depth_m,
+            progress_every=progress_every,
+        )
 
     out = df.copy()
     out["f"] = grid.f[out.ic, out.jc]
@@ -269,6 +294,257 @@ def add_pv_gradient_terms(df: pd.DataFrame, grid: Grid, core_mean: bool = False)
     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
     out = add_topo_plan_ratio_smooth(out, smooth_window=3)
     return out
+
+
+def _fixed_core_means(
+    df: pd.DataFrame,
+    grid: Grid,
+    fields: dict,
+    *,
+    progress_every: int | None = None,
+) -> pd.DataFrame:
+    """Mean several fixed 2-D fields while calculating each ellipse mask once."""
+    names = list(fields)
+    stack = np.stack([
+        np.where(grid.mask_rho, np.asarray(fields[name], dtype=float), np.nan)
+        for name in names
+    ])
+    values = np.full((len(df), len(names)), np.nan)
+    for pos, row in enumerate(df.itertuples(index=False)):
+        if progress_every and pos and pos % progress_every == 0:
+            print(f"Processed {pos:,}/{len(df):,} depth ellipses")
+        ii, jj = core_grid_indices(row, grid)
+        if not len(ii):
+            continue
+        sample = stack[:, ii, jj]
+        valid = np.isfinite(sample)
+        count = valid.sum(axis=1)
+        values[pos] = np.divide(
+            np.where(valid, sample, 0.0).sum(axis=1), count,
+            out=np.full(len(names), np.nan), where=count > 0,
+        )
+    return pd.DataFrame(values, columns=names, index=df.index)
+
+
+def _vertical_cell_weights(depth, max_depth_m: float) -> np.ndarray:
+    """Thickness represented by irregular positive-down profile centres."""
+    z = np.asarray(depth, dtype=float)
+    weights = np.zeros(len(z), dtype=float)
+    finite = np.isfinite(z) & (z >= 0) & (z <= max_depth_m)
+    positions = np.flatnonzero(finite)
+    if not len(positions):
+        return weights
+    order = positions[np.argsort(z[positions])]
+    zz = z[order]
+    if len(zz) == 1:
+        # A single level cannot represent a resolved vertical column.
+        return weights
+    edges = np.empty(len(zz) + 1)
+    edges[0] = 0.0
+    edges[1:-1] = 0.5 * (zz[:-1] + zz[1:])
+    edges[-1] = min(float(max_depth_m), zz[-1] + 0.5 * (zz[-1] - zz[-2]))
+    edges = np.maximum.accumulate(np.clip(edges, 0.0, float(max_depth_m)))
+    weights[order] = np.diff(edges)
+    return weights
+
+
+def _weighted_mean(values, weights) -> float:
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    valid = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+    if not valid.any():
+        return np.nan
+    return float(np.average(values[valid], weights=weights[valid]))
+
+
+def _add_depth_following_pv_gradient_terms(
+    snapshots: pd.DataFrame,
+    vertical: pd.DataFrame,
+    grid: Grid,
+    *,
+    max_depth_m: float,
+    progress_every: int | None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Depth-following ellipse means and thickness-weighted snapshot vectors."""
+    if not np.isfinite(max_depth_m) or max_depth_m <= 0:
+        raise ValueError("max_depth_m must be positive and finite")
+    if progress_every is not None and progress_every <= 0:
+        raise ValueError("progress_every must be positive or None")
+    keys = ["Eddy", "Day"]
+    required_snapshot = {*keys, "TiltDis", "TiltDir"}
+    required_depth = {*keys, "Depth", "xc", "yc", "Rc", "q11", "q12", "q22", "w"}
+    missing_snapshot = required_snapshot - set(snapshots.columns)
+    missing_depth = required_depth - set(vertical.columns)
+    if missing_snapshot:
+        raise KeyError(f"Snapshot table is missing {sorted(missing_snapshot)}")
+    if missing_depth:
+        raise KeyError(f"Vertical table is missing {sorted(missing_depth)}")
+    if snapshots.duplicated(keys).any():
+        raise ValueError("Snapshot table contains duplicate Eddy-Day rows")
+    if vertical.duplicated(keys + ["Depth"]).any():
+        raise ValueError("Vertical table contains duplicate Eddy-Day-Depth rows")
+
+    depth = vertical.copy()
+    depth["Depth"] = pd.to_numeric(depth["Depth"], errors="coerce").abs()
+    depth = depth.loc[depth["Depth"].between(0, max_depth_m)].copy()
+    depth = depth.sort_values(keys + ["Depth"]).reset_index(drop=True)
+
+    # Authoritative whole-column tilt and useful snapshot metadata are repeated
+    # onto the depth table without overwriting depth-resolved quantities.
+    metadata_cols = [
+        col for col in ["Cyc", "TiltDis", "TiltDir", "Region", "Age", "fname"]
+        if col in snapshots.columns and col not in depth.columns
+    ]
+    if metadata_cols:
+        depth = depth.merge(
+            snapshots[keys + metadata_cols], on=keys, how="inner",
+            validate="many_to_one",
+        )
+    else:
+        valid_keys = snapshots[keys].drop_duplicates()
+        depth = depth.merge(valid_keys, on=keys, how="inner", validate="many_to_one")
+    if depth.empty:
+        raise ValueError(f"No vertical rows overlap snapshots within 0-{max_depth_m:g} m")
+
+    dhdx_grid, dhdy_grid = phys_grad(
+        grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho
+    )
+    dh_dN = np.sin(grid.angle) * dhdx_grid + np.cos(grid.angle) * dhdy_grid
+    dh_dE = np.cos(grid.angle) * dhdx_grid - np.sin(grid.angle) * dhdy_grid
+    dfdx, dfdy = phys_grad(
+        grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho
+    )
+    beta_grid = np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy
+    h = np.asarray(grid.h, dtype=float)
+    f = np.asarray(grid.f, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        basis = {
+            "h": h,
+            "f": f,
+            "beta": beta_grid,
+            "dhdx": dh_dE,
+            "dhdy": dh_dN,
+            "inv_h": 1.0 / h,
+            "f_over_h": f / h,
+            "beta_over_h": beta_grid / h,
+            "dhdx_over_h2": dh_dE / h**2,
+            "dhdy_over_h2": dh_dN / h**2,
+            "f_dhdx_over_h2": f * dh_dE / h**2,
+            "f_dhdy_over_h2": f * dh_dN / h**2,
+        }
+    means = _fixed_core_means(
+        depth, grid, basis, progress_every=progress_every
+    )
+    for column in means:
+        depth[column] = means[column]
+
+    omega = pd.to_numeric(depth["w"], errors="coerce")
+    depth["abs_vort"] = omega + depth["f"]
+    # These expressions are ellipse means of the completed nonlinear fields,
+    # rather than completed expressions of separately averaged h and slope.
+    depth["PV"] = omega * depth["inv_h"] + depth["f_over_h"]
+    depth["PV_grad_plan_x"] = 0.0
+    depth["PV_grad_plan_y"] = depth["beta_over_h"]
+    depth["PV_grad_topo_x"] = -(
+        omega * depth["dhdx_over_h2"] + depth["f_dhdx_over_h2"]
+    )
+    depth["PV_grad_topo_y"] = -(
+        omega * depth["dhdy_over_h2"] + depth["f_dhdy_over_h2"]
+    )
+    depth["PV_grad_x"] = depth["PV_grad_plan_x"] + depth["PV_grad_topo_x"]
+    depth["PV_grad_y"] = depth["PV_grad_plan_y"] + depth["PV_grad_topo_y"]
+    for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
+        depth[f"{prefix}_mag"] = np.hypot(
+            depth[f"{prefix}_x"], depth[f"{prefix}_y"]
+        )
+        depth[f"{prefix}_theta"] = bearing_from_xy(
+            depth[f"{prefix}_x"], depth[f"{prefix}_y"]
+        )
+    depth["Ro"] = omega / depth["f"]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        depth["topo_plan_ratio"] = np.log(
+            depth["PV_grad_topo_mag"] / depth["PV_grad_plan_mag"]
+        )
+    if "TiltDir" in depth:
+        depth["dtheta_PV_grad"] = angle_diff_180(
+            depth["TiltDir"], depth["PV_grad_theta"]
+        )
+        depth["dtheta_PV_grad_topo"] = angle_diff_180(
+            depth["TiltDir"], depth["PV_grad_topo_theta"]
+        )
+        depth["dtheta_PV_grad_plan"] = angle_diff_180(
+            depth["TiltDir"], depth["PV_grad_plan_theta"]
+        )
+
+    depth["vertical_weight_m"] = 0.0
+    for _, index in depth.groupby(keys, sort=False).groups.items():
+        depth.loc[index, "vertical_weight_m"] = _vertical_cell_weights(
+            depth.loc[index, "Depth"], max_depth_m
+        )
+
+    mean_columns = [
+        "h", "f", "beta", "dhdx", "dhdy", "w", "abs_vort", "PV", "Ro",
+        "PV_grad_plan_x", "PV_grad_plan_y", "PV_grad_topo_x",
+        "PV_grad_topo_y",
+    ]
+    records = []
+    for key, part in depth.groupby(keys, sort=False):
+        weights = part["vertical_weight_m"].to_numpy(float)
+        valid_gradient = (
+            np.isfinite(part["PV_grad_x"].to_numpy(float))
+            & np.isfinite(part["PV_grad_y"].to_numpy(float))
+            & (weights > 0)
+        )
+        valid_weights = np.where(valid_gradient, weights, 0.0)
+        row = dict(zip(keys, key))
+        for column in mean_columns:
+            row[column] = _weighted_mean(part[column], weights)
+        represented = valid_gradient
+        row["PV_depth_n"] = int(represented.sum())
+        row["PV_depth_min_m"] = float(part.loc[represented, "Depth"].min()) \
+            if represented.any() else np.nan
+        row["PV_depth_max_m"] = float(part.loc[represented, "Depth"].max()) \
+            if represented.any() else np.nan
+        row["PV_vertical_coverage_m"] = float(valid_weights.sum())
+        row["PV_vertical_coverage_fraction"] = float(
+            valid_weights.sum() / max_depth_m
+        )
+        row["PV_mean_Rc_km"] = _weighted_mean(part["Rc"], valid_weights)
+        records.append(row)
+    averaged = pd.DataFrame(records)
+    averaged["PV_grad_x"] = averaged["PV_grad_plan_x"] + averaged["PV_grad_topo_x"]
+    averaged["PV_grad_y"] = averaged["PV_grad_plan_y"] + averaged["PV_grad_topo_y"]
+    for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
+        averaged[f"{prefix}_mag"] = np.hypot(
+            averaged[f"{prefix}_x"], averaged[f"{prefix}_y"]
+        )
+        averaged[f"{prefix}_theta"] = bearing_from_xy(
+            averaged[f"{prefix}_x"], averaged[f"{prefix}_y"]
+        )
+    with np.errstate(divide="ignore", invalid="ignore"):
+        averaged["topo_plan_ratio"] = np.log(
+            averaged["PV_grad_topo_mag"] / averaged["PV_grad_plan_mag"]
+        )
+
+    replace = set(averaged.columns) - set(keys)
+    snapshot = snapshots.drop(columns=list(replace), errors="ignore").merge(
+        averaged, on=keys, how="left", validate="one_to_one"
+    )
+    snapshot["dtheta_PV_grad"] = angle_diff_180(
+        snapshot["TiltDir"], snapshot["PV_grad_theta"]
+    )
+    snapshot["dtheta_PV_grad_topo"] = angle_diff_180(
+        snapshot["TiltDir"], snapshot["PV_grad_topo_theta"]
+    )
+    snapshot["dtheta_PV_grad_plan"] = angle_diff_180(
+        snapshot["TiltDir"], snapshot["PV_grad_plan_theta"]
+    )
+    snapshot = add_topo_plan_ratio_smooth(snapshot, smooth_window=3, min_periods=3)
+    depth = depth.drop(columns=[
+        "inv_h", "f_over_h", "beta_over_h", "dhdx_over_h2",
+        "dhdy_over_h2", "f_dhdx_over_h2", "f_dhdy_over_h2",
+    ])
+    return snapshot, depth
 
 
 def add_top_bottom_speeds(df: pd.DataFrame, dic_vert: dict, zmax: float = 1000.0) -> pd.DataFrame:
@@ -1350,4 +1626,3 @@ def tilt_t(df_data, grid, add_field='PV_grad_mag', field_label='PV grad.',
     
     plt.tight_layout()
     return fig, axs
-
