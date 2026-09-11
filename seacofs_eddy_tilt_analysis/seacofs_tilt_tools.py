@@ -218,6 +218,107 @@ def add_topo_plan_ratio_smooth(df, smooth_window=3, min_periods=3):
     )
     return out
 
+
+def _validate_ellipse_fractions(frac, inner_frac=0.0):
+    """Validate linear ellipse scale factors for a filled core or annulus."""
+    frac = float(frac)
+    inner_frac = float(inner_frac)
+    if not np.isfinite(frac) or frac <= 0:
+        raise ValueError("frac must be positive and finite")
+    if not np.isfinite(inner_frac) or inner_frac < 0:
+        raise ValueError("inner_frac must be non-negative and finite")
+    if inner_frac >= frac:
+        raise ValueError("inner_frac must be smaller than frac")
+    return frac, inner_frac
+
+
+def _surface_pv_footprint_statistics(
+    df, grid, *, frac, inner_frac, dh_dE=None, dh_dN=None, beta=None,
+):
+    """Average completed local PV-gradient fields within surface footprints.
+
+    Existing ``*_mag`` columns are the magnitude of the spatially averaged
+    vector. ``*_mean_local_mag`` and ``*_rms_local_mag`` quantify exposure
+    without cancellation. ``*_coherence`` is net magnitude divided by mean
+    local magnitude and lies in [0, 1].
+    """
+    if dh_dE is None or dh_dN is None or beta is None:
+        dhdx, dhdy = phys_grad(
+            grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho
+        )
+        dh_dN = np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy
+        dh_dE = np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy
+        dfdx, dfdy = phys_grad(
+            grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho
+        )
+        beta = np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy
+    h = np.asarray(grid.h, dtype=float)
+    f = np.asarray(grid.f, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        fields = {
+            "h": h, "f": f, "beta": beta, "dhdx": dh_dE, "dhdy": dh_dN,
+            "inv_h": 1.0 / h, "f_over_h": f / h,
+            "beta_over_h": beta / h,
+            "dhdx_over_h2": dh_dE / h**2,
+            "dhdy_over_h2": dh_dN / h**2,
+            "f_dhdx_over_h2": f * dh_dE / h**2,
+            "f_dhdy_over_h2": f * dh_dN / h**2,
+        }
+    names = list(fields)
+    stack = np.stack([
+        np.where(grid.mask_rho, np.asarray(field, dtype=float), np.nan)
+        for field in fields.values()
+    ])
+    records = []
+    for row in df.itertuples(index=False):
+        ii, jj = core_grid_indices(row, grid, frac=frac, inner_frac=inner_frac)
+        record = {"PV_footprint_n": 0}
+        if not len(ii):
+            records.append(record)
+            continue
+        sample = stack[:, ii, jj]
+        mean = dict(zip(names, np.nanmean(sample, axis=1)))
+        record.update({name: mean[name] for name in ("h", "f", "beta", "dhdx", "dhdy")})
+        omega = float(row.w)
+        plan_x = np.zeros(sample.shape[1], dtype=float)
+        plan_y = sample[names.index("beta_over_h")]
+        topo_x = -(omega * sample[names.index("dhdx_over_h2")] + sample[names.index("f_dhdx_over_h2")])
+        topo_y = -(omega * sample[names.index("dhdy_over_h2")] + sample[names.index("f_dhdy_over_h2")])
+        vectors = {
+            "PV_grad_plan": (plan_x, plan_y),
+            "PV_grad_topo": (topo_x, topo_y),
+            "PV_grad": (plan_x + topo_x, plan_y + topo_y),
+        }
+        record["abs_vort"] = omega + mean["f"]
+        record["PV"] = omega * mean["inv_h"] + mean["f_over_h"]
+        for prefix, (east, north) in vectors.items():
+            valid = np.isfinite(east) & np.isfinite(north)
+            if not valid.any():
+                continue
+            east_mean = float(np.mean(east[valid]))
+            north_mean = float(np.mean(north[valid]))
+            local_mag = np.hypot(east[valid], north[valid])
+            net_mag = float(np.hypot(east_mean, north_mean))
+            mean_local_mag = float(np.mean(local_mag))
+            record[f"{prefix}_x"] = east_mean
+            record[f"{prefix}_y"] = north_mean
+            record[f"{prefix}_mean_local_mag"] = mean_local_mag
+            record[f"{prefix}_rms_local_mag"] = float(np.sqrt(np.mean(local_mag**2)))
+            record[f"{prefix}_p90_local_mag"] = float(np.percentile(local_mag, 90))
+            record[f"{prefix}_coherence"] = net_mag / mean_local_mag if mean_local_mag > 0 else np.nan
+            if prefix == "PV_grad":
+                record["PV_footprint_n"] = int(valid.sum())
+        records.append(record)
+    result = pd.DataFrame(records, index=df.index)
+    expected = ["h", "f", "beta", "dhdx", "dhdy", "abs_vort", "PV", "PV_footprint_n"]
+    for prefix in ("PV_grad_plan", "PV_grad_topo", "PV_grad"):
+        expected.extend([
+            f"{prefix}_x", f"{prefix}_y", f"{prefix}_mean_local_mag",
+            f"{prefix}_rms_local_mag", f"{prefix}_p90_local_mag",
+            f"{prefix}_coherence",
+        ])
+    return result.reindex(columns=expected)
+
 def add_pv_gradient_terms(
     df: pd.DataFrame | None = None,
     grid: Grid | None = None,
@@ -229,11 +330,18 @@ def add_pv_gradient_terms(
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
     progress_every: int | None = None,
-    frac=1
+    frac: float = 1.0,
+    inner_frac: float = 0.0,
+    averaging: str = "nonlinear",
 ):
     """Compute planetary, topographic, and total shallow-water PV gradients.
 
     ``source='original'`` (the default) runs the surface-centred calculation.
+    With ``core_mean=True``, ``averaging='nonlinear'`` averages the completed
+    local PV-gradient components and is the default. ``averaging='legacy'``
+    reproduces the historical mean-h/mean-slope calculation. ``frac`` is the
+    outer linear ellipse scale and ``inner_frac > 0`` selects an annulus.
+
     ``source='depth_snapshot'`` or ``source='depth'`` loads the corresponding
     precomputed depth-following Parquet table and does not require ``df`` or
     ``grid``.
@@ -249,6 +357,8 @@ def add_pv_gradient_terms(
     if source != "original":
         if depth_following:
             raise ValueError("depth_following cannot be combined with a cached source")
+        if frac != 1 or inner_frac != 0 or averaging != "nonlinear":
+            raise ValueError("frac, inner_frac and averaging apply only to source='original'")
         filename = (
             DEPTH_PV_SNAPSHOT_NAME if source == "depth_snapshot"
             else DEPTH_PV_DEPTH_NAME
@@ -257,7 +367,12 @@ def add_pv_gradient_terms(
 
     if df is None or grid is None:
         raise ValueError("source='original' requires both df and grid")
+    frac, inner_frac = _validate_ellipse_fractions(frac, inner_frac)
+    if averaging not in {"nonlinear", "legacy"}:
+        raise ValueError("averaging must be 'nonlinear' or 'legacy'")
     if depth_following:
+        if frac != 1 or inner_frac != 0 or averaging != "nonlinear":
+            raise ValueError("Surface footprint options are not supported with depth_following=True")
         if not core_mean:
             raise ValueError("depth_following=True requires core_mean=True")
         if vertical is None:
@@ -268,54 +383,73 @@ def add_pv_gradient_terms(
         )
 
     out = df.copy()
-    out["f"] = grid.f[out.ic, out.jc]
+    dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
+    dh_dN = np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy
+    dh_dE = np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy
+    dfdx, dfdy = phys_grad(grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
+    df_dN = np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy
+
     if core_mean:
+        footprint = _surface_pv_footprint_statistics(
+            out, grid, frac=frac, inner_frac=inner_frac,
+            dh_dE=dh_dE, dh_dN=dh_dN, beta=df_dN,
+        )
+        for column in footprint:
+            out[column] = footprint[column]
+    else:
+        out["f"] = grid.f[out.ic, out.jc]
+        out["h"] = grid.h[out.ic, out.jc]
+        out["dhdx"] = dh_dE[out.ic, out.jc]
+        out["dhdy"] = dh_dN[out.ic, out.jc]
+        out["beta"] = df_dN[out.ic, out.jc]
+
+    if core_mean and averaging == "legacy":
+        # Preserve the historical standard columns exactly while retaining
+        # the new non-cancelling footprint diagnostics calculated above.
+        out = out.drop(columns=["h", "dhdx", "dhdy"])
+        out["f"] = grid.f[out.ic, out.jc]
         out = compute_core_mean(
             out, grid,
             fixed_field=grid.h,
             colname="h",
-            frac=frac
+            frac=frac,
+            inner_frac=inner_frac,
         )
-    else:
-        out["h"] = grid.h[out.ic, out.jc]
-
-    dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
-    dh_dN = np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy
-    dh_dE = np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy
-    if core_mean:
         out = compute_core_mean(
             out, grid,
             fixed_field=dh_dE,
             colname="dhdx",
-            frac=frac
+            frac=frac,
+            inner_frac=inner_frac,
         )
         out = compute_core_mean(
             out, grid,
             fixed_field=dh_dN,
             colname="dhdy",
-            frac=frac
+            frac=frac,
+            inner_frac=inner_frac,
         )
-    else:
-        out["dhdx"] = dh_dE[out.ic, out.jc]
-        out["dhdy"] = dh_dN[out.ic, out.jc]
+        out["beta"] = df_dN[out.ic, out.jc]
 
-    dfdx, dfdy = phys_grad(grid.f, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
-    df_dN = np.sin(grid.angle) * dfdx + np.cos(grid.angle) * dfdy
-    out["beta"] = df_dN[out.ic, out.jc]
-
-    omega_f = out["w"] + out["f"]
-    out["abs_vort"] = omega_f
-    out["PV"] = omega_f / out["h"]
-    out["PV_grad_plan_x"] = 0.0
-    out["PV_grad_plan_y"] = out["beta"] / out["h"]
-    out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2
-    out["PV_grad_topo_y"] = -omega_f * out["dhdy"] / out["h"] ** 2
-    out["PV_grad_x"] = out["PV_grad_plan_x"] + out["PV_grad_topo_x"]
-    out["PV_grad_y"] = out["PV_grad_plan_y"] + out["PV_grad_topo_y"]
+    if not core_mean or averaging == "legacy":
+        omega_f = out["w"] + out["f"]
+        out["abs_vort"] = omega_f
+        out["PV"] = omega_f / out["h"]
+        out["PV_grad_plan_x"] = 0.0
+        out["PV_grad_plan_y"] = out["beta"] / out["h"]
+        out["PV_grad_topo_x"] = -omega_f * out["dhdx"] / out["h"] ** 2
+        out["PV_grad_topo_y"] = -omega_f * out["dhdy"] / out["h"] ** 2
+        out["PV_grad_x"] = out["PV_grad_plan_x"] + out["PV_grad_topo_x"]
+        out["PV_grad_y"] = out["PV_grad_plan_y"] + out["PV_grad_topo_y"]
 
     for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
         out[f"{prefix}_mag"] = np.hypot(out[f"{prefix}_x"], out[f"{prefix}_y"])
         out[f"{prefix}_theta"] = bearing_from_xy(out[f"{prefix}_x"], out[f"{prefix}_y"])
+        if not core_mean:
+            out[f"{prefix}_mean_local_mag"] = out[f"{prefix}_mag"]
+            out[f"{prefix}_rms_local_mag"] = out[f"{prefix}_mag"]
+            out[f"{prefix}_p90_local_mag"] = out[f"{prefix}_mag"]
+            out[f"{prefix}_coherence"] = np.where(out[f"{prefix}_mag"] > 0, 1.0, np.nan)
 
     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
@@ -323,6 +457,10 @@ def add_pv_gradient_terms(
     out["Ro"] = out["w"] / out["f"]
     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
     out = add_topo_plan_ratio_smooth(out, smooth_window=3)
+    out["ellipse_frac"] = frac
+    out["ellipse_inner_frac"] = inner_frac
+    out["ellipse_area_fraction"] = frac**2 - inner_frac**2
+    out["pv_averaging"] = averaging
     return out
 
 
@@ -1298,14 +1436,19 @@ def match_old_eddies(sample_eddies_old, df_eddies_old, df_eddies, min_overlap_fr
             matches.append({"old_eddy": eddy_old, "new_eddy": np.nan, "overlap_frac": 0.0, "mean_dist_km": np.nan, "n_overlap": 0})
     return pd.DataFrame(matches)
 
-def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False, frac=1):
-    """Return ocean-grid indices inside an eddy's core contour."""
+def core_grid_indices(
+    row, grid: Grid, circle_region_flag: bool = False,
+    frac=1, inner_frac=0.0,
+):
+    """Return ocean-grid indices inside a scaled core ellipse or annulus."""
+
+    frac, inner_frac = _validate_ellipse_fractions(frac, inner_frac)
 
     if circle_region_flag:
         if not (hasattr(row, "rmax") and np.isfinite(row.rmax) and row.rmax > 0):
             return np.array([], dtype=int), np.array([], dtype=int)
         q = np.eye(2)
-        threshold = float(row.rmax) ** 2 * frac**2
+        base_threshold = float(row.rmax) ** 2
     else:
         if hasattr(row, "q11") and np.isfinite(row.q11):
             q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
@@ -1315,7 +1458,9 @@ def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False, frac=1)
             return np.array([], dtype=int), np.array([], dtype=int)
         if q.shape != (2, 2) or not np.isfinite(q).all() or not np.isfinite(row.Rc) or row.Rc <= 0:
             return np.array([], dtype=int), np.array([], dtype=int)
-        threshold = (float(row.Rc) ** 2 / 2.0) * frac**2
+        base_threshold = float(row.Rc) ** 2 / 2.0
+    threshold = base_threshold * frac**2
+    inner_threshold = base_threshold * inner_frac**2
     eigenvalues = np.linalg.eigvalsh(q)
     if not np.isfinite(eigenvalues).all() or eigenvalues.min() <= 0:
         return np.array([], dtype=int), np.array([], dtype=int)
@@ -1330,7 +1475,10 @@ def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False, frac=1)
     dx = grid.x_grid[ii] - float(row.xc)
     dy = grid.y_grid[jj] - float(row.yc)
     rho2 = q[0, 0] * dx**2 + 2.0 * q[0, 1] * dx * dy + q[1, 1] * dy**2
-    use = (rho2 <= threshold) & grid.mask_rho[ii, jj].astype(bool)
+    use = (
+        (rho2 <= threshold) & (rho2 >= inner_threshold)
+        & grid.mask_rho[ii, jj].astype(bool)
+    )
     return ii[use].astype(int), jj[use].astype(int)
 
 
@@ -1343,7 +1491,8 @@ def compute_core_mean(
     fixed_field=None,
     colname=None,
     circle_region_flag=False,
-    frac=1
+    frac=1,
+    inner_frac=0.0,
 ):
     """
     Core-mean of either
@@ -1371,7 +1520,10 @@ def compute_core_mean(
         df_loc = df_loc.copy().reset_index(drop=False)
         core_vals = np.full(len(df_loc), np.nan)
         for idx, row in enumerate(df_loc.itertuples(index=False)):
-            ii, jj = core_grid_indices(row, grid, circle_region_flag=circle_region_flag, frac=frac)
+            ii, jj = core_grid_indices(
+                row, grid, circle_region_flag=circle_region_flag,
+                frac=frac, inner_frac=inner_frac,
+            )
             if not len(ii):
                 continue
             if mode_2d:
