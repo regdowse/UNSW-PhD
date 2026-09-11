@@ -89,3 +89,47 @@ def test_invalid_annulus_is_rejected():
             pass
         else:
             raise AssertionError((outer, inner))
+
+
+def test_esp_gaussian_uses_saved_w_as_central_vorticity():
+    result = tilt.add_pv_gradient_terms(
+        _snapshot(), _grid(), core_mean=True, frac=0.1,
+        surface_method="esp_gaussian",
+    ).iloc[0]
+    np.testing.assert_allclose(result.zeta_mean, _snapshot().w.iloc[0])
+    assert result.PV_footprint_n == 1
+    assert result.PV_weight_effective_n == 1
+
+
+def test_esp_gaussian_internal_gradient_has_zero_net_in_symmetric_footprint():
+    grid = _grid()
+    grid.h[:] = 2500.0
+    result = tilt.add_pv_gradient_terms(
+        _snapshot(), grid, core_mean=True, frac=1.5,
+        surface_method="esp_gaussian",
+    ).iloc[0]
+    assert result.PV_grad_eddy_mean_local_mag > 0
+    assert result.PV_grad_eddy_mag < result.PV_grad_eddy_mean_local_mag * 1e-12
+    np.testing.assert_allclose(result.PV_grad_full_x, result.PV_grad_x, atol=1e-25)
+    np.testing.assert_allclose(result.PV_grad_full_y, result.PV_grad_y, rtol=1e-10)
+
+
+def test_gaussian_weighting_has_smaller_effective_than_raw_sample_size():
+    result = tilt.add_pv_gradient_terms(
+        _snapshot(), _grid(seamount=True), core_mean=True, frac=2.0,
+        surface_method="esp_gaussian",
+    ).iloc[0]
+    assert 0 < result.PV_weight_effective_n < result.PV_footprint_n
+    assert result.pv_surface_method == "esp_gaussian"
+
+
+def test_legacy_rejects_esp_gaussian_surface_method():
+    try:
+        tilt.add_pv_gradient_terms(
+            _snapshot(), _grid(), core_mean=True,
+            averaging="legacy", surface_method="esp_gaussian",
+        )
+    except ValueError as exc:
+        assert "legacy" in str(exc)
+    else:
+        raise AssertionError("Expected incompatible surface-method validation")

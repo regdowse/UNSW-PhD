@@ -232,15 +232,32 @@ def _validate_ellipse_fractions(frac, inner_frac=0.0):
     return frac, inner_frac
 
 
+def _weighted_percentile(values, weights, percentile):
+    """Weighted percentile for finite one-dimensional samples."""
+    values = np.asarray(values, dtype=float)
+    weights = np.asarray(weights, dtype=float)
+    valid = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+    if not valid.any():
+        return np.nan
+    values, weights = values[valid], weights[valid]
+    order = np.argsort(values)
+    values, weights = values[order], weights[order]
+    cumulative = np.cumsum(weights) - 0.5 * weights
+    cumulative /= weights.sum()
+    return float(np.interp(float(percentile) / 100.0, cumulative, values))
+
+
 def _surface_pv_footprint_statistics(
-    df, grid, *, frac, inner_frac, dh_dE=None, dh_dN=None, beta=None,
+    df, grid, *, frac, inner_frac, surface_method="uniform",
+    dh_dE=None, dh_dN=None, beta=None,
 ):
     """Average completed local PV-gradient fields within surface footprints.
 
     Existing ``*_mag`` columns are the magnitude of the spatially averaged
     vector. ``*_mean_local_mag`` and ``*_rms_local_mag`` quantify exposure
     without cancellation. ``*_coherence`` is net magnitude divided by mean
-    local magnitude and lies in [0, 1].
+    local magnitude and lies in [0, 1]. ``surface_method='esp_gaussian'`` uses
+    zeta = w exp(-rho**2 / Rc**2) and the same Gaussian as spatial weights.
     """
     if dh_dE is None or dh_dN is None or beta is None:
         dhdx, dhdy = phys_grad(
@@ -272,46 +289,89 @@ def _surface_pv_footprint_statistics(
     records = []
     for row in df.itertuples(index=False):
         ii, jj = core_grid_indices(row, grid, frac=frac, inner_frac=inner_frac)
-        record = {"PV_footprint_n": 0}
+        record = {"PV_footprint_n": 0, "PV_weight_effective_n": 0.0}
         if not len(ii):
             records.append(record)
             continue
         sample = stack[:, ii, jj]
-        mean = dict(zip(names, np.nanmean(sample, axis=1)))
+        if surface_method == "esp_gaussian":
+            q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
+            dx = grid.x_grid[ii] - float(row.xc)
+            dy = grid.y_grid[jj] - float(row.yc)
+            rho2 = q[0, 0] * dx**2 + 2.0 * q[0, 1] * dx * dy + q[1, 1] * dy**2
+            shape = np.exp(-rho2 / float(row.Rc) ** 2)
+            zeta = float(row.w) * shape
+            weights = shape
+        else:
+            zeta = np.full(len(ii), float(row.w))
+            weights = np.ones(len(ii), dtype=float)
+
+        def weighted_mean(values):
+            values = np.asarray(values, dtype=float)
+            valid = np.isfinite(values) & np.isfinite(weights) & (weights > 0)
+            return float(np.average(values[valid], weights=weights[valid])) if valid.any() else np.nan
+
+        mean = {name: weighted_mean(sample[pos]) for pos, name in enumerate(names)}
         record.update({name: mean[name] for name in ("h", "f", "beta", "dhdx", "dhdy")})
-        omega = float(row.w)
         plan_x = np.zeros(sample.shape[1], dtype=float)
         plan_y = sample[names.index("beta_over_h")]
-        topo_x = -(omega * sample[names.index("dhdx_over_h2")] + sample[names.index("f_dhdx_over_h2")])
-        topo_y = -(omega * sample[names.index("dhdy_over_h2")] + sample[names.index("f_dhdy_over_h2")])
+        topo_x = -(zeta * sample[names.index("dhdx_over_h2")] + sample[names.index("f_dhdx_over_h2")])
+        topo_y = -(zeta * sample[names.index("dhdy_over_h2")] + sample[names.index("f_dhdy_over_h2")])
+        if surface_method == "esp_gaussian":
+            q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
+            qr_x = q[0, 0] * dx + q[0, 1] * dy
+            qr_y = q[1, 0] * dx + q[1, 1] * dy
+            dzeta_dx = -2.0 * zeta * qr_x / float(row.Rc) ** 2 / 1000.0
+            dzeta_dy = -2.0 * zeta * qr_y / float(row.Rc) ** 2 / 1000.0
+            eddy_x = dzeta_dx * sample[names.index("inv_h")]
+            eddy_y = dzeta_dy * sample[names.index("inv_h")]
+        else:
+            eddy_x = np.zeros(sample.shape[1], dtype=float)
+            eddy_y = np.zeros(sample.shape[1], dtype=float)
         vectors = {
             "PV_grad_plan": (plan_x, plan_y),
             "PV_grad_topo": (topo_x, topo_y),
             "PV_grad": (plan_x + topo_x, plan_y + topo_y),
+            "PV_grad_eddy": (eddy_x, eddy_y),
+            "PV_grad_full": (plan_x + topo_x + eddy_x, plan_y + topo_y + eddy_y),
         }
-        record["abs_vort"] = omega + mean["f"]
-        record["PV"] = omega * mean["inv_h"] + mean["f_over_h"]
+        record["zeta_mean"] = weighted_mean(zeta)
+        record["abs_vort"] = weighted_mean(zeta + sample[names.index("f")])
+        record["PV"] = weighted_mean(
+            zeta * sample[names.index("inv_h")] + sample[names.index("f_over_h")]
+        )
+        positive_weights = weights[np.isfinite(weights) & (weights > 0)]
+        record["PV_weight_effective_n"] = float(
+            positive_weights.sum() ** 2 / np.sum(positive_weights**2)
+        ) if len(positive_weights) else 0.0
         for prefix, (east, north) in vectors.items():
-            valid = np.isfinite(east) & np.isfinite(north)
+            valid = np.isfinite(east) & np.isfinite(north) & np.isfinite(weights) & (weights > 0)
             if not valid.any():
                 continue
-            east_mean = float(np.mean(east[valid]))
-            north_mean = float(np.mean(north[valid]))
+            east_mean = float(np.average(east[valid], weights=weights[valid]))
+            north_mean = float(np.average(north[valid], weights=weights[valid]))
             local_mag = np.hypot(east[valid], north[valid])
             net_mag = float(np.hypot(east_mean, north_mean))
-            mean_local_mag = float(np.mean(local_mag))
+            mean_local_mag = float(np.average(local_mag, weights=weights[valid]))
             record[f"{prefix}_x"] = east_mean
             record[f"{prefix}_y"] = north_mean
             record[f"{prefix}_mean_local_mag"] = mean_local_mag
-            record[f"{prefix}_rms_local_mag"] = float(np.sqrt(np.mean(local_mag**2)))
-            record[f"{prefix}_p90_local_mag"] = float(np.percentile(local_mag, 90))
+            record[f"{prefix}_rms_local_mag"] = float(
+                np.sqrt(np.average(local_mag**2, weights=weights[valid]))
+            )
+            record[f"{prefix}_p90_local_mag"] = _weighted_percentile(
+                local_mag, weights[valid], 90
+            )
             record[f"{prefix}_coherence"] = net_mag / mean_local_mag if mean_local_mag > 0 else np.nan
             if prefix == "PV_grad":
                 record["PV_footprint_n"] = int(valid.sum())
         records.append(record)
     result = pd.DataFrame(records, index=df.index)
-    expected = ["h", "f", "beta", "dhdx", "dhdy", "abs_vort", "PV", "PV_footprint_n"]
-    for prefix in ("PV_grad_plan", "PV_grad_topo", "PV_grad"):
+    expected = [
+        "h", "f", "beta", "dhdx", "dhdy", "zeta_mean", "abs_vort", "PV",
+        "PV_footprint_n", "PV_weight_effective_n",
+    ]
+    for prefix in ("PV_grad_plan", "PV_grad_topo", "PV_grad", "PV_grad_eddy", "PV_grad_full"):
         expected.extend([
             f"{prefix}_x", f"{prefix}_y", f"{prefix}_mean_local_mag",
             f"{prefix}_rms_local_mag", f"{prefix}_p90_local_mag",
@@ -333,6 +393,7 @@ def add_pv_gradient_terms(
     frac: float = .75,
     inner_frac: float = 0.0,
     averaging: str = "nonlinear",
+    surface_method: str = "uniform",
 ):
     """Compute planetary, topographic, and total shallow-water PV gradients.
 
@@ -341,6 +402,11 @@ def add_pv_gradient_terms(
     local PV-gradient components and is the default. ``averaging='legacy'``
     reproduces the historical mean-h/mean-slope calculation. ``frac`` is the
     outer linear ellipse scale and ``inner_frac > 0`` selects an annulus.
+    ``surface_method='esp_gaussian'`` reconstructs
+    ``zeta = w * exp(-rho**2 / Rc**2)`` and uses that Gaussian as the spatial
+    weight. The standard ``PV_grad_*`` fields remain the environmental
+    planetary-plus-topographic gradient; ``PV_grad_full_*`` additionally
+    includes the eddy's internal ``grad(zeta) / h`` contribution.
 
     ``source='depth_snapshot'`` or ``source='depth'`` loads the corresponding
     precomputed depth-following Parquet table and does not require ``df`` or
@@ -357,8 +423,8 @@ def add_pv_gradient_terms(
     if source != "original":
         if depth_following:
             raise ValueError("depth_following cannot be combined with a cached source")
-        if frac != 1 or inner_frac != 0 or averaging != "nonlinear":
-            raise ValueError("frac, inner_frac and averaging apply only to source='original'")
+        if frac != .75 or inner_frac != 0 or averaging != "nonlinear" or surface_method != "uniform":
+            raise ValueError("Surface footprint options apply only to source='original'")
         filename = (
             DEPTH_PV_SNAPSHOT_NAME if source == "depth_snapshot"
             else DEPTH_PV_DEPTH_NAME
@@ -370,8 +436,12 @@ def add_pv_gradient_terms(
     frac, inner_frac = _validate_ellipse_fractions(frac, inner_frac)
     if averaging not in {"nonlinear", "legacy"}:
         raise ValueError("averaging must be 'nonlinear' or 'legacy'")
+    if surface_method not in {"uniform", "esp_gaussian"}:
+        raise ValueError("surface_method must be 'uniform' or 'esp_gaussian'")
+    if averaging == "legacy" and surface_method != "uniform":
+        raise ValueError("averaging='legacy' requires surface_method='uniform'")
     if depth_following:
-        if frac != 1 or inner_frac != 0 or averaging != "nonlinear":
+        if frac != .75 or inner_frac != 0 or averaging != "nonlinear" or surface_method != "uniform":
             raise ValueError("Surface footprint options are not supported with depth_following=True")
         if not core_mean:
             raise ValueError("depth_following=True requires core_mean=True")
@@ -392,6 +462,7 @@ def add_pv_gradient_terms(
     if core_mean:
         footprint = _surface_pv_footprint_statistics(
             out, grid, frac=frac, inner_frac=inner_frac,
+            surface_method=surface_method,
             dh_dE=dh_dE, dh_dN=dh_dN, beta=df_dN,
         )
         for column in footprint:
@@ -441,8 +512,12 @@ def add_pv_gradient_terms(
         out["PV_grad_topo_y"] = -omega_f * out["dhdy"] / out["h"] ** 2
         out["PV_grad_x"] = out["PV_grad_plan_x"] + out["PV_grad_topo_x"]
         out["PV_grad_y"] = out["PV_grad_plan_y"] + out["PV_grad_topo_y"]
+        out["PV_grad_eddy_x"] = 0.0
+        out["PV_grad_eddy_y"] = 0.0
+        out["PV_grad_full_x"] = out["PV_grad_x"]
+        out["PV_grad_full_y"] = out["PV_grad_y"]
 
-    for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad"]:
+    for prefix in ["PV_grad_plan", "PV_grad_topo", "PV_grad", "PV_grad_eddy", "PV_grad_full"]:
         out[f"{prefix}_mag"] = np.hypot(out[f"{prefix}_x"], out[f"{prefix}_y"])
         out[f"{prefix}_theta"] = bearing_from_xy(out[f"{prefix}_x"], out[f"{prefix}_y"])
         if not core_mean:
@@ -454,6 +529,7 @@ def add_pv_gradient_terms(
     out["dtheta_PV_grad"] = angle_diff_180(out["TiltDir"], out["PV_grad_theta"])
     out["dtheta_PV_grad_topo"] = angle_diff_180(out["TiltDir"], out["PV_grad_topo_theta"])
     out["dtheta_PV_grad_plan"] = angle_diff_180(out["TiltDir"], out["PV_grad_plan_theta"])
+    out["dtheta_PV_grad_full"] = angle_diff_180(out["TiltDir"], out["PV_grad_full_theta"])
     out["Ro"] = out["w"] / out["f"]
     out["topo_plan_ratio"] = np.log(out["PV_grad_topo_mag"] / out["PV_grad_plan_mag"])
     out = add_topo_plan_ratio_smooth(out, smooth_window=3)
@@ -461,6 +537,7 @@ def add_pv_gradient_terms(
     out["ellipse_inner_frac"] = inner_frac
     out["ellipse_area_fraction"] = frac**2 - inner_frac**2
     out["pv_averaging"] = averaging
+    out["pv_surface_method"] = surface_method
     return out
 
 
