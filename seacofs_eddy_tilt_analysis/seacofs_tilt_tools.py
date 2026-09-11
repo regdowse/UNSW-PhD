@@ -390,7 +390,7 @@ def add_pv_gradient_terms(
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
     progress_every: int | None = None,
-    frac: float = .75,
+    frac: float = 1.0,
     inner_frac: float = 0.0,
     averaging: str = "nonlinear",
     surface_method: str = "uniform",
@@ -423,7 +423,7 @@ def add_pv_gradient_terms(
     if source != "original":
         if depth_following:
             raise ValueError("depth_following cannot be combined with a cached source")
-        if frac != .75 or inner_frac != 0 or averaging != "nonlinear" or surface_method != "uniform":
+        if frac != 1 or inner_frac != 0 or averaging != "nonlinear" or surface_method != "uniform":
             raise ValueError("Surface footprint options apply only to source='original'")
         filename = (
             DEPTH_PV_SNAPSHOT_NAME if source == "depth_snapshot"
@@ -441,7 +441,7 @@ def add_pv_gradient_terms(
     if averaging == "legacy" and surface_method != "uniform":
         raise ValueError("averaging='legacy' requires surface_method='uniform'")
     if depth_following:
-        if frac != .75 or inner_frac != 0 or averaging != "nonlinear" or surface_method != "uniform":
+        if frac != 1 or inner_frac != 0 or averaging != "nonlinear" or surface_method != "uniform":
             raise ValueError("Surface footprint options are not supported with depth_following=True")
         if not core_mean:
             raise ValueError("depth_following=True requires core_mean=True")

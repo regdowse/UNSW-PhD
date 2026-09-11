@@ -16,13 +16,10 @@ DEFAULT_CACHE_NAME = "surface_pv_esp_gaussian_comparison.parquet"
 
 
 def method_specs():
-    """Prespecified controls and Gaussian truncation-sensitivity runs."""
+    """Primary fixed-core method and its equal-weight control."""
     return pd.DataFrame([
-        {"method": "uniform_0.75", "surface_method": "uniform", "frac": 0.75},
         {"method": "uniform_1", "surface_method": "uniform", "frac": 1.0},
         {"method": "esp_gaussian_1", "surface_method": "esp_gaussian", "frac": 1.0},
-        {"method": "esp_gaussian_1.5", "surface_method": "esp_gaussian", "frac": 1.5},
-        {"method": "esp_gaussian_2", "surface_method": "esp_gaussian", "frac": 2.0},
     ])
 
 
@@ -91,7 +88,7 @@ def eddy_equal_scorecard(df, min_tilt_km=5.0):
             .reset_index())
 
 
-def paired_to(df, reference="esp_gaussian_2"):
+def paired_to(df, reference="esp_gaussian_1"):
     """Attach a reference run to each matched Eddy-Day method row."""
     columns = ["PV", "PV_grad_mag", "PV_grad_theta", "PV_grad_topo_mag",
                "PV_grad_coherence", "PV_grad_full_mag", "PV_grad_full_theta"]
@@ -101,7 +98,7 @@ def paired_to(df, reference="esp_gaussian_2"):
     return df.merge(ref, on=["Eddy", "Day"], how="inner", validate="many_to_one")
 
 
-def local_esp_fields(row, grid, frac=2.0):
+def local_esp_fields(row, grid, frac=1.0):
     """Return local reconstructed fields for visualising one eddy snapshot."""
     import seacofs_tilt_tools as tilt
 
