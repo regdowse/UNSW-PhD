@@ -11,10 +11,18 @@ import numpy as np
 import pandas as pd
 
 
+# SELECTED_EDDIES = {
+#     "AE": [356, 484, 1260, 1015, 1268, 2255, 604, 739],
+#     "CE": [1927, 1194, 1552, 1105],
+# }
 SELECTED_EDDIES = {
-    "AE": [356, 484, 1260, 1015, 1268, 2255, 604, 739],
-    "CE": [1927, 1194, 1552, 1105],
+    "AE": [1015,  184, 1260, 1741,  356,  969,  972, 2889, 2320,    6, 2693,  888,
+       2255, 2903, 1268, 2394,   86, 2790,  484, 2517],
+    "CE": [2297,  751,  476,  397,   20, 2162, 1552, 1956, 1814, 1294, 2786, 2895,
+       1830, 1927, 2958,  375, 1194,  933, 1780, 1667],
 }
+
+
 DEFAULT_CACHE_ROOT = Path(
     "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
     "pv_gradient_selected_case_studies"
@@ -93,7 +101,7 @@ def load_cache(cache_root=DEFAULT_CACHE_ROOT):
 
 def _regime_spans(ax, age, regime):
     for x, label in zip(age, regime):
-        ax.axvspan(x-.5, x+.5, color=REGIME_COLOURS[label], alpha=.16, lw=0)
+        ax.axvspan(x-.5, x+.5, color=REGIME_COLOURS[label], alpha=.3, lw=0)
 
 
 def _vector_endpoint(x, y, magnitude, bearing, scale=1.0, reverse=False):
@@ -230,7 +238,7 @@ def plot_selected_day(track, vertical, grid, day):
         ax.annotate("",xy=(px,py),xytext=(row.xc,row.yc),
                     arrowprops=dict(arrowstyle="-|>",color="magenta",lw=3),zorder=11)
     if not profile.empty:
-        sc=ax.scatter(profile.xc,profile.yc,c=profile.Depth,cmap="viridis_r",s=30,
+        sc=ax.scatter(profile.xc,profile.yc,c=profile.Depth,cmap="jet_r",s=30,
                       edgecolor="black",linewidth=.2,zorder=10)
         ax.plot(profile.xc,profile.yc,color="black",lw=1.2,alpha=.75,zorder=9)
         fig.colorbar(sc,ax=ax,label="Eddy-centre depth (m)",shrink=.8,pad=.02)
