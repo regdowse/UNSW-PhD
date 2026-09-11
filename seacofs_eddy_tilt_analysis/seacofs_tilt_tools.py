@@ -229,6 +229,7 @@ def add_pv_gradient_terms(
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
     progress_every: int | None = None,
+    frac=1
 ):
     """Compute planetary, topographic, and total shallow-water PV gradients.
 
@@ -272,7 +273,8 @@ def add_pv_gradient_terms(
         out = compute_core_mean(
             out, grid,
             fixed_field=grid.h,
-            colname="h"
+            colname="h",
+            frac=frac
         )
     else:
         out["h"] = grid.h[out.ic, out.jc]
@@ -284,12 +286,14 @@ def add_pv_gradient_terms(
         out = compute_core_mean(
             out, grid,
             fixed_field=dh_dE,
-            colname="dhdx"
+            colname="dhdx",
+            frac=frac
         )
         out = compute_core_mean(
             out, grid,
             fixed_field=dh_dN,
-            colname="dhdy"
+            colname="dhdy",
+            frac=frac
         )
     else:
         out["dhdx"] = dh_dE[out.ic, out.jc]
@@ -1294,14 +1298,14 @@ def match_old_eddies(sample_eddies_old, df_eddies_old, df_eddies, min_overlap_fr
             matches.append({"old_eddy": eddy_old, "new_eddy": np.nan, "overlap_frac": 0.0, "mean_dist_km": np.nan, "n_overlap": 0})
     return pd.DataFrame(matches)
 
-def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False):
+def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False, frac=1):
     """Return ocean-grid indices inside an eddy's core contour."""
 
     if circle_region_flag:
         if not (hasattr(row, "rmax") and np.isfinite(row.rmax) and row.rmax > 0):
             return np.array([], dtype=int), np.array([], dtype=int)
         q = np.eye(2)
-        threshold = float(row.rmax) ** 2
+        threshold = float(row.rmax) ** 2 * frac**2
     else:
         if hasattr(row, "q11") and np.isfinite(row.q11):
             q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
@@ -1311,7 +1315,7 @@ def core_grid_indices(row, grid: Grid, circle_region_flag: bool = False):
             return np.array([], dtype=int), np.array([], dtype=int)
         if q.shape != (2, 2) or not np.isfinite(q).all() or not np.isfinite(row.Rc) or row.Rc <= 0:
             return np.array([], dtype=int), np.array([], dtype=int)
-        threshold = float(row.Rc) ** 2 / 2.0
+        threshold = (float(row.Rc) ** 2 / 2.0) * frac**2
     eigenvalues = np.linalg.eigvalsh(q)
     if not np.isfinite(eigenvalues).all() or eigenvalues.min() <= 0:
         return np.array([], dtype=int), np.array([], dtype=int)
@@ -1338,7 +1342,8 @@ def compute_core_mean(
     varname=None,
     fixed_field=None,
     colname=None,
-    circle_region_flag=False
+    circle_region_flag=False,
+    frac=1
 ):
     """
     Core-mean of either
@@ -1366,7 +1371,7 @@ def compute_core_mean(
         df_loc = df_loc.copy().reset_index(drop=False)
         core_vals = np.full(len(df_loc), np.nan)
         for idx, row in enumerate(df_loc.itertuples(index=False)):
-            ii, jj = core_grid_indices(row, grid, circle_region_flag=circle_region_flag)
+            ii, jj = core_grid_indices(row, grid, circle_region_flag=circle_region_flag, frac=frac)
             if not len(ii):
                 continue
             if mode_2d:
@@ -1652,3 +1657,11 @@ def tilt_t(df_data, grid, add_field='PV_grad_mag', field_label='PV grad.',
     
     plt.tight_layout()
     return fig, axs
+
+def plot_ellipse(ax, row, grid=Grid, frac=1, color='k', lw=1, zorder=None, alpha=1):
+    Q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
+    dx, dy = grid.X_grid - row.xc, grid.Y_grid - row.yc
+    rho2 = Q[0, 0]*dx**2 + 2*Q[0, 1]*dx*dy + Q[1, 1]*dy**2
+    ax.contour(grid.X_grid, grid.Y_grid, rho2, levels=[(row.Rc**2/2)*frac**2],
+               colors=[color], linewidths=lw, zorder=zorder, alpha=alpha)
+    return
