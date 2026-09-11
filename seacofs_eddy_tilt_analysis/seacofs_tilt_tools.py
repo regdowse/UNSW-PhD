@@ -330,7 +330,7 @@ def add_pv_gradient_terms(
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
     progress_every: int | None = None,
-    frac: float = 1.0,
+    frac: float = .75,
     inner_frac: float = 0.0,
     averaging: str = "nonlinear",
 ):
