@@ -150,8 +150,10 @@ def plot_eddy_overview(track, grid, *, dist_arrow=20, day_tag=False, pv_norm=Fal
     axes[3].set_ylabel("Depth (km)", color="saddlebrown")
     axes[3].invert_yaxis()
     ax_pv = axes[3].twinx()
-    ax_pv.plot(age, df.PV, color="tab:blue", lw=1.3)
-    ax_pv.set_ylabel("PV", color="tab:blue")
+    # ax_pv.plot(age, df.PV, color="tab:blue", lw=1.3)
+    # ax_pv.set_ylabel("PV", color="tab:blue")
+    ax_pv.plot(age, df.Ro, color="tab:blue", lw=1.3)
+    ax_pv.set_ylabel("Ro", color="tab:blue")
     axes[3].set_xlabel("Eddy age (days)")
     for ax in axes:
         ax.grid(alpha=.2); ax.margins(x=0)
@@ -205,9 +207,9 @@ def plot_eddy_overview(track, grid, *, dist_arrow=20, day_tag=False, pv_norm=Fal
     axm.scatter(df.xc.iloc[0],df.yc.iloc[0],facecolor="white",edgecolor="black",s=55,zorder=10)
     axm.scatter(df.xc.iloc[-1],df.yc.iloc[-1],marker="x",color="black",s=55,zorder=10)
     legend=[Line2D([0],[0],color=REGIME_COLOURS[k],lw=3,label=k.title()) for k in REGIME_COLOURS]
-    legend += [Line2D([0],[0],color="tab:blue",lw=2,label="Surface-to-deep tilt"),
-               Line2D([0],[0],color="magenta",lw=2,label="Mean PV gradient")]
-    axm.legend(handles=legend,frameon=False,loc="best")
+    legend += [Line2D([0],[0],color="tab:blue",lw=2,label="Surf-to-deep tilt"),
+               Line2D([0],[0],color="magenta",lw=2,label="Mean PV grad")]
+    axm.legend(handles=legend,frameon=False,loc="lower right")
     axm.set(xlim=(xmin,xmax),ylim=(ymin,ymax),aspect="equal",xlabel="x (km)",ylabel="y (km)", title=f"{cyc}{eddy}")
     if day_tag:
         map_rows = df.copy()
