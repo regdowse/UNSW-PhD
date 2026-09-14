@@ -112,7 +112,7 @@ def _vector_endpoint(x, y, magnitude, bearing, scale=1.0, reverse=False):
             float(y) + sign*scale*float(magnitude)*np.cos(angle))
 
 
-def plot_eddy_overview(track, grid, *, arrow_count=14):
+def plot_eddy_overview(track, grid, *, dist_arrow=20, day_tag=False, pv_norm=False, ellipse=False):
     """Compact time series plus bathymetric track/tilt/PV-vector map."""
     import seacofs_tilt_tools as tilt
 
@@ -130,17 +130,22 @@ def plot_eddy_overview(track, grid, *, arrow_count=14):
 
     axes[0].plot(age, df.TiltDis, color="tab:purple", lw=1.8)
     axes[0].set_ylabel("Tilt distance (km)")
-    theta = np.deg2rad(df.TiltDir)
-    axes[1].plot(age, df.TiltDis*np.sin(theta), color="tab:red", label="Zonal")
-    axes[1].plot(age, df.TiltDis*np.cos(theta), color="tab:blue", label="Meridional")
-    axes[1].axhline(0, color=".3", lw=.8)
-    axes[1].set_ylabel("Tilt component (km)")
+    axes[1].semilogy(age, df.PV_grad_mag, color="tab:green", lw=1.7, label="PV_grad_mag")
+    # axes[2].semilogy(age, df.PV_grad_full_mag, color="tab:green", alpha=.35,
+    #                 label="PV_grad_full_mag")
+    # axes[2].semilogy(age, df.PV_grad_mean_local_mag, color="tab:green", alpha=.35,
+    #                 label="Mean local")
+    axes[1].set_ylabel(r"$|\nabla_h q|$")
     axes[1].legend(ncol=2, frameon=False)
-    axes[2].semilogy(age, df.PV_grad_mag, color="tab:green", lw=1.7, label="Net")
-    axes[2].semilogy(age, df.PV_grad_mean_local_mag, color="tab:green", alpha=.35,
-                    label="Mean local")
-    axes[2].set_ylabel(r"$|\nabla_h q|$")
+    theta = np.deg2rad(df.TiltDir)
+    # axes[2].plot(age, df.TiltDis*np.sin(theta), color="tab:red", label="Zonal")
+    # axes[2].plot(age, df.TiltDis*np.cos(theta), color="tab:blue", label="Meridional")
+    # axes[2].axhline(0, color=".3", lw=.8)
+    axes[2].plot(age, df.dtheta_PV_grad, color="tab:red", label="dtheta_PV_grad")
+    # axes[2].plot(age, df.dtheta_PV_grad_full, color="tab:blue", label="dtheta_PV_grad_full")
+    axes[2].set_ylabel(r"$\Delta\theta$ (°)")
     axes[2].legend(ncol=2, frameon=False)
+
     axes[3].plot(age, df.h/1e3, color="saddlebrown", lw=1.6)
     axes[3].set_ylabel("Depth (km)", color="saddlebrown")
     axes[3].invert_yaxis()
@@ -170,20 +175,32 @@ def plot_eddy_overview(track, grid, *, arrow_count=14):
         segments=np.stack([points[:-1],points[1:]],axis=1)
         colours=[REGIME_COLOURS[r] for r in df.regime.iloc[:-1]]
         axm.add_collection(LineCollection(segments,colors=colours,linewidths=3,zorder=5))
-    positions=np.unique(np.linspace(0,len(df)-1,min(arrow_count,len(df)),dtype=int))
+    
+    step=np.hypot(np.diff(df.xc),np.diff(df.yc))
+    dist=np.r_[0,np.cumsum(step)]
+    targets=np.arange(0,dist[-1]+dist_arrow,dist_arrow)
+    positions=np.unique([np.abs(dist-d).argmin() for d in targets])
+    
+    pv_ref=np.nanpercentile(df.iloc[positions].PV_grad_mag,80)
     pv_scale=.65*float(np.nanmedian(df.Rc))
     for pos in positions:
         row=df.iloc[pos]
         tx,ty=_vector_endpoint(row.xc,row.yc,row.TiltDis,row.TiltDir,reverse=True)
         axm.annotate("",xy=(tx,ty),xytext=(row.xc,row.yc),
                     arrowprops=dict(arrowstyle="-|>",color="tab:blue",lw=1.5,alpha=.75),zorder=8)
-        if np.isfinite(row.PV_grad_theta):
-            px,py=_vector_endpoint(row.xc,row.yc,1,row.PV_grad_theta,scale=pv_scale)
+        if np.isfinite(row.PV_grad_theta) and np.isfinite(row.PV_grad_mag):
+            if pv_norm:
+                mag=row.PV_grad_mag/pv_ref
+                mag=np.clip(row.PV_grad_mag/pv_ref,0,1)
+            else:
+                mag=1
+            px,py=_vector_endpoint(row.xc,row.yc,mag,row.PV_grad_theta,scale=pv_scale)
             coherence=np.clip(row.PV_grad_coherence,0,1) if np.isfinite(row.PV_grad_coherence) else 0
             axm.annotate("",xy=(px,py),xytext=(row.xc,row.yc),
                         arrowprops=dict(arrowstyle="-|>",color="magenta",lw=1.7,
                                         alpha=.25+.75*coherence),zorder=9)
-        tilt.plot_ellipse(axm,row,grid,frac=1,color=REGIME_COLOURS[row.regime],
+        if ellipse:
+            tilt.plot_ellipse(axm,row,grid,frac=1,color=REGIME_COLOURS[row.regime],
                           lw=.7,alpha=.4,zorder=6)
     axm.scatter(df.xc.iloc[0],df.yc.iloc[0],facecolor="white",edgecolor="black",s=55,zorder=10)
     axm.scatter(df.xc.iloc[-1],df.yc.iloc[-1],marker="x",color="black",s=55,zorder=10)
@@ -191,9 +208,19 @@ def plot_eddy_overview(track, grid, *, arrow_count=14):
     legend += [Line2D([0],[0],color="tab:blue",lw=2,label="Surface-to-deep tilt"),
                Line2D([0],[0],color="magenta",lw=2,label="Mean PV gradient")]
     axm.legend(handles=legend,frameon=False,loc="best")
-    axm.set(xlim=(xmin,xmax),ylim=(ymin,ymax),aspect="equal",xlabel="x (km)",ylabel="y (km)",
-            title=f"{cyc}{eddy}: surface track, tilt and PV-gradient directions")
-    fig.suptitle(f"{cyc}{eddy}: fixed-core ESP-Gaussian surface PV gradient",fontsize=15)
+    axm.set(xlim=(xmin,xmax),ylim=(ymin,ymax),aspect="equal",xlabel="x (km)",ylabel="y (km)", title=f"{cyc}{eddy}")
+    if day_tag:
+        map_rows = df.copy()
+        map_rows['day_idx'] = map_rows.Day - map_rows.Day.min()
+        for day in np.arange(0, map_rows.day_idx.max()+1, 50):
+            part = map_rows[map_rows.day_idx.eq(day)]
+            if not part.empty:
+                point = part.iloc[0]
+                axm.annotate(f'D{day}', (point.xc, point.yc), xytext=(4, 4),
+                             textcoords='offset points', fontsize=8)
+
+    #         title=f"{cyc}{eddy}: surface track, tilt and PV-gradient directions")
+    # fig.suptitle(f"{cyc}{eddy}: fixed-core ESP-Gaussian surface PV gradient",fontsize=15)
     return fig, axes, axm
 
 
@@ -217,6 +244,7 @@ def plot_selected_day(track, vertical, grid, day):
     if match.empty:
         raise ValueError(f"Day {day} is not available for this eddy")
     row=match.iloc[0]
+    cyc_clr = 'tab:red' if row.Cyc == 'AE' else 'cyan'
     local=ept.local_esp_fields(row,grid,frac=1)
     profile=vertical[(vertical.Eddy.eq(row.Eddy))&(vertical.Day.eq(row.Day))].copy()
     profile=profile.dropna(subset=["Depth","xc","yc"]).sort_values("Depth")
@@ -225,12 +253,12 @@ def plot_selected_day(track, vertical, grid, day):
     inside=((grid.X_grid>=xmin)&(grid.X_grid<=xmax)&(grid.Y_grid>=ymin)&(grid.Y_grid<=ymax))
     bathy=np.where(grid.mask_rho.astype(bool)&inside,grid.h/1e3,np.nan)
     fig,ax=plt.subplots(figsize=(7.2,6.4),constrained_layout=True)
-    cf=ax.contourf(grid.X_grid,grid.Y_grid,bathy,levels=25,cmap="terrain_r")
-    tilt.plot_ellipse(ax,row,grid,frac=1,color="cyan",lw=2.5,zorder=8)
+    cf=ax.contourf(grid.X_grid,grid.Y_grid,bathy,levels=25,cmap="Greys_r")#"terrain_r")
+    tilt.plot_ellipse(ax,row,grid,frac=1,color=cyc_clr,lw=2.5,zorder=8)
     step=max(1,len(local)//130); arrows=local.iloc[::step]
     mag=np.hypot(arrows.environment_east,arrows.environment_north); valid=mag.gt(0)
     ax.quiver(arrows.x[valid],arrows.y[valid],arrows.environment_east[valid]/mag[valid],
-              arrows.environment_north[valid]/mag[valid],color="white",alpha=.7,
+              arrows.environment_north[valid]/mag[valid],color=cyc_clr,alpha=.7,
               scale=24,width=.003,zorder=7)
     net=np.hypot(row.PV_grad_x,row.PV_grad_y)
     if np.isfinite(net) and net>0:
