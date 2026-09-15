@@ -118,3 +118,37 @@ Tests cover geographic sign conventions, rotating reference axes, wrapped
 angles, weighting, missing records, invalid intervals, regime re-entry,
 shallow columns and duplicate keys. Notebook execution is also checked with
 synthetic inputs locally; physical conclusions require the real Katana run.
+
+## Focused shear-direction analysis
+
+Run **`02_shear_direction_preference.ipynb`** after the existing input cache has
+been prepared. Notebook 01 does not need to be rerun. This asks whether the
+AE-left/CE-right relationship holds across geographic shear directions, rather
+than assuming that a pooled mean excludes fixed geographic tilt preferences.
+
+Outputs include:
+
+- Eight compass-sector means, left-side probabilities, support counts and
+  whole-eddy bootstrap intervals, with day and equal-eddy weighting.
+- An equal-sector estimate with joint track resampling, requiring all eight
+  compass sectors to have adequate support.
+- Latitude-by-direction checks and conditional geographic tilt distributions.
+- Pooled shear coverage and fixed 14-day, nonoverlapping within-track shear
+  variability. These distinguish geographical diversity from temporal change.
+- Exact 3/7/14-day pairs stratified by shear turn, checking both endpoint signs
+  and final tilt relative to new versus frozen starting shear.
+- Planetary, topographic, mixed and all-quality populations. The all-quality
+  population includes unknown PV labels and can cross regime transitions in
+  temporal analyses; the regime-specific populations cannot. It still requires
+  the same valid tilt, shear and 500 m column coverage.
+- Fully saved sensitivity tables and figures for thresholds, flow definitions,
+  dominance and compass-sector boundaries. Key scorecards print without row
+  truncation in saved notebook output.
+
+Results are saved to `direction_results/<UTC run timestamp>/` under the same
+scratch cache root, including input/source provenance. No synthetic results are
+committed. The geographic and temporal tests establish associations, not a
+causal shear response. No temporally independent shuffle p-values are used;
+a defensible spatial/seasonal surrogate would need metadata absent from this
+cache and must preserve temporal dependence. `direction_tools.py` contains the
+new helpers; existing geometry and notebook 01 remain unchanged.
