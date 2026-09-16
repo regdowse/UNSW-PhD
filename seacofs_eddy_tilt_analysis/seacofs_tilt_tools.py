@@ -1019,7 +1019,7 @@ def add_season(df: pd.DataFrame, time_col: str = "Date", season_col: str = "Seas
     out[season_col] = np.select(
         [month.isin([12, 1, 2]), month.isin([3, 4, 5]), month.isin([6, 7, 8]), month.isin([9, 10, 11])],
         ["DJF", "MAM", "JJA", "SON"],
-        default=np.nan,
+        default='nan',
     )
     return out
 
