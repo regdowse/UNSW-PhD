@@ -12,6 +12,7 @@ Run order:
 6. `05_wind_ekman_sensitivity.ipynb` (optional; requires a wind-stress cache)
 7. `06_joint_mechanism_comparison.ipynb`
 8. `07_temporal_tilt_evolution.ipynb`
+9. `08_stratification_polarity_tilt.ipynb`
 
 The stratification cache is file-parallel and restartable. For every eddy-day,
 it calculates depth-mean N2 at each ocean grid column inside the same
@@ -49,3 +50,8 @@ eddy-level slope tests, clustered nonlinear age models, increment/sign tests,
 individual trajectories, PV-regime transitions, and a component-wise test of
 the predicted surface-minus-deep differential displacement. It uses the
 existing vertical-profile dictionary and does not require a new cache.
+
+Notebook 08 isolates the stratification–polarity–tilt question. It compares
+AE and CE core N2 over 0–200 m and 0–500 m, confirms the polarity contrast in
+`TiltDis`, and separates raw, covariate-adjusted, between-eddy, and within-eddy
+stratification associations. It reuses the core-N2 cache built by notebook 00.
