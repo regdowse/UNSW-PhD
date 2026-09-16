@@ -7,7 +7,14 @@ survey is in `NOTEBOOK_INVENTORY.md`.
 
 ## Run on Katana
 
-Pull `UNSW-PhD/main`, then run these notebooks in order:
+For an **already completed run**, first run **03_report_saved_results.ipynb**.
+It prints numerical centreline intervals and raw CE-minus-AE contrast intervals,
+plots zoomed means/intervals, and redraws sections within the actual depth range.
+It reads your existing summaries and member files; **no reconstruction is needed**.
+Set `RUN_PATH` explicitly to choose an older run. Reporting outputs go into its
+`report_v2/` directory; the original selection/reconstruction provenance remains intact.
+
+For new composites, pull `UNSW-PhD/main`, then run:
 
 1. **00_population_audit.ipynb** — choose depths/thresholds, load existing tables,
    inspect exclusions/geography and freeze the selected Eddy-Day manifest.
@@ -15,6 +22,14 @@ Pull `UNSW-PhD/main`, then run these notebooks in order:
    per-eddy means, bootstrap and plot maps, centrelines, sections and 3-D vectors.
 3. **02_selection_sensitivity.ipynb** — inspect attrition and compare equal-eddy
    versus day-weighted centrelines.
+
+For depth sensitivity, run **00–01 with `DEPTH_PRESET='full_500m'`**, then run
+**00–01 with `DEPTH_PRESET='shallow_200m'`**. Finally run
+**04_depth_sensitivity_comparison.ipynb**. It discovers the latest completed run
+for each preset (or accepts explicit `RUNS`), compares their shared exact depths,
+and reports overlap/attrition of selected eddy-days. It rejects different units,
+reference depths, selection settings or input metadata. Its bands are each run's
+separate intervals, not a confidence interval for the difference between runs.
 
 Run from this directory or elsewhere inside `seacofs_eddy_tilt_analysis`.
 Notebook 01 loads the last frozen run by default; `RUN_PATH` can select a specific
@@ -33,11 +48,12 @@ No population composites have been evaluated on real Katana data locally.
 
 ## Defaults and interpretation
 
-- Use cached levels nearest **0, 200 and 500 m**, within a maximum 60 m mismatch;
-  actual levels are printed and stored. Adjust target depths to include additional
-  levels for finer sections. All levels must be present and valid for every
-  selected day; there is no vertical interpolation. All members share the same
-  shallow reference depth. A shallower companion run tests deep-profile selection.
+- `full_500m` uses **all cached levels through the level nearest 500 m**
+  (currently 515.4 m); `shallow_200m` ends near 200 m (currently 181.3 m).
+  `custom` retains the explicit target list, resolving to exact cached levels.
+  There is no vertical interpolation. Every selected day must contain all
+  requested levels, with one common reference depth. Sections are limited to
+  the shallowest/deepest actual levels; cell colouring is not extra depth data.
 - Positive radius, finite required parameters, positive-definite ellipse matrix,
   consistent AE/CE rotation sign and unique keys are required. No tilt magnitude
   or preferred tilt direction is used to select members.
@@ -87,7 +103,9 @@ pixelwise intervals as a simultaneous significance test across a volume.
 Current primary groups have different environmental frames and eligible samples;
 a raw difference between their grids is not a controlled mechanism test. The
 sensitivity notebook compares weighting, but it does not claim to implement
-matched geography/season, spatial-block bootstrap or field-difference intervals.
+matched geography/season, spatial-block bootstrap or field-difference intervals. Numerical centreline
+CE-minus-AE contrasts are provided within each common frame; they are raw
+population comparisons, not matched or causal polarity effects.
 High/low Rossby, core/background stratification, shear-relative and other groups
 remain subsequent extensions after the initial selection audit is reviewed.
 

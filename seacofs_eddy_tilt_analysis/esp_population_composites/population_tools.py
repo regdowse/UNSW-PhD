@@ -303,7 +303,7 @@ def plot_sections_3d(result, depths, coordinate, units='Rc'):
     for j,(ax,s) in enumerate(zip(axes,sections)):
         im=ax.pcolormesh(coordinate,depths,s,shading='auto',cmap='RdBu_r',vmin=-limit,vmax=limit)
         ax.plot(centre[:,j],depths,'k.-')
-        ax.invert_yaxis()
+        ax.set_ylim(float(depths[-1]),float(depths[0]))
         ax.set(xlabel=f'{names[j]} ({units})',ylabel='Depth (m)',
                title=f'{names[1-j]} velocity on central section')
         fig.colorbar(im,ax=ax,label='m/s')
@@ -326,3 +326,158 @@ def plot_sections_3d(result, depths, coordinate, units='Rc'):
            zlim=(depths[-1],depths[0]))
     ax.legend()
     return [('sections',fig),('3d_horizontal_velocity',fig3)]
+
+
+def depth_preset(vertical, preset='full_500m'):
+    """Select every exact cached level through the nearest declared endpoint."""
+    endpoints={'full_500m':500., 'shallow_200m':200.}
+    if preset not in endpoints:
+        raise ValueError(f'Choose one of {list(endpoints)}')
+    available=np.sort(vertical.Depth.dropna().unique())
+    endpoints_actual=select_depths(vertical,(0.,endpoints[preset]))
+    return available[(available>=endpoints_actual[0])&(available<=endpoints_actual[-1])]
+
+
+def load_saved_results(run):
+    """Read existing summaries without rerunning reconstruction or changing provenance."""
+    run=Path(run)
+    config=json.loads((run/'provenance.json').read_text())['config']
+    manifest=pd.read_csv(run/'members/members.csv')
+    results={};depths=coordinate=None
+    for group,part in manifest.groupby('group',sort=True):
+        with np.load(run/f'{group}_summary.npz') as z:
+            current_depths=z['depths'];current_coordinate=z['coordinate']
+            if depths is not None and (not np.array_equal(depths,current_depths) or
+                                      not np.array_equal(coordinate,current_coordinate)):
+                raise ValueError('Group summaries use different grids or depths')
+            depths=current_depths;coordinate=current_coordinate
+            results[group]={kind:{key:z[f'{kind}_{key}'] for key in ('mean','low','high','support')}
+                            for kind in ('field','centre')}
+            results[group].update(members=z['member_centres'],eddies=len(part),
+                                  days=int(part.days.sum()),frame=part.frame.iloc[0])
+    if not results:
+        raise ValueError('No saved group summaries')
+    return results,depths,coordinate,config
+
+
+def centre_interval_table(results, depths, units='Rc'):
+    """Signed centre displacement plus reversed deep-to-shallow tilt intervals."""
+    rows=[]
+    for group,r in results.items():
+        labels=('onshore','alongshore') if r['frame']=='onshore' else ('east','north')
+        for k,depth in enumerate(depths):
+            for j,label in enumerate(labels):
+                mean,low,high=(float(r['centre'][key][k,j]) for key in ('mean','low','high'))
+                valid=np.isfinite([mean,low,high]).all()
+                rows.append(dict(group=group,depth_m=float(depth),component=label,units=units,
+                    eddies=int(r['centre']['support'][k,j]),days=r['days'],
+                    mean=mean,ci_low=low,ci_high=high,
+                    excludes_zero=bool(low>0 or high<0) if valid else None,
+                    tilt_mean=-mean,tilt_ci_low=-high,tilt_ci_high=-low))
+    return pd.DataFrame(rows)
+
+
+def plot_zoomed_centres(results, depths, units='Rc'):
+    """Shared symmetric limits from means/CIs, no member outliers in these panels."""
+    import matplotlib.pyplot as plt
+    bounds=[]
+    for r in results.values():
+        for key in ('mean','low','high'):
+            values=r['centre'][key];bounds.extend(abs(values[np.isfinite(values)]))
+    limit=max(max(bounds,default=0)*1.15,.01 if units=='Rc' else 1.)
+    fig,axes=plt.subplots(len(results),2,figsize=(10,3*len(results)),squeeze=False,constrained_layout=True)
+    for i,(group,r) in enumerate(results.items()):
+        names=('Onshore','Alongshore') if r['frame']=='onshore' else ('East','North')
+        for j in range(2):
+            ax=axes[i,j];c=r['centre']
+            ax.plot(c['mean'][:,j],depths,'o-',color='tab:red' if group.startswith('AE') else 'tab:blue',ms=3)
+            ax.fill_betweenx(depths,c['low'][:,j],c['high'][:,j],alpha=.25)
+            ax.axvline(0,color='.4',ls=':')
+            ax.set(xlim=(-limit,limit),ylim=(depths[-1],depths[0]),
+                   xlabel=f'{names[j]} displacement ({units})',ylabel='Depth (m)',title=group)
+    fig.suptitle('Population-mean centre displacement: pointwise 95% eddy-bootstrap intervals\nShallow-to-deep displacement; deep-to-shallow tilt has opposite sign')
+    return fig
+
+
+def centre_contrasts(manifest, member_dir, depths, *, n_boot=500, seed=731, min_members=20):
+    """CE minus AE within each common frame; shared global-ID draws across groups.
+
+    Raw contrasts are not geographically/seasonally matched or causal effects.
+    """
+    if n_boot<100 or min_members<2:
+        raise ValueError('Use >=100 draws and >=2 eddies')
+    ids=np.sort(manifest.Eddy.unique())
+    if not len(ids):raise ValueError('No eddies')
+    draws=np.random.default_rng(seed).multinomial(len(ids),np.full(len(ids),1/len(ids)),size=n_boot)
+    stats={}
+    for group,part in manifest.groupby('group',sort=True):
+        arrays=[]
+        for file in part.file:
+            with np.load(Path(member_dir)/file) as z:arrays.append(z['centres'])
+        a=np.stack(arrays)
+        if a.shape[1:] != (len(depths),2) or not np.isfinite(a).all():
+            raise ValueError('Contrasts require complete finite centrelines')
+        weights=draws[:,np.searchsorted(ids,part.Eddy.to_numpy())].astype(float)
+        den=weights.sum(axis=1)[:,None]
+        samples=np.divide(np.dot(weights,a.reshape(len(a),-1)),den,
+                          out=np.full((n_boot,len(depths)*2),np.nan),where=den>0)
+        stats[group]=(a.mean(axis=0),samples.reshape(n_boot,len(depths),2),len(a),part.frame.iloc[0])
+    rows=[]
+    for regime in ('Planetary','Topographic'):
+        if f'AE_{regime}' not in stats or f'CE_{regime}' not in stats:continue
+        a,b=stats[f'AE_{regime}'],stats[f'CE_{regime}']
+        if a[3]!=b[3]:raise ValueError('Contrast requires matching frames')
+        labels=('onshore','alongshore') if a[3]=='onshore' else ('east','north')
+        valid_support=min(a[2],b[2])>=min_members
+        for k,z in enumerate(depths):
+            for j,label in enumerate(labels):
+                samples=b[1][:,k,j]-a[1][:,k,j]
+                samples=samples[np.isfinite(samples)]
+                lo,hi=np.quantile(samples,[.025,.975]) if valid_support and len(samples) else (np.nan,np.nan)
+                rows.append(dict(regime=regime,depth_m=float(z),component=label,
+                                 contrast='CE minus AE centre displacement',
+                                 mean=b[0][k,j]-a[0][k,j] if valid_support else np.nan,
+                                 ci_low=lo,ci_high=hi,AE_eddies=a[2],CE_eddies=b[2],
+                                 excludes_zero=bool(lo>0 or hi<0) if np.isfinite([lo,hi]).all() else None))
+    return pd.DataFrame(rows)
+
+
+def compare_saved_runs(runs):
+    """Descriptive comparison at shared exact depths; not a paired difference test."""
+    tables=[];selections={};configs={};provenances={};references=[]
+    if len(runs)<2: raise ValueError('Select at least two runs')
+    for label,path in runs.items():
+        results,depths,_,config=load_saved_results(path)
+        configs[label]=config
+        references.append(float(depths[0]))
+        provenances[label]=json.loads((Path(path)/'provenance.json').read_text())
+        table=centre_interval_table(results,depths,config['units'])
+        table.insert(0,'run',label);tables.append(table)
+        selected=pd.read_parquet(Path(path)/'selected.parquet')
+        unique(selected,KEYS)
+        selections[label]=selected
+    if len(set(references))>1:
+        raise ValueError('Runs must use the same reference depth')
+    settings=('dominance','min_slope','min_slope_coherence','min_slope_valid_fraction',
+              'mask_ocean','half_width','grid_step','units')
+    for setting in settings:
+        if len({str(c.get(setting)) for c in configs.values()})>1:
+            raise ValueError(f'Depth-only comparison has different {setting} settings')
+    source_sets=[v.get('sources',{}) for v in provenances.values()]
+    if any(s!=source_sets[0] for s in source_sets[1:]):
+        raise ValueError('Depth-only comparison requires matching input source metadata')
+    if len({c['units'] for c in configs.values()})>1:
+        raise ValueError('Run comparison requires identical displacement units')
+    table=pd.concat(tables,ignore_index=True)
+    shared=set.intersection(*(set(t.depth_m) for t in tables))
+    table=table.loc[table.depth_m.isin(shared)].reset_index(drop=True)
+    rows=[];labels=list(runs)
+    for i,left in enumerate(labels):
+        for right in labels[i+1:]:
+            l,r=selections[left],selections[right]
+            for group in sorted(set(l.group)|set(r.group)):
+                ls=set(map(tuple,l.loc[l.group.eq(group),KEYS].to_numpy()))
+                rs=set(map(tuple,r.loc[r.group.eq(group),KEYS].to_numpy()))
+                rows.append(dict(run_a=left,run_b=right,group=group,days_a=len(ls),days_b=len(rs),
+                                 shared_days=len(ls&rs),only_a=len(ls-rs),only_b=len(rs-ls)))
+    return table,pd.DataFrame(rows)

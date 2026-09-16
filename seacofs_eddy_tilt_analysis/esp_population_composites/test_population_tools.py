@@ -2,6 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+import matplotlib
+matplotlib.use("Agg")
 import numpy as np
 import pandas as pd
 import population_tools as p
@@ -109,5 +111,66 @@ class Tests(unittest.TestCase):
             r=p.summarise_members(pd.DataFrame(rows),t,n_boot=100,min_members=2)
             np.testing.assert_equal(r['a']['centre']['low'],r['b']['centre']['low'])
             np.testing.assert_equal(r['a']['centre']['high'],r['b']['centre']['high'])
+
+
+
+class ReportingTests(unittest.TestCase):
+    def result(self):
+        centre={'mean':np.array([[0.,0.],[-.05,.02]]),
+                'low':np.array([[0.,0.],[-.08,-.01]]),
+                'high':np.array([[0.,0.],[-.02,.05]]),
+                'support':np.full((2,2),30)}
+        return {'centre':centre,'frame':'onshore','days':100,'eddies':30,
+                'members':np.array([centre['mean']])}
+
+    def test_interval_sign_and_zero(self):
+        table=p.centre_interval_table({'AE_Topographic':self.result()},[0,500])
+        r=table.loc[(table.depth_m==500)&(table.component=='onshore')].iloc[0]
+        self.assertAlmostEqual(r.tilt_mean,.05)
+        self.assertAlmostEqual(r.tilt_ci_low,.02)
+        self.assertAlmostEqual(r.tilt_ci_high,.08)
+        self.assertTrue(r.excludes_zero)
+        self.assertFalse(table.loc[(table.depth_m==500)&(table.component=='alongshore'),'excludes_zero'].iloc[0])
+
+    def test_all_levels_preset(self):
+        v=pd.DataFrame({'Depth':[0,5,20,50,181.264,300,515.416,660]})
+        np.testing.assert_equal(p.depth_preset(v,'full_500m'),[0,5,20,50,181.264,300,515.416])
+        np.testing.assert_equal(p.depth_preset(v,'shallow_200m'),[0,5,20,50,181.264])
+
+    def test_zoom_ignores_extreme_members(self):
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        r=self.result();r['members']=np.array([[[0,0],[1000,-1000]]])
+        fig=p.plot_zoomed_centres({'AE_Topographic':r},[0,500])
+        self.assertLess(fig.axes[0].get_xlim()[1],.1)
+        np.testing.assert_equal(fig.axes[0].get_ylim(),[500,0])
+        plt.close(fig)
+
+    def test_contrast_sign_and_support(self):
+        with tempfile.TemporaryDirectory() as t:
+            rows=[]
+            for cyc,value in [('AE',1.),('CE',3.)]:
+                for e in range(3):
+                    file=f'{cyc}{e}.npz'
+                    np.savez(Path(t)/file,centres=np.array([[0.,0.],[value,0.]]))
+                    rows.append(dict(group=f'{cyc}_Planetary',Eddy=e+(0 if cyc=='AE' else 3),
+                                     file=file,days=1,frame='geographic'))
+            r=p.centre_contrasts(pd.DataFrame(rows),t,[0,500],n_boot=100,min_members=2)
+            row=r.loc[(r.depth_m==500)&(r.component=='east')].iloc[0]
+            self.assertAlmostEqual(row['mean'],2.)
+            self.assertAlmostEqual(row.ci_low,2.)
+            self.assertAlmostEqual(row.ci_high,2.)
+            r=p.centre_contrasts(pd.DataFrame(rows),t,[0,500],n_boot=100,min_members=4)
+            self.assertTrue(r['mean'].isna().all())
+
+    def test_section_limits(self):
+        import matplotlib.pyplot as plt
+        r=self.result()
+        r['field']={'mean':np.ones((2,2,3,3))}
+        figs=p.plot_sections_3d(r,np.array([0.,515.4]),np.array([-1,0,1]))
+        for ax in figs[0][1].axes[:2]:
+            np.testing.assert_allclose(ax.get_ylim(),[515.4,0])
+        for _,fig in figs:plt.close(fig)
 
 if __name__=='__main__': unittest.main()
