@@ -21,3 +21,11 @@ buoyancy-gradient method used to build the v4 cache.
 
 ESP requires `/home/z5297792/ESP_zonodo/functions.py` by default. Change
 `ESP_ROOT` in the notebook if that checkout moves.
+
+`eddy_esp_composite.ipynb` reconstructs every selected day of one eddy and
+then averages the evaluated ESP velocity fields. Its default onshore-aligned
+frame recentres every day and rotates the local core-mean bathymetric gradient
+to a common direction. This is intended for testing persistent shelfward tilt
+without smearing the eddy as it translates southward. `esp_composite_tools.py`
+contains the reusable compositing functions and also supports radius-normalised
+coordinates for later multi-eddy comparisons.
