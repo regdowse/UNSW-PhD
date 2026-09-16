@@ -9,6 +9,8 @@ and background-flow calculations.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -18,6 +20,12 @@ import pandas as pd
 
 SECONDS_PER_DAY = 86400.0
 METRES_PER_KM = 1000.0
+N2_CACHE_VERSION = "v4_potential_density"
+N2_DENSITY_METHOD = "xroms.potential_density_z0"
+DEFAULT_N2_CACHE_PATH = Path(
+    "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset/"
+    "tilt_mechanisms/n2_eddy_day_v4_potential_density_core.parquet"
+)
 
 
 def require_tilt_measurements(df: pd.DataFrame) -> pd.DataFrame:
@@ -305,27 +313,138 @@ def _depth_means(n2_columns, z_columns, depths):
     return output
 
 
+def _profile_stratification_metrics(
+    n2_columns,
+    z_mid_columns,
+    sigma0_columns,
+    z_rho_columns,
+    depths,
+    *,
+    pycnocline_limit_m=500.0,
+    pycnocline_half_width_m=50.0,
+    mld_density_threshold=0.03,
+):
+    """Calculate fixed-depth and pycnocline-following profile diagnostics.
+
+    ``N2`` is based on surface-referenced potential density. Fixed-depth means
+    and integrals use the resolved N2 midpoint span within each interval. The
+    pycnocline is the largest stable N2 value above ``pycnocline_limit_m``;
+    its mean is evaluated within a depth window around that peak. MLD is the
+    linearly interpolated depth where sigma0 first exceeds the shallowest
+    valid value by ``mld_density_threshold`` kg m-3.
+    """
+
+    n2 = np.asarray(n2_columns, float)
+    z_mid = np.asarray(z_mid_columns, float)
+    sigma0 = np.asarray(sigma0_columns, float)
+    z_rho = np.asarray(z_rho_columns, float)
+    if n2.shape != z_mid.shape or n2.ndim != 2:
+        raise ValueError("N2 and midpoint z must be matching point-by-level arrays.")
+    if sigma0.shape != z_rho.shape or sigma0.ndim != 2:
+        raise ValueError("Potential density and rho-level z must be matching arrays.")
+    if sigma0.shape[0] != n2.shape[0] or sigma0.shape[1] != n2.shape[1] + 1:
+        raise ValueError("Rho-level profiles must contain one more level than N2 profiles.")
+
+    metrics = {}
+    means = _depth_means(n2, z_mid, depths)
+    for depth in depths:
+        depth = int(depth)
+        metrics[f"N2_{depth}m_mean_s2"] = means[depth]
+        metrics[f"N2_{depth}m_integral_m_s2"] = np.full(n2.shape[0], np.nan)
+        metrics[f"N2_{depth}m_max_s2"] = np.full(n2.shape[0], np.nan)
+    for name in (
+        "N2_pycnocline_mean_s2",
+        "N2_pycnocline_max_s2",
+        "pycnocline_depth_m",
+        "MLD_density_m",
+    ):
+        metrics[name] = np.full(n2.shape[0], np.nan)
+
+    for point in range(n2.shape[0]):
+        valid_mid = np.isfinite(n2[point]) & np.isfinite(z_mid[point])
+        for depth in depths:
+            depth = int(depth)
+            use = valid_mid & (z_mid[point] <= 0) & (z_mid[point] >= -float(depth))
+            if use.sum() >= 2:
+                order = np.argsort(z_mid[point, use])
+                zz = z_mid[point, use][order]
+                nn = n2[point, use][order]
+                metrics[f"N2_{depth}m_integral_m_s2"][point] = np.trapz(nn, zz)
+                metrics[f"N2_{depth}m_max_s2"][point] = np.nanmax(nn)
+
+        pyc_use = (
+            valid_mid
+            & (z_mid[point] <= 0)
+            & (z_mid[point] >= -float(pycnocline_limit_m))
+            & (n2[point] > 0)
+        )
+        if pyc_use.any():
+            candidates = np.flatnonzero(pyc_use)
+            peak_index = candidates[np.nanargmax(n2[point, candidates])]
+            peak_depth = -z_mid[point, peak_index]
+            window = pyc_use & (
+                np.abs((-z_mid[point]) - peak_depth) <= float(pycnocline_half_width_m)
+            )
+            metrics["N2_pycnocline_max_s2"][point] = n2[point, peak_index]
+            metrics["N2_pycnocline_mean_s2"][point] = np.nanmean(n2[point, window])
+            metrics["pycnocline_depth_m"][point] = peak_depth
+
+        valid_rho = np.isfinite(sigma0[point]) & np.isfinite(z_rho[point]) & (z_rho[point] <= 0)
+        if valid_rho.sum() >= 2:
+            depth_positive = -z_rho[point, valid_rho]
+            density = sigma0[point, valid_rho]
+            order = np.argsort(depth_positive)
+            depth_positive = depth_positive[order]
+            density = density[order]
+            target = density[0] + float(mld_density_threshold)
+            crossed = np.flatnonzero(density >= target)
+            if crossed.size:
+                upper = int(crossed[0])
+                if upper == 0:
+                    metrics["MLD_density_m"][point] = depth_positive[0]
+                else:
+                    z0, z1 = depth_positive[upper - 1 : upper + 1]
+                    r0, r1 = density[upper - 1 : upper + 1]
+                    if np.isfinite(r1 - r0) and not np.isclose(r1, r0):
+                        metrics["MLD_density_m"][point] = z0 + (target - r0) * (z1 - z0) / (r1 - r0)
+    return metrics
+
+
 @dataclass(frozen=True)
 class N2CacheConfig:
     """Runtime and restart settings for the file-parallel N2 cache."""
 
     model_root: Path = Path("/srv/scratch/z3533156/26year_BRAN2020")
-    output_path: Path = Path(
-        "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset/"
-        "tilt_mechanisms/n2_eddy_day_v3_core.parquet"
-    )
+    output_path: Path = DEFAULT_N2_CACHE_PATH
     grid_path: Path = Path("/srv/scratch/z3533156/26year_BRAN2020/outer_avg_01461.nc")
     z_r_path: Path = Path(
         "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy"
     )
     depths: tuple[int, ...] = (200, 500)
     rho0: float = 1025.0
+    pycnocline_limit_m: float = 500.0
+    pycnocline_half_width_m: float = 50.0
+    mld_density_threshold: float = 0.03
     point_batch_size: int = 128
     skip_existing: bool = True
 
     @property
     def partition_root(self):
-        return self.output_path.parent / f"{self.output_path.stem}_file_partitions"
+        return self.output_path.parent / f"{self.output_path.stem}_{self.signature}_file_partitions"
+
+    @property
+    def signature(self):
+        settings = {
+            "version": N2_CACHE_VERSION,
+            "density_method": N2_DENSITY_METHOD,
+            "depths": tuple(int(value) for value in self.depths),
+            "rho0": float(self.rho0),
+            "pycnocline_limit_m": float(self.pycnocline_limit_m),
+            "pycnocline_half_width_m": float(self.pycnocline_half_width_m),
+            "mld_density_threshold": float(self.mld_density_threshold),
+        }
+        encoded = json.dumps(settings, sort_keys=True).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()[:12]
 
 
 def _n2_partition_path(model_path, config):
@@ -449,11 +568,11 @@ def process_n2_model_file(model_path, file_rows, config=N2CacheConfig()):
         sigma_coordinate = raw[vertical_dim].values if vertical_dim in raw.coords else None
 
         def calculate_points(day, ic, jc):
-            """Return depth means for arbitrary columns on one model day."""
+            """Return potential-density stratification metrics for model columns."""
 
             ic = np.asarray(ic, dtype=int)
             jc = np.asarray(jc, dtype=int)
-            values = {int(depth): np.full(len(ic), np.nan) for depth in config.depths}
+            values = None
             for start in range(0, len(ic), config.point_batch_size):
                 stop = min(start + config.point_batch_size, len(ic))
                 xi = xr.DataArray(ic[start:stop], dims="point")
@@ -470,11 +589,26 @@ def process_n2_model_file(model_path, file_rows, config=N2CacheConfig()):
                     raise ValueError(
                         f"z_r columns {z_values.shape} do not match temp columns {temp.shape}."
                     )
-                rho = np.asarray(xroms.density(temp, salt, z=z_values), float)
-                n2_values, z_mid = _n2_from_density(rho, z_values, config.rho0)
-                batch_means = _depth_means(n2_values, z_mid, config.depths)
-                for depth in config.depths:
-                    values[int(depth)][start:stop] = batch_means[int(depth)]
+                sigma0 = np.asarray(xroms.potential_density(temp, salt, z=0.0), float)
+                n2_values, z_mid = _n2_from_density(sigma0, z_values, config.rho0)
+                batch_metrics = _profile_stratification_metrics(
+                    n2_values,
+                    z_mid,
+                    sigma0,
+                    z_values,
+                    config.depths,
+                    pycnocline_limit_m=config.pycnocline_limit_m,
+                    pycnocline_half_width_m=config.pycnocline_half_width_m,
+                    mld_density_threshold=config.mld_density_threshold,
+                )
+                if values is None:
+                    values = {
+                        name: np.full(len(ic), np.nan) for name in batch_metrics
+                    }
+                for name, metric in batch_metrics.items():
+                    values[name][start:stop] = metric
+            if values is None:
+                values = {}
             return values
 
         for day, day_rows in rows.groupby("Day", sort=False):
@@ -500,27 +634,60 @@ def process_n2_model_file(model_path, file_rows, config=N2CacheConfig()):
                     "Eddy": row.Eddy,
                     "Day": int(day),
                     "N2_core_cells": int(core_sizes[position]),
+                    "N2_cache_version": N2_CACHE_VERSION,
+                    "N2_cache_signature": config.signature,
+                    "N2_density_method": N2_DENSITY_METHOD,
                 }
-                for depth in config.depths:
-                    depth = int(depth)
-                    core = core_values[depth][owners == position]
+                for metric, all_core_values in core_values.items():
+                    core = all_core_values[owners == position]
                     valid = np.isfinite(core)
-                    record[f"N2_{depth}m_core_s2"] = float(np.nanmean(core)) if valid.any() else np.nan
-                    record[f"N2_{depth}m_core_std_s2"] = float(np.nanstd(core)) if valid.any() else np.nan
-                    record[f"N2_{depth}m_core_valid_cells"] = int(valid.sum())
-                    record[f"N2_{depth}m_core_valid_fraction"] = (
-                        float(valid.mean()) if len(valid) else np.nan
-                    )
-                    record[f"N2_{depth}m_centre_s2"] = centre_values[depth][position]
+                    if metric.startswith("N2_") and metric.endswith("m_mean_s2"):
+                        depth = metric.removeprefix("N2_").removesuffix("m_mean_s2")
+                        mean_base = f"N2_{depth}m"
+                        record[f"{mean_base}_core_s2"] = float(np.nanmean(core)) if valid.any() else np.nan
+                        record[f"{mean_base}_core_std_s2"] = float(np.nanstd(core)) if valid.any() else np.nan
+                        record[f"{mean_base}_core_valid_cells"] = int(valid.sum())
+                        record[f"{mean_base}_core_valid_fraction"] = (
+                            float(valid.mean()) if len(valid) else np.nan
+                        )
+                        record[f"{mean_base}_centre_s2"] = centre_values[metric][position]
+                    else:
+                        prefix = metric
+                        record[f"{prefix}_core"] = float(np.nanmean(core)) if valid.any() else np.nan
+                        record[f"{prefix}_core_std"] = float(np.nanstd(core)) if valid.any() else np.nan
+                        record[f"{prefix}_core_valid_cells"] = int(valid.sum())
+                        record[f"{prefix}_core_valid_fraction"] = (
+                            float(valid.mean()) if len(valid) else np.nan
+                        )
+                        record[f"{prefix}_centre"] = centre_values[metric][position]
                 output.append(record)
 
-    columns = ["Eddy", "Day", "N2_core_cells"]
+    columns = [
+        "Eddy", "Day", "N2_core_cells", "N2_cache_version",
+        "N2_cache_signature", "N2_density_method",
+    ]
     for depth in config.depths:
         depth = int(depth)
         columns.extend([
             f"N2_{depth}m_core_s2", f"N2_{depth}m_core_std_s2",
             f"N2_{depth}m_core_valid_cells", f"N2_{depth}m_core_valid_fraction",
             f"N2_{depth}m_centre_s2",
+        ])
+        for suffix in ("integral_m_s2", "max_s2"):
+            prefix = f"N2_{depth}m_{suffix}"
+            columns.extend([
+                f"{prefix}_core", f"{prefix}_core_std",
+                f"{prefix}_core_valid_cells", f"{prefix}_core_valid_fraction",
+                f"{prefix}_centre",
+            ])
+    for metric in (
+        "N2_pycnocline_mean_s2", "N2_pycnocline_max_s2",
+        "pycnocline_depth_m", "MLD_density_m",
+    ):
+        columns.extend([
+            f"{metric}_core", f"{metric}_core_std",
+            f"{metric}_core_valid_cells", f"{metric}_core_valid_fraction",
+            f"{metric}_centre",
         ])
     table = pd.DataFrame(output, columns=columns).sort_values(["Eddy", "Day"])
     _atomic_parquet(table, partition)
@@ -532,8 +699,11 @@ def build_n2_cache_xroms(
     model_root: Path | str | None = None,
     output_path: Path | str | None = None,
     *,
-    depths=(300, 500),
+    depths=(200, 500),
     rho0=1025.0,
+    pycnocline_limit_m=500.0,
+    pycnocline_half_width_m=50.0,
+    mld_density_threshold=0.03,
     workers=4,
     point_batch_size=128,
     grid_path: Path | str | None = None,
@@ -542,11 +712,12 @@ def build_n2_cache_xroms(
 ):
     """Build a restartable, model-file-parallel eddy-centre N2 cache.
 
-    Only requested temperature/salinity columns are read. ``xroms.density``
-    supplies the ROMS equation of state, then N2 is evaluated from its
-    documented vertical-gradient definition. Results are written once as a
-    parquet cache. ``ic`` indexes xi and ``jc`` indexes eta, matching the
-    transposed arrays used by ``seacofs_tilt_tools``.
+    Only requested temperature/salinity columns are read. Surface-referenced
+    ``xroms.potential_density`` supplies sigma0; N2 is its vertical buoyancy
+    gradient. This deliberately excludes the compressibility contribution in
+    pressure-dependent in-situ density. Results include fixed-depth mean,
+    integral, and maximum N2, plus pycnocline-following and density-threshold
+    mixed-layer diagnostics. ``ic`` indexes xi and ``jc`` indexes eta.
     """
 
     from joblib import Parallel, delayed
@@ -568,6 +739,9 @@ def build_n2_cache_xroms(
         z_r_path=Path(z_r_path) if z_r_path is not None else defaults.z_r_path,
         depths=tuple(int(depth) for depth in depths),
         rho0=float(rho0),
+        pycnocline_limit_m=float(pycnocline_limit_m),
+        pycnocline_half_width_m=float(pycnocline_half_width_m),
+        mld_density_threshold=float(mld_density_threshold),
         point_batch_size=int(point_batch_size),
         skip_existing=bool(skip_existing),
     )
@@ -597,9 +771,48 @@ def build_n2_cache_xroms(
     if not key_check["_merge"].eq("both").all():
         counts = key_check["_merge"].value_counts().to_dict()
         raise ValueError(f"Reduced cache does not match requested Eddy-Day keys: {counts}")
+    for column, expected_value in {
+        "N2_cache_version": N2_CACHE_VERSION,
+        "N2_cache_signature": config.signature,
+        "N2_density_method": N2_DENSITY_METHOD,
+    }.items():
+        values = set(result[column].dropna().astype(str))
+        if values != {expected_value}:
+            raise ValueError(f"Mixed or stale cache metadata in {column}: {sorted(values)}")
     config.output_path.parent.mkdir(parents=True, exist_ok=True)
     _atomic_parquet(result, config.output_path)
     return result
+
+
+def load_stratification_cache(path=DEFAULT_N2_CACHE_PATH):
+    """Load and validate the corrected potential-density N2 cache."""
+
+    path = Path(path)
+    table = pd.read_parquet(path)
+    required = {
+        "Eddy", "Day", "N2_cache_version", "N2_cache_signature",
+        "N2_density_method", "N2_200m_core_s2", "N2_500m_core_s2",
+        "N2_200m_integral_m_s2_core", "N2_500m_integral_m_s2_core",
+        "N2_200m_max_s2_core", "N2_500m_max_s2_core",
+        "N2_pycnocline_mean_s2_core", "N2_pycnocline_max_s2_core",
+        "pycnocline_depth_m_core", "MLD_density_m_core",
+    }
+    if missing := required - set(table.columns):
+        raise ValueError(
+            f"{path} is not the corrected stratification cache; missing {sorted(missing)}"
+        )
+    versions = set(table["N2_cache_version"].dropna().astype(str))
+    methods = set(table["N2_density_method"].dropna().astype(str))
+    signatures = set(table["N2_cache_signature"].dropna().astype(str))
+    if versions != {N2_CACHE_VERSION} or methods != {N2_DENSITY_METHOD}:
+        raise ValueError(
+            f"Unsupported N2 cache metadata: versions={versions}, methods={methods}"
+        )
+    if len(signatures) != 1:
+        raise ValueError(f"Cache contains mixed calculation signatures: {signatures}")
+    if table.duplicated(["Eddy", "Day"]).any():
+        raise ValueError("N2 cache contains duplicate Eddy-Day rows.")
+    return table
 
 
 def add_topographic_regimes(df: pd.DataFrame, shelf_depth=2000.0, dominance_ratio=1.0):
