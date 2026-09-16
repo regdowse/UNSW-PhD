@@ -355,8 +355,8 @@ def plot_sections(
     }
     labels = {
         "N2": r"$N^2$ (s$^{-2}$)", "u": r"$u_E$ (m s$^{-1}$)",
-        "v": r"$v_N$ (m s$^{-1}$)", "temp": r"Temperature ($^\\circ$C)",
-        "salt": "Salinity", "sigma0": r"$\\sigma_0$ (kg m$^{-3}$)",
+        "v": r"$v_N$ (m s$^{-1}$)", "temp": r"Temperature ($^\circ$C)",
+        "salt": "Salinity", "sigma0": r"$\sigma_0$ (kg m$^{-3}$)",
         "speed": r"Speed (m s$^{-1}$)",
     }
     fields = []
