@@ -122,7 +122,7 @@ def plot_tilt_summary(summary):
     for ax in axs:
         ax.set_xlim(0,xmax);ax.ticklabel_format(axis='x',style='plain',useOffset=False)
     fig.suptitle('Surface-to-depth composite tilt; bars = pointwise 95% bootstrap CI')
-    return fig
+    return fig, axs
 
 
 def fit_collections(collections,X,Y,esp,min_eddies=2,**fit_kwargs):
@@ -148,23 +148,44 @@ def fit_collections(collections,X,Y,esp,min_eddies=2,**fit_kwargs):
     return (pd.concat(tables,ignore_index=True) if tables else pd.DataFrame(),pd.DataFrame(audit))
 
 
+# def plot_fit_profiles(fits,population):
+#     import matplotlib.pyplot as plt
+#     fig,axs=plt.subplots(2,4,figsize=(14,8),constrained_layout=True)
+#     for i,cohort in enumerate(['shallow','deep']):
+#         for cyc in ['AE','CE']:
+#             s=fits.loc[fits.population.eq(population)&fits.cohort.eq(cohort)&fits.Cyc.eq(cyc)].sort_values('Depth')
+#             for ax,col,scale in zip(axs[i],['w','Omega','Rc','vector_r2'],[1e5,1e5,1,1]):
+#                 ax.plot((s[col]*scale).where(s.fit_ok),s.Depth,color=COLORS[cyc],label=cyc)
+#         for ax,label in zip(axs[i],[r'$\zeta$ ($10^{-5}$ s$^{-1}$)',r'$\Omega$ ($10^{-5}$ s$^{-1}$)',r'$R_c$ (km)','Outer-fit vector R²']):
+#             ax.set(xlabel=label,ylabel='Depth (m)',title=cohort);ax.invert_yaxis();ax.axvline(0,color='.5',lw=.5)
+#             if ax.lines:ax.legend()
+#     for j in range(4):
+#         limits=[ax.get_xlim() for ax in axs[:,j]]
+#         for ax in axs[:,j]:ax.set_xlim(min(x[0] for x in limits),max(x[1] for x in limits))
+#     fig.suptitle(f'{population}: full inner/outer fits to composite velocities (gaps = failed/unsupported fits)')
+#     return fig
 def plot_fit_profiles(fits,population):
     import matplotlib.pyplot as plt
-    fig,axs=plt.subplots(2,4,figsize=(14,8),constrained_layout=True)
+    fig,axs=plt.subplots(2,3,figsize=(11,8),constrained_layout=True)
     for i,cohort in enumerate(['shallow','deep']):
         for cyc in ['AE','CE']:
             s=fits.loc[fits.population.eq(population)&fits.cohort.eq(cohort)&fits.Cyc.eq(cyc)].sort_values('Depth')
-            for ax,col,scale in zip(axs[i],['w','Omega','Rc','vector_r2'],[1e5,1e5,1,1]):
-                ax.plot((s[col]*scale).where(s.fit_ok),s.Depth,color=COLORS[cyc],label=cyc)
-        for ax,label in zip(axs[i],[r'Inner $w$ ($10^{-5}$ s$^{-1}$)',r'Outer $\Omega$ ($10^{-5}$ s$^{-1}$)',r'$R_c$ (km)','Outer-fit vector R²']):
-            ax.set(xlabel=label,ylabel='Depth (m)',title=cohort);ax.invert_yaxis();ax.axvline(0,color='.5',lw=.5)
-            if ax.lines:ax.legend()
-    for j in range(4):
+            for ax,col,scale in zip(axs[i],['w','Omega','Rc'],[1e5,1e5,1]):
+                if col in ['w','Omega']:
+                    ax.plot(np.abs((s[col]*scale).where(s.fit_ok)),s.Depth,color=COLORS[cyc],label=cyc)
+                else:
+                    ax.plot((s[col]*scale).where(s.fit_ok),s.Depth,color=COLORS[cyc],label=cyc)
+        for ax,label in zip(axs[i],[r'$|\zeta|$ ($10^{-5}$ s$^{-1}$)',r'$|\Omega|$ ($10^{-5}$ s$^{-1}$)',r'$R_c$ (km)']):
+            ax.set(xlabel=label,ylabel='Depth (m)',title=cohort)
+            ax.invert_yaxis()
+            ax.axvline(0,color='.5',lw=.5)
+            if ax.lines: ax.legend()
+    for j in range(3):
         limits=[ax.get_xlim() for ax in axs[:,j]]
-        for ax in axs[:,j]:ax.set_xlim(min(x[0] for x in limits),max(x[1] for x in limits))
+        for ax in axs[:,j]:
+            ax.set_xlim(min(x[0] for x in limits),max(x[1] for x in limits))
     fig.suptitle(f'{population}: full inner/outer fits to composite velocities (gaps = failed/unsupported fits)')
     return fig
-
 
 def section_data(result,X,Y,rotation_rad=0.,min_eddies=2):
     """Two surface-centred vertical cuts in a properly rotated coordinate frame.
@@ -201,8 +222,8 @@ def plot_sections(results,X,Y,population,cohort,rotation_rad=0.,frame='geographi
     finite=[a[np.isfinite(a)] for d in cuts.values() for a in [d['xcut'],d['ycut']]]
     limit=max([float(np.max(abs(a))) for a in finite if len(a)]+[1e-12])
     fig,axs=plt.subplots(2,2,figsize=(12,8),constrained_layout=True)
-    labels=(('East (km), north = 0','North velocity'),('North (km), east = 0','East velocity')) if frame=='geographic' else (
-        ('Along-gradient (km), perpendicular = 0','Perpendicular velocity'),('Perpendicular (km), along-gradient = 0','Along-gradient velocity'))
+    labels=(('Zonal (km)','Meridional velocity'),('Meridional (km)','Zonal velocity')) if frame=='geographic' else (
+        ('Along-gradient (km)','Perpendicular velocity'),('Perpendicular (km)','Along-gradient velocity'))
     deepest=max(float(np.max(d['depths'])) for d in cuts.values())
     im=None
     for i,cyc in enumerate(['AE','CE']):
