@@ -174,4 +174,4 @@ def plot_centrelines(stats,fits=None):
             ax.set(xlabel=f'Relative model-grid {c[0]} (km)',ylabel='Depth (m)')
             ax.legend(fontsize=8)
     fig.suptitle('Constituent mean and fitted composite centrelines\nSpread of eddy-days (top) and uncertainty of the mean (bottom)')
-    return fig
+    return fig,axes
