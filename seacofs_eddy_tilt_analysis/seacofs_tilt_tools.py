@@ -27,6 +27,10 @@ DEFAULT_TILT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modula
 DEFAULT_VERT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/vertical_profiles_confirmed/profiles.parquet")
 DEFAULT_GRID_PATH = Path("/srv/scratch/z3533156/26year_BRAN2020/outer_avg_01461.nc")
 DEFAULT_ZR_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy")
+DEFAULT_SURFACE_PV_CACHE = Path(
+    "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
+    "pv_gradient_surface/surface_pv.parquet"
+)
 DEFAULT_DEPTH_PV_ROOT = Path(
     "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
     "pv_gradient_depth_following"
@@ -385,6 +389,8 @@ def add_pv_gradient_terms(
     core_mean: bool = False,
     *,
     source: str = "original",
+    use_cache: bool | None = None,
+    cache_path: Path | str = DEFAULT_SURFACE_PV_CACHE,
     cache_root: Path | str = DEFAULT_DEPTH_PV_ROOT,
     depth_following: bool = False,
     vertical: pd.DataFrame | None = None,
@@ -396,6 +402,15 @@ def add_pv_gradient_terms(
     surface_method: str = "uniform",
 ):
     """Compute planetary, topographic, and total shallow-water PV gradients.
+
+    ``use_cache=True`` loads the entire saved surface result without using
+    ``df`` or ``grid``. ``use_cache=False`` recalculates and atomically replaces
+    ``cache_path``. Omitting the flag preserves the previous calculation-only
+    behaviour (no file writes). The Parquet file includes calculation settings
+    in its attributes; loading with different footprint/method settings raises
+    an error. Refresh with False after changing source data or the model grid.
+    Use different cache_path values to retain different datasets/settings.
+    This flag applies only to source='original', depth_following=False.
 
     ``source='original'`` (the default) runs the surface-centred calculation.
     With ``core_mean=True``, ``averaging='nonlinear'`` averages the completed
@@ -420,6 +435,51 @@ def add_pv_gradient_terms(
     valid_sources = {"original", "depth_snapshot", "depth"}
     if source not in valid_sources:
         raise ValueError(f"source must be one of {sorted(valid_sources)}")
+    if use_cache is not None:
+        if not isinstance(use_cache, bool):
+            raise TypeError("use_cache must be True, False, or None")
+        if source != "original" or depth_following:
+            raise ValueError("use_cache applies only to the surface calculation (source='original')")
+        cache_path = Path(cache_path).expanduser()
+        if cache_path.suffix.lower() != ".parquet":
+            raise ValueError("cache_path must end in .parquet")
+        frac, inner_frac = _validate_ellipse_fractions(frac, inner_frac)
+        settings = dict(version=1, core_mean=bool(core_mean), frac=frac,
+                        inner_frac=inner_frac, averaging=averaging,
+                        surface_method=surface_method)
+        if use_cache:
+            if not cache_path.is_file():
+                raise FileNotFoundError(
+                    f"No surface PV cache at {cache_path}. Run once with use_cache=False."
+                )
+            cached = pd.read_parquet(cache_path)
+            if cached.attrs.get("surface_pv_cache_settings") != settings:
+                raise ValueError(
+                    "Saved surface PV settings differ or metadata is missing. "
+                    "Run with use_cache=False to rebuild, or choose a different cache_path."
+                )
+            return cached
+        result = add_pv_gradient_terms(
+            df, grid, core_mean=core_mean, source=source,
+            frac=frac, inner_frac=inner_frac, averaging=averaging,
+            surface_method=surface_method, progress_every=progress_every,
+        )
+        # Save only after successful calculation; leave an existing cache intact
+        # if either calculation or serialisation fails.
+        import tempfile
+        from datetime import datetime, timezone
+        result.attrs["surface_pv_cache_settings"] = settings
+        result.attrs["surface_pv_cache_created_utc"] = datetime.now(timezone.utc).isoformat()
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=cache_path.parent, suffix=".parquet", delete=False) as handle:
+            temporary = Path(handle.name)
+        try:
+            result.to_parquet(temporary, index=True)
+            temporary.replace(cache_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return result
+
     if source != "original":
         if depth_following:
             raise ValueError("depth_following cannot be combined with a cached source")
