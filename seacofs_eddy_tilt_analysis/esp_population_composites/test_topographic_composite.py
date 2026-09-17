@@ -3,6 +3,9 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'seacofs_eddy_dataset_modular'/'src'))
+import composite_comparison_tools as ccomp
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -20,6 +23,10 @@ def model(x,y,xc,yc,Q,omega,rc):
     return -qy*factor,qx*factor
 
 
+def unavailable_inner(*args):
+    raise ValueError('synthetic notebook smoke test: no inner-fit solution')
+
+
 def fixture():
     rows=[];profiles=[]
     grid_angle=.23
@@ -31,7 +38,7 @@ def fixture():
         theta=(90-np.degrees(phi+grid_angle))%360
         for day in range(1,3):
             rows.append(dict(Eddy=e,Day=day,Cyc='AE' if e<=4 else 'CE',Ro=.2,
-                PV_grad_topo_mag=1e-10,PV_grad_topo_theta=theta,topo_plan_ratio=2.,h=2000.,
+                lon=154.5 if day==1 else 155.,PV_grad_topo_mag=1e-10,PV_grad_topo_theta=theta,topo_plan_ratio=2.,h=2000.,
                 dhdx=np.sin(np.deg2rad(theta)),dhdy=np.cos(np.deg2rad(theta))))
             for z in ([0,200,500,1000] if e%2 else [0,200,500,1000,1500]):
                 centre=B@np.array([z/100,z/250])+[100,200]
@@ -104,12 +111,12 @@ class TopographicTests(unittest.TestCase):
 
     def test_notebook_end_to_end(self):
         s,v,angle,_=fixture()
-        grid=SimpleNamespace(angle=angle)
+        grid=SimpleNamespace(angle=angle,z_r=np.full((151,151,6),-500.))
         tilt=SimpleNamespace(Paths=lambda:SimpleNamespace(grid='test',z_r='test'),
             load_grid=lambda *a:grid,load_tilt_tables=lambda *a,**kw:(s.copy(),None),
             add_pv_gradient_terms=lambda data,*a,**kw:data,load_vert=lambda *a:v)
-        ns=dict(np=np,pd=pd,plt=plt,pct=pct,tct=tct,tilt=tilt,
-            esp=SimpleNamespace(model_uv_at_xy=model),display=lambda *a:None)
+        ns=dict(np=np,pd=pd,plt=plt,pct=pct,tct=tct,tilt=tilt,ccomp=ccomp,
+            esp=SimpleNamespace(model_uv_at_xy=model,doppio=unavailable_inner,out_core_param_fit=lambda *a:None),display=lambda *a:None)
         cells=json.loads(Path(__file__).with_name('topographic_composite_tilt.ipynb').read_text())['cells']
         for c in cells[2:]:
             if c['cell_type']=='code':

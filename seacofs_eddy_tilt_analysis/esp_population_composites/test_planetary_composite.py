@@ -3,12 +3,19 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'seacofs_eddy_dataset_modular'/'src'))
+import composite_comparison_tools as ccomp
 import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import planetary_composite_tools as pct
+
+
+def unavailable_inner(*args):
+    raise ValueError('synthetic notebook smoke test: no inner-fit solution')
 
 
 def fixture():
@@ -73,8 +80,8 @@ class PlanetaryTests(unittest.TestCase):
 
     def test_notebook_end_to_end_synthetic(self):
         sample,v=fixture()
-        ns=dict(np=np,pd=pd,plt=plt,pct=pct,esp=SimpleNamespace(model_uv_at_xy=model),
-            grid=SimpleNamespace(angle=.2),planetary=sample,vertical=v,display=lambda *a:None,
+        ns=dict(np=np,pd=pd,plt=plt,pct=pct,ccomp=ccomp,esp=SimpleNamespace(model_uv_at_xy=model,doppio=unavailable_inner,out_core_param_fit=lambda *a:None),
+            grid=SimpleNamespace(angle=.2,z_r=np.full((151,151,6),-500.)),planetary=sample,vertical=v,display=lambda *a:None,
             SPLIT_DEPTH_M=1000.,TARGET_DEPTHS_M=[200.,500.,1000.,1500.,2000.],
             BOOTSTRAPS=100,SEED=731,MIN_DIRECTION_DISTANCE_KM=0.,MIN_PLOT_EDDIES=2,
             WIDTH_KM=100.,RES_KM=10.,RUN_VELOCITY_COMPOSITES=True)
