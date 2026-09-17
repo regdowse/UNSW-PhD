@@ -160,8 +160,8 @@ def summarise(members, n_boot=500, seed=731):
     for i,row in result.iterrows():
         d=members.loc[members.Depth.eq(row.Depth)]
         a=d.groupby('Eddy').agg(e=('east_km','sum'), n=('north_km','sum'), count=('Day','size')).reindex(ids,fill_value=0)
-        denom=draws@a['count'].to_numpy(float)
-        xy=np.divide(draws@a[['e','n']].to_numpy(),denom[:,None],out=np.full((n_boot,2),np.nan),where=denom[:,None]>0)
+        denom=np.dot(draws.astype(float),a['count'].to_numpy(float))
+        xy=np.divide(np.dot(draws.astype(float),a[['e','n']].to_numpy(float)),denom[:,None],out=np.full((n_boot,2),np.nan),where=denom[:,None]>0)
         dist=np.hypot(xy[:,0],xy[:,1])
         result.loc[i,'mean_member_distance_km']=d.distance_km.mean()
         result.loc[i,'coherence']=row.distance_km/d.distance_km.mean() if d.distance_km.mean()>1e-10 else np.nan

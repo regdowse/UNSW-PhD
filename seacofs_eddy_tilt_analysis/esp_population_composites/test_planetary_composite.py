@@ -85,8 +85,8 @@ class PlanetaryTests(unittest.TestCase):
                 exec(''.join(cell['source']),ns)
                 plt.close('all')
         self.assertEqual(len(ns['results']),6)
-        self.assertFalse(ns['ae_ce_contrasts'].empty)
-        self.assertFalse(ns['context_stats'].empty)
+        self.assertFalse(ns['centre_members'].empty)
+        self.assertTrue({'mean_east','mean_north','distance_km'}.issubset(ns['centre_stats']))
         self.assertTrue(ns['centre_stats'].Depth.gt(1000).any())
 
 if __name__=='__main__':unittest.main()

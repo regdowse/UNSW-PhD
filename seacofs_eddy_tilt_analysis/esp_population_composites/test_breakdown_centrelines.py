@@ -117,7 +117,7 @@ class CentreTests(unittest.TestCase):
         members=pd.DataFrame(dict(Eddy=[1,2,1,2],Day=[1,1,1,1],Depth=[0,0,200,200],xc=[0,0,3,5],yc=[0,0,1,2]))
         stats=cbt.centre_statistics(members,[0,200],n_boot=100)
         fits=pd.DataFrame(dict(Depth=[0,200],xc=[1,4],yc=[2,3],fit_ok=[True,False]))
-        fig=cbt.plot_centrelines(stats,fits)
+        fig,axes=cbt.plot_centrelines(stats,fits)
         self.assertEqual(len(fig.axes),4)
         fig.canvas.draw();plt.close(fig)
 
