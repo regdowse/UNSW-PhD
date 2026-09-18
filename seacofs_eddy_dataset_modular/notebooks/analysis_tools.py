@@ -11,7 +11,7 @@ import sys
 import matplotlib.cm as cm
 
 
-TILT_ROOT = Path("~/UNSW-MRes/MRes/seacofs_eddy_tilt_analysis").expanduser()
+TILT_ROOT = Path("~/UNSW-PhD/seacofs_eddy_tilt_analysis").expanduser()
 if str(TILT_ROOT) not in sys.path:
     sys.path.insert(0, str(TILT_ROOT))
 import seacofs_tilt_tools as tilt
