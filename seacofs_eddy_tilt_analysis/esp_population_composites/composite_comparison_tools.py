@@ -223,3 +223,62 @@ def plot_sections(results,X,Y,population,cohort,rotation_rad=0.,frame='geographi
     if im is not None:fig.colorbar(im,ax=list(axs.flat),label='Composite velocity (m/s)')
     fig.suptitle(f'{population}, {cohort}: vertical cuts through the surface reference (black = zero velocity)')
     return fig, axs
+
+
+def rossby_centre_results(results,profile_audit,frame='geographic',threshold=.5,n_boot=500,seed=731):
+    """Split actual contributing members, preserving their existing coordinate frame."""
+    import planetary_composite_tools as pct
+    import topographic_composite_tools as tct
+    if frame not in ('geographic','topographic'):raise ValueError('Unknown centre frame')
+    metadata=profile_audit[['Eddy','Day','Ro']].rename(columns={'Ro':'surface_Ro'})
+    if metadata.duplicated(['Eddy','Day']).any():raise ValueError('Duplicate day metadata')
+    out={};audit=[]
+    for cohort in ['shallow','deep']:
+        for cyc in ['AE','CE']:
+            original=results.get((cohort,cyc))
+            if original is None:continue
+            m=original['members'].merge(metadata,on=['Eddy','Day'],how='left',validate='many_to_one')
+            absolute=m.surface_Ro.abs();known=np.isfinite(absolute)
+            for ro in ['low','high']:
+                part=m.loc[known & (absolute.lt(threshold) if ro=='low' else absolute.ge(threshold))].copy()
+                audit.append(dict(cohort=cohort,Cyc=cyc,Ro_class=ro,
+                    eddy_days=len(part[['Eddy','Day']].drop_duplicates()),eddies=part.Eddy.nunique(),
+                    unknown_Ro_days=len(m.loc[~known,['Eddy','Day']].drop_duplicates())))
+                if part.empty:continue
+                summarise=pct.summarise if frame=='geographic' else tct.summarise
+                stats,_=summarise(part,n_boot,seed)
+                out[cohort,ro,cyc]=dict(members=part,stats=stats)
+    return out,pd.DataFrame(audit)
+
+
+def plot_rossby_centres(results,frame='geographic',min_eddies=2,split_depth=1000.,show_individual=True):
+    import matplotlib.pyplot as plt
+    components=('east','north') if frame=='geographic' else ('along','perp')
+    labels=('Zonal (km)','Meridional (km)') if frame=='geographic' else ('Along-gradient (km)','Perpendicular (km)')
+    fig,axs=plt.subplots(2,3,figsize=(12,8),constrained_layout=True)
+    for i,cohort in enumerate(['shallow','deep']):
+        maxdepth=1.
+        for ro,style in [('low','-'),('high','--')]:
+            for cyc in ['AE','CE']:
+                r=results.get((cohort,ro,cyc))
+                if r is None:continue
+                s=r['stats'];ok=s.n_eddies.ge(min_eddies);maxdepth=max(maxdepth,float(s.Depth.max()))
+                for ax,col in zip(axs[i],[f'mean_{c}' for c in components]+['distance_km']):
+                    lo,hi=('distance_ci_low','distance_ci_high') if col=='distance_km' else (col+'_ci_low',col+'_ci_high')
+                    ax.plot(s[col].where(ok),s.Depth,style,color=COLORS[cyc],label=f'{cyc} {ro} |Ro|',lw=1.8)
+                    ax.fill_betweenx(s.Depth,s[lo].where(ok),s[hi].where(ok),color=COLORS[cyc],alpha=.10)
+                if show_individual:
+                    axs[i,2].plot(s.mean_member_distance_km.where(ok),s.Depth,style,color=COLORS[cyc],
+                        lw=.8,alpha=.5,marker='.',ms=3,label=f'{cyc} {ro}: mean individual')
+        for j,ax in enumerate(axs[i]):
+            ax.set(xlabel=(*labels,'Tilt distance (km)')[j],ylabel='Depth (m)' if j==0 else '',
+                   title=cohort.capitalize() if j==0 else '',ylim=(maxdepth,0))
+            ax.axvline(0,color='.5',lw=.5)
+            if i==1:ax.axhline(split_depth,color='.5',ls=':',lw=.6)
+    for j in range(3):
+        lim=[ax.get_xlim() for ax in axs[:,j]]
+        for ax in axs[:,j]:ax.set_xlim(min(a[0] for a in lim),max(a[1] for a in lim))
+    if axs[0,0].lines:axs[0,0].legend(fontsize=8)
+    if show_individual:axs[0,2].legend(fontsize=6)
+    fig.suptitle('Low |Ro| < 0.5: solid; high |Ro| ≥ 0.5: dashed; bands = 95% eddy-bootstrap CI')
+    return fig,axs

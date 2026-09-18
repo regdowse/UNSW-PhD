@@ -127,7 +127,7 @@ class TopographicTests(unittest.TestCase):
         self.assertEqual(len(ns['frame_audit']),len(s))
         # Exercise the explicitly supported centre-only mode as well.
         ns['RUN_VELOCITY_COMPOSITES']=False
-        exec(''.join(cells[4]['source']),ns)
+        exec(next(''.join(c['source']) for c in cells if ''.join(c['source']).startswith('a = np.arange')),ns)
         self.assertNotIn('u',ns['results']['all','AE'])
 
 if __name__=='__main__':unittest.main()

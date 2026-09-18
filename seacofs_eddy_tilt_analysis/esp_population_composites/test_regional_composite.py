@@ -143,10 +143,10 @@ class RegionalTests(unittest.TestCase):
                 source=''.join(c['source']).replace('BOOTSTRAPS=500','BOOTSTRAPS=100').replace(
                     'LOAD_STRATIFICATION_DIAGNOSTICS=True','LOAD_STRATIFICATION_DIAGNOSTICS=False')
                 exec(source,ns);plt.close('all')
-        self.assertEqual(len(ns['regional_results']),60)
-        self.assertEqual(len(ns['matched_results']),48)
-        self.assertEqual(len(ns['composite_fit_audit']),48)
-        self.assertEqual(ns['population_inventory'].shape[0],60)
+        self.assertEqual(len(ns['regional_results']),42)
+        self.assertEqual(len(ns['matched_results']),36)
+        self.assertEqual(len(ns['composite_fit_audit']),24)
+        self.assertEqual(ns['population_inventory'].shape[0],42)
         self.assertTrue(ns['centre_stats'].below_bottom_fraction.max()>0)
         self.assertFalse(ns['population_context'].empty)
 

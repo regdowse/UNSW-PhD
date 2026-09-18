@@ -77,7 +77,7 @@ class ComparisonTests(unittest.TestCase):
         self.assertEqual(audit.successful_depths.iloc[0],2)
         self.assertEqual(len(r['composite_fit']),3)
         cc.plot_fit_profiles(fits,'P').canvas.draw();plt.close('all')
-        cc.plot_sections({('deep','AE'):r},X,Y,'P','deep').canvas.draw();plt.close('all')
+        cc.plot_sections({('deep','AE'):r},X,Y,'P','deep')[0].canvas.draw();plt.close('all')
         skipped,audit=cc.fit_collections({'P':{('deep','AE'):result()}},X,Y,backend)
         self.assertTrue(skipped.empty)
         self.assertIn('disabled',audit.status.iloc[0])

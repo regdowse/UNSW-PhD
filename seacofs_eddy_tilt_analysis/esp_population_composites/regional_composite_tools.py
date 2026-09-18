@@ -10,7 +10,7 @@ KEYS = ('Region','cohort','Ro_class','Cyc')
 COLORS = {'AE':'firebrick','CE':'royalblue'}
 
 
-def prepare_population(surface, vertical, split_depth=1000., ro_split=.5, dominance_factor=2., shelf_lon=154.75):
+def prepare_population(surface, vertical, split_depth=1000., ro_split=.5, dominance_factor=2., shelf_lon=154.75,regions=REGIONS):
     """Classify days, retaining missing Ro in baselines and auditing exclusions."""
     if surface[['Eddy','Day']].duplicated().any():raise ValueError('Duplicate surface Eddy-Day keys')
     s=surface.copy()
@@ -20,7 +20,7 @@ def prepare_population(surface, vertical, split_depth=1000., ro_split=.5, domina
     s['PV_regime']=np.select([ratio.le(-np.log(dominance_factor)),ratio.ge(np.log(dominance_factor)),ratio.notna()],
                             ['planetary','topographic','mixed'],default='unknown')
     s['shelf_class']=np.where(np.isfinite(s.lon),np.where(s.lon<shelf_lon,'On-shelf','Off-shelf'),'Unknown') if 'lon' in s else 'Unknown'
-    s['selection_status']=np.select([~s.Region.isin(REGIONS),~s.Cyc.isin(['AE','CE'])],
+    s['selection_status']=np.select([~s.Region.isin(regions),~s.Cyc.isin(['AE','CE'])],
         ['outside named regions','unrecognised polarity'],default='selected')
     audit,profiles=pct.prepare_profiles(s.loc[s.selection_status.eq('selected')],vertical,split_depth)
     radius=profiles.loc[profiles.Depth.eq(0),['Eddy','Day','Rc']].rename(columns={'Rc':'surface_Rc_km'})
@@ -44,21 +44,24 @@ def bottom_audit(profiles,grid):
     return p
 
 
-def memberships(row):
+def memberships(row,pool_rossby=False):
     groups=[(row.Region,'all','all',row.Cyc)]
+    if pool_rossby:groups.append((row.Region,row.extent_group,'all',row.Cyc))
     if row.Ro_class in ('low','high'):
         groups.append((row.Region,row.extent_group,row.Ro_class,row.Cyc))
     return groups
 
 
-def inventory(audit):
-    """All 12 baseline and 48 detailed slots, including empty populations."""
+def inventory(audit,regions=REGIONS,pool_rossby=False):
+    """Requested baseline/detailed slots plus optional pooled-depth slots, including empties."""
     rows=[];usable=audit.loc[audit.profile_status.eq('usable')]
-    combos=[(r,'all','all',c) for r,c in product(REGIONS,['AE','CE'])]
-    combos += list(product(REGIONS,['shallow','deep'],['low','high'],['AE','CE']))
+    combos=[(r,'all','all',c) for r,c in product(regions,['AE','CE'])]
+    combos += list(product(regions,['shallow','deep'],['low','high'],['AE','CE']))
+    if pool_rossby:combos += list(product(regions,['shallow','deep'],['all'],['AE','CE']))
     for region,cohort,ro,cyc in combos:
         d=usable.loc[usable.Region.eq(region)&usable.Cyc.eq(cyc)]
-        if cohort!='all':d=d.loc[d.extent_group.eq(cohort)&d.Ro_class.eq(ro)]
+        if cohort!='all':d=d.loc[d.extent_group.eq(cohort)]
+        if ro!='all':d=d.loc[d.Ro_class.eq(ro)]
         rows.append(dict(Region=region,cohort=cohort,Ro_class=ro,Cyc=cyc,
             eddy_days=len(d),eddies=d.Eddy.nunique(),unknown_Ro_days=int(d.Ro_class.eq('unknown').sum()),
             median_max_depth_m=d.max_fit_depth_m.median(),median_abs_Ro=d.Ro_abs.median(),
@@ -66,7 +69,7 @@ def inventory(audit):
     return pd.DataFrame(rows)
 
 
-def build_composites(audit,profiles,X,Y,esp,grid_angle,velocity=True,progress_every=1000):
+def build_composites(audit,profiles,X,Y,esp,grid_angle,velocity=True,progress_every=1000,pool_rossby=False):
     """Reconstruct each day once, accumulating its baseline and detailed group.
 
     Centres are recorded only for levels contributing finite paired velocity
@@ -77,7 +80,7 @@ def build_composites(audit,profiles,X,Y,esp,grid_angle,velocity=True,progress_ev
     depths=np.sort(profiles.Depth.unique());shape=(*X.shape,len(depths))
     accum={};day_audit=[]
     for n,((eddy,day),p) in enumerate(profiles.groupby(['Eddy','Day'],sort=True),1):
-        row=meta.loc[eddy,day];groups=memberships(row);p=p.sort_values('Depth')
+        row=meta.loc[eddy,day];groups=memberships(row,pool_rossby);p=p.sort_values('Depth')
         for key in groups:
             if key not in accum:
                 accum[key]=dict(records=[],depth_days=np.zeros(len(depths),dtype=np.int64))
@@ -287,3 +290,47 @@ def horizontal_maps(results,X,Y,region,cohort,ro_class,depth):
     fig.colorbar(im,ax=list(axs),label='Speed of mean ESP velocity (m/s)')
     fig.suptitle(f'{region}, {cohort}, {ro_class} Ro, {depth:g} m')
     return fig
+
+
+REGION_GROUPS = ('S','U','D')
+REGION_GROUP_MAP = {r:r[0] for r in REGIONS}
+
+
+def combine_region_labels(surface):
+    """Pool raw days before statistics; keep original labels for diagnostics."""
+    s=surface.copy()
+    s['Subregion']=s.Region
+    s['Region']=s.Subregion.map(REGION_GROUP_MAP)
+    return s
+
+
+def plot_combined_regions(results,split_rossby=False,normalised=False,min_eddies=2,sparse_eddies=20):
+    """2x3: shallow/deep rows and S/U/D columns, equal-day pooled estimates."""
+    import matplotlib.pyplot as plt
+    fig,axs=plt.subplots(2,3,figsize=(12,8),constrained_layout=True)
+    field='normalised_stats' if normalised else 'stats'
+    col,lo,hi=('distance_Rc','distance_Rc_ci_low','distance_Rc_ci_high') if normalised else ('distance_km','distance_ci_low','distance_ci_high')
+    styles=[('low','-'),('high','--')] if split_rossby else [('all','-')]
+    for i,cohort in enumerate(['shallow','deep']):
+        deepest=1.
+        for j,region in enumerate(REGION_GROUPS):
+            ax=axs[i,j];found=False
+            for ro,style in styles:
+                for cyc in ['AE','CE']:
+                    r=results.get((region,cohort,ro,cyc))
+                    if r is None:continue
+                    s=r[field];ok=s.n_eddies.ge(min_eddies);found=True;deepest=max(deepest,float(s.Depth.max()))
+                    ax.plot(s[col].where(ok),s.Depth,style,color=COLORS[cyc],label=f'{cyc} {ro}' if split_rossby else cyc)
+                    ax.fill_betweenx(s.Depth,s[lo].where(ok),s[hi].where(ok),color=COLORS[cyc],alpha=.12)
+                    sparse=ok&s.n_eddies.lt(sparse_eddies)
+                    ax.scatter(s.loc[sparse,col],s.loc[sparse,'Depth'],s=20,facecolors='none',edgecolors=COLORS[cyc])
+            ax.set(title=f'{region} — {cohort}',xlabel='Tilt / surface Rc' if normalised else 'Tilt distance (km)',
+                   ylabel='Depth (m)' if j==0 else '')
+            if found:ax.legend(fontsize=8)
+            else:ax.text(.5,.5,'No contributors',ha='center',transform=ax.transAxes)
+        for ax in axs[i]:ax.set_ylim(deepest,0)
+    xmax=max(max(ax.get_xlim()) for ax in axs.flat)
+    for ax in axs.flat:ax.set_xlim(0,max(xmax,1e-6));ax.grid(alpha=.15)
+    fig.suptitle(('Low |Ro| < 0.5 solid; high |Ro| ≥ 0.5 dashed' if split_rossby else 'All Rossby numbers pooled')+
+                 f'; 95% CI; open circles <{sparse_eddies} eddies')
+    return fig,axs
