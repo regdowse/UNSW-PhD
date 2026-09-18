@@ -383,6 +383,35 @@ def _surface_pv_footprint_statistics(
         ])
     return result.reindex(columns=expected)
 
+def _select_profile_peak_w(surface, vertical, max_depth_m):
+    """Select a signed profile amplitude, preserving surface row order/index."""
+    keys = ["Eddy", "Day"]
+    for table, required in ((surface, keys + ["w"]),
+                            (vertical, keys + ["Depth", "w"])):
+        missing = set(required) - set(table.columns)
+        if missing:
+            raise ValueError(f"Peak-w selection requires columns: {sorted(missing)}")
+    candidates = vertical[keys + ["Depth", "w"]].copy()
+    candidates = candidates.loc[
+        candidates[keys].notna().all(axis=1)
+        & np.isfinite(candidates["Depth"]) & np.isfinite(candidates["w"])
+        & candidates["Depth"].between(0, max_depth_m)
+    ]
+    candidates["magnitude"] = candidates["w"].abs()
+    counts = candidates.groupby(keys).size()
+    peaks = (candidates.sort_values(["magnitude", "Depth"], ascending=[False, True],
+                                   kind="stable")
+             .drop_duplicates(keys).set_index(keys))
+    lookup = pd.MultiIndex.from_frame(surface[keys])
+    out = surface.copy()
+    if "w_surface" not in out:
+        out["w_surface"] = out["w"]
+    out["w"] = peaks["w"].reindex(lookup).to_numpy()
+    out["w_selected_depth_m"] = peaks["Depth"].reindex(lookup).to_numpy()
+    out["w_profile_n"] = counts.reindex(lookup, fill_value=0).to_numpy()
+    return out
+
+
 def add_pv_gradient_terms(
     df: pd.DataFrame | None = None,
     grid: Grid | None = None,
@@ -393,6 +422,7 @@ def add_pv_gradient_terms(
     cache_path: Path | str = DEFAULT_SURFACE_PV_CACHE,
     cache_root: Path | str = DEFAULT_DEPTH_PV_ROOT,
     depth_following: bool = False,
+    use_max_abs_w: bool = False,
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
     progress_every: int | None = None,
@@ -409,8 +439,20 @@ def add_pv_gradient_terms(
     behaviour (no file writes). The Parquet file includes calculation settings
     in its attributes; loading with different footprint/method settings raises
     an error. Refresh with False after changing source data or the model grid.
-    Use different cache_path values to retain different datasets/settings.
+    Only one file is retained. Recalculating with different settings overwrites
+    the same cache_path; no settings-specific versions are created.
     This flag applies only to source='original', depth_following=False.
+
+    ``use_max_abs_w=True`` selects the signed w with largest magnitude for
+    each (Eddy, Day) at 0 <= Depth <= max_depth_m (default 1000 m). Pass
+    ``vertical=tilt.load_vert()`` or omit it to load the default profile table.
+    Ties select the shallowest depth; missing finite samples produce NaN w.
+    ``w_surface`` preserves the original value, ``w_selected_depth_m`` records
+    the selected depth, and ``w_profile_n`` counts valid candidate samples.
+    All w-dependent PV terms and Ro use this amplitude with the SURFACE
+    ellipse geometry. Turning the flag off restores w_surface if present.
+    The option applies only to the surface calculation; cache loads do not
+    load profiles. Refresh the single cache after changing this option.
 
     ``source='original'`` (the default) runs the surface-centred calculation.
     With ``core_mean=True``, ``averaging='nonlinear'`` averages the completed
@@ -432,6 +474,13 @@ def add_pv_gradient_terms(
     ``(snapshot_df, depth_df)``.  The snapshot vectors are thickness-weighted
     over the sampled column before magnitudes and bearings are reconstructed.
     """
+    if not isinstance(use_max_abs_w, bool):
+        raise TypeError("use_max_abs_w must be True or False")
+    if use_max_abs_w:
+        if source != "original" or depth_following:
+            raise ValueError("use_max_abs_w applies only to the surface calculation")
+        if not np.isfinite(max_depth_m) or max_depth_m <= 0:
+            raise ValueError("max_depth_m must be finite and positive")
     valid_sources = {"original", "depth_snapshot", "depth"}
     if source not in valid_sources:
         raise ValueError(f"source must be one of {sorted(valid_sources)}")
@@ -447,6 +496,8 @@ def add_pv_gradient_terms(
         settings = dict(version=1, core_mean=bool(core_mean), frac=frac,
                         inner_frac=inner_frac, averaging=averaging,
                         surface_method=surface_method)
+        if use_max_abs_w:
+            settings.update(use_max_abs_w=True, max_depth_m=float(max_depth_m))
         if use_cache:
             if not cache_path.is_file():
                 raise FileNotFoundError(
@@ -456,13 +507,14 @@ def add_pv_gradient_terms(
             if cached.attrs.get("surface_pv_cache_settings") != settings:
                 raise ValueError(
                     "Saved surface PV settings differ or metadata is missing. "
-                    "Run with use_cache=False to rebuild, or choose a different cache_path."
+                    "Run with use_cache=False to overwrite the same cache file."
                 )
             return cached
         result = add_pv_gradient_terms(
             df, grid, core_mean=core_mean, source=source,
             frac=frac, inner_frac=inner_frac, averaging=averaging,
             surface_method=surface_method, progress_every=progress_every,
+            use_max_abs_w=use_max_abs_w, vertical=vertical, max_depth_m=max_depth_m,
         )
         # Save only after successful calculation; leave an existing cache intact
         # if either calculation or serialisation fails.
@@ -513,6 +565,12 @@ def add_pv_gradient_terms(
         )
 
     out = df.copy()
+    if use_max_abs_w:
+        out = _select_profile_peak_w(out, load_vert() if vertical is None else vertical,
+                                     max_depth_m)
+    elif "w_surface" in out:
+        out["w"] = out["w_surface"]
+        out = out.drop(columns=["w_selected_depth_m", "w_profile_n"], errors="ignore")
     dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
     dh_dN = np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy
     dh_dE = np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy
