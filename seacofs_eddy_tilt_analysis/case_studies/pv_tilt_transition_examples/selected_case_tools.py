@@ -88,9 +88,17 @@ def build_cache(eddies, grid, selected=SELECTED_EDDIES):
     if subset.empty:
         raise ValueError("None of the selected eddies was found")
     result = tilt.add_pv_gradient_terms(
-        subset, grid, core_mean=True, frac=1.0,
-        surface_method="esp_gaussian", averaging="nonlinear",
+        subset,
+        grid,
+        core_mean=True,
+        frac=1.0,
+        surface_method="esp_gaussian",
+        averaging="nonlinear",
+        use_max_abs_w=True,
+        max_depth_m=1000,
+        use_cache=True,
     )
+
     return add_regimes(result)
 
 
