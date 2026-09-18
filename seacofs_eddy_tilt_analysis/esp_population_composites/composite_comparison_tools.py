@@ -147,23 +147,6 @@ def fit_collections(collections,X,Y,esp,min_eddies=2,**fit_kwargs):
             audit.append(dict(**meta,status='attempted',successful_depths=int(fits.fit_ok.sum()),attempted_depths=int((support>=min_eddies).sum())))
     return (pd.concat(tables,ignore_index=True) if tables else pd.DataFrame(),pd.DataFrame(audit))
 
-
-# def plot_fit_profiles(fits,population):
-#     import matplotlib.pyplot as plt
-#     fig,axs=plt.subplots(2,4,figsize=(14,8),constrained_layout=True)
-#     for i,cohort in enumerate(['shallow','deep']):
-#         for cyc in ['AE','CE']:
-#             s=fits.loc[fits.population.eq(population)&fits.cohort.eq(cohort)&fits.Cyc.eq(cyc)].sort_values('Depth')
-#             for ax,col,scale in zip(axs[i],['w','Omega','Rc','vector_r2'],[1e5,1e5,1,1]):
-#                 ax.plot((s[col]*scale).where(s.fit_ok),s.Depth,color=COLORS[cyc],label=cyc)
-#         for ax,label in zip(axs[i],[r'$\zeta$ ($10^{-5}$ s$^{-1}$)',r'$\Omega$ ($10^{-5}$ s$^{-1}$)',r'$R_c$ (km)','Outer-fit vector R²']):
-#             ax.set(xlabel=label,ylabel='Depth (m)',title=cohort);ax.invert_yaxis();ax.axvline(0,color='.5',lw=.5)
-#             if ax.lines:ax.legend()
-#     for j in range(4):
-#         limits=[ax.get_xlim() for ax in axs[:,j]]
-#         for ax in axs[:,j]:ax.set_xlim(min(x[0] for x in limits),max(x[1] for x in limits))
-#     fig.suptitle(f'{population}: full inner/outer fits to composite velocities (gaps = failed/unsupported fits)')
-#     return fig
 def plot_fit_profiles(fits,population):
     import matplotlib.pyplot as plt
     fig,axs=plt.subplots(2,3,figsize=(11,8),constrained_layout=True)
@@ -239,4 +222,4 @@ def plot_sections(results,X,Y,population,cohort,rotation_rad=0.,frame='geographi
             ax.set_ylim(max(deepest,1.),0);ax.axvline(0,color='.5',ls=':',lw=.6)
     if im is not None:fig.colorbar(im,ax=list(axs.flat),label='Composite velocity (m/s)')
     fig.suptitle(f'{population}, {cohort}: vertical cuts through the surface reference (black = zero velocity)')
-    return fig
+    return fig, axs
