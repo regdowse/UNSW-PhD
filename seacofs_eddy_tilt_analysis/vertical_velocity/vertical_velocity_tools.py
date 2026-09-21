@@ -22,8 +22,26 @@ def core_indices(row, grid, fraction):
     return core_grid_indices(row, local_grid, frac=float(fraction))
 
 
+def load_vertical_velocity_xyz(ds, day, grid):
+    """Read one model day as (x, y, 30), excluding the extra surface level."""
+    t = model_time_index(ds, day)
+    wvar = ds["w"]
+    if tuple(wvar.dimensions[1:]) != ("s_w", "eta_rho", "xi_rho"):
+        raise ValueError(f"Unexpected w dimensions: {wvar.dimensions}")
+    if wvar.shape[2:][::-1] != grid.mask_rho.shape:
+        raise ValueError("Model w and analysis grid have different horizontal shapes")
+    if grid.z_r.shape != grid.mask_rho.shape + (wvar.shape[1] - 1,):
+        raise ValueError("Expected grid.z_r with (x, y, 30), one fewer level than native w")
+    raw = wvar[t, :, :, :]
+    vel = np.flip(np.ma.filled(raw, np.nan).transpose(2, 1, 0), axis=2)[:, :, 1:]
+    vel = np.asarray(vel, float)
+    vel[np.abs(vel) >= 1e30] = np.nan
+    return vel
+
+
 def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
-                    max_depth_m=1000, max_mismatch_m=75):
+                    max_depth_m=1000, max_mismatch_m=75, return_maps=True,
+                    velocity_xyz=None):
     """Return per-depth extrema and selected maps for one fitted eddy-day.
 
     Match the modular pipeline's (x, y, z) layout: transpose the native
@@ -31,14 +49,10 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
     surface level. The remaining 30 levels match grid.z_r directly.
     Full-column extrema use the per-depth samples, without interpolation.
     """
-    t = model_time_index(ds, row.Day)
-    wvar = ds["w"]
-    if tuple(wvar.dimensions[1:]) != ("s_w", "eta_rho", "xi_rho"):
-        raise ValueError(f"Unexpected w dimensions: {wvar.dimensions}")
-    if wvar.shape[2:][::-1] != grid.mask_rho.shape:
-        raise ValueError("Model w and analysis grid have different horizontal shapes")
-    if grid.z_r.shape[:2] != grid.mask_rho.shape or grid.z_r.shape[2] != wvar.shape[1] - 1:
-        raise ValueError("Expected grid.z_r with (x, y, 30), one fewer level than native w")
+    velocity_xyz = (load_vertical_velocity_xyz(ds, row.Day, grid)
+                    if velocity_xyz is None else np.asarray(velocity_xyz, float))
+    if velocity_xyz.shape != grid.z_r.shape:
+        raise ValueError("Converted velocity and z_r must both have shape (x, y, 30)")
     results, maps = [], {}
     for fraction in fractions:
         ii, jj = core_indices(row, grid, fraction)
@@ -46,10 +60,7 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
             continue
         i0, i1, j0, j1 = ii.min(), ii.max() + 1, jj.min(), jj.max() + 1
         local_i, local_j = ii - i0, jj - j0
-        raw = wvar[t, :, j0:j1, i0:i1]
-        vel = np.flip(np.ma.filled(raw, np.nan).transpose(2, 1, 0), axis=2)[:, :, 1:]
-        vel = np.asarray(vel, float)
-        vel[np.abs(vel) >= 1e30] = np.nan
+        vel = velocity_xyz[i0:i1, j0:j1, :]
         z = np.asarray(grid.z_r[ii, jj, :], float)
         if z.shape != (len(ii), vel.shape[2]):
             raise ValueError("Converted w and local z_r depths have different shapes")
@@ -64,19 +75,24 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
             record = dict(Eddy=int(row.Eddy), Day=int(row.Day), fraction=float(fraction),
                           Depth=float(depth), n_core=len(ii), n_valid=int(valid.sum()),
                           coverage=float(valid.mean()), max_mismatch_m=float(np.nanmax(mismatch)))
-            field = np.full((i1-i0, j1-j0), np.nan)
-            field[local_i[valid], local_j[valid]] = values[valid]
             if valid.any():
                 v = values[valid]
                 pos = np.flatnonzero(valid)
                 hi, lo = pos[np.argmax(v)], pos[np.argmin(v)]
                 record.update(w_max=float(values[hi]), w_min=float(values[lo]),
-                              w_mean=float(np.mean(v)), w_abs_max=float(values[pos[np.argmax(np.abs(v))]]),
+                              w_mean=float(np.mean(v)), w_rms=float(np.sqrt(np.mean(v**2))),
+                              w_positive_mean=float(np.mean(v[v > 0])) if np.any(v > 0) else np.nan,
+                              w_negative_mean=float(np.mean(v[v < 0])) if np.any(v < 0) else np.nan,
+                              positive_fraction=float(np.mean(v > 0)),
+                              w_abs_max=float(values[pos[np.argmax(np.abs(v))]]),
                               x_max=float(grid.x_grid[ii[hi]]), y_max=float(grid.y_grid[jj[hi]]),
                               x_min=float(grid.x_grid[ii[lo]]), y_min=float(grid.y_grid[jj[lo]]),
                               z_max_m=float(-actual_z[hi]), z_min_m=float(-actual_z[lo]))
             results.append(record)
-            maps[(float(fraction), float(depth))] = (field, (i0, i1, j0, j1))
+            if return_maps:
+                field = np.full((i1-i0, j1-j0), np.nan)
+                field[local_i[valid], local_j[valid]] = values[valid]
+                maps[(float(fraction), float(depth))] = (field, (i0, i1, j0, j1))
     return pd.DataFrame(results), maps
 
 
@@ -93,5 +109,8 @@ def column_extrema(per_depth):
                          w_max=up.w_max, max_depth_m=up.z_max_m,
                          w_min=down.w_min, min_depth_m=down.z_min_m,
                          w_abs_max=up.w_max if up.w_max >= abs(down.w_min) else down.w_min,
+                         w_mean=np.average(group.w_mean, weights=group.n_valid),
+                         w_rms=np.sqrt(np.average(group.w_rms**2, weights=group.n_valid)),
+                         n_valid=int(group.n_valid.sum()),
                          n_depths=len(group), min_coverage=group.coverage.min()))
     return pd.DataFrame(rows)
