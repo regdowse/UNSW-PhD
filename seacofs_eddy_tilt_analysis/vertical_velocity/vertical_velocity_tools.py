@@ -28,7 +28,7 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
 
     Match the modular pipeline's (x, y, z) layout: transpose the native
     (s_w, eta_rho, xi_rho) slab, flip its vertical axis, and drop the extra
-    surface level. The remaining 30 levels match grid.z_r[:, :, 1:].
+    surface level. The remaining 30 levels match grid.z_r directly.
     Full-column extrema use the per-depth samples, without interpolation.
     """
     t = model_time_index(ds, row.Day)
@@ -37,8 +37,8 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
         raise ValueError(f"Unexpected w dimensions: {wvar.dimensions}")
     if wvar.shape[2:][::-1] != grid.mask_rho.shape:
         raise ValueError("Model w and analysis grid have different horizontal shapes")
-    if grid.z_r.shape[:2] != grid.mask_rho.shape or grid.z_r.shape[2] != wvar.shape[1]:
-        raise ValueError("Expected grid.z_r with (x, y, 31) matching native w")
+    if grid.z_r.shape[:2] != grid.mask_rho.shape or grid.z_r.shape[2] != wvar.shape[1] - 1:
+        raise ValueError("Expected grid.z_r with (x, y, 30), one fewer level than native w")
     results, maps = [], {}
     for fraction in fractions:
         ii, jj = core_indices(row, grid, fraction)
