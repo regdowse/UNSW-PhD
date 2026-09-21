@@ -1,9 +1,7 @@
 """Exploratory native-grid vertical-velocity sampling around fitted eddy cores."""
 
-from pathlib import Path
 from types import SimpleNamespace
 
-import netCDF4 as nc
 import numpy as np
 import pandas as pd
 
@@ -14,24 +12,6 @@ def model_time_index(ds, day):
     if len(hits) != 1:
         raise ValueError(f"Expected one sample for day {day}; found {len(hits)}")
     return int(hits[0])
-
-
-def interface_depths(ds, time_index, ii, jj):
-    """ROMS physical depth (negative metres) at local s_w interfaces."""
-    i0, i1, j0, j1 = ii.min(), ii.max() + 1, jj.min(), jj.max() + 1
-    h = np.asarray(ds["h"][i0:i1, j0:j1], float)[ii-i0, jj-j0]
-    zeta = np.asarray(ds["zeta"][time_index, i0:i1, j0:j1], float)[ii-i0, jj-j0]
-    s = np.asarray(ds["s_w"][:], float)[:, None]
-    cs = np.asarray(ds["Cs_w"][:], float)[:, None]
-    hc = float(np.asarray(ds["hc"][:]))
-    transform = int(np.asarray(ds["Vtransform"][:]))
-    if transform == 2:
-        z0 = (hc * s + h[None, :] * cs) / (hc + h[None, :])
-        return zeta[None, :] + (zeta[None, :] + h[None, :]) * z0
-    if transform == 1:
-        z0 = hc * (s - cs) + h[None, :] * cs
-        return z0 + zeta[None, :] * (1 + z0 / h[None, :])
-    raise ValueError(f"Unsupported Vtransform={transform}")
 
 
 def core_indices(row, grid, fraction):
@@ -46,17 +26,19 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
                     max_depth_m=1000, max_mismatch_m=75):
     """Return per-depth extrema and selected maps for one fitted eddy-day.
 
-    Samples the nearest *local* s_w interface at each rho cell. Full-column
-    extrema are taken over the per-depth samples, not over interpolated data.
+    Match the modular pipeline's (x, y, z) layout: transpose the native
+    (s_w, eta_rho, xi_rho) slab, flip its vertical axis, and drop the extra
+    surface level. The remaining 30 levels match grid.z_r[:, :, 1:].
+    Full-column extrema use the per-depth samples, without interpolation.
     """
     t = model_time_index(ds, row.Day)
     wvar = ds["w"]
-    wvar = wvar[:,:1,:,:]
-    wvar = np.flip(np.asarray(wvar[t].T, float), axis=2)
     if tuple(wvar.dimensions[1:]) != ("s_w", "eta_rho", "xi_rho"):
         raise ValueError(f"Unexpected w dimensions: {wvar.dimensions}")
-    if wvar.shape[2:] != grid.mask_rho.shape:
+    if wvar.shape[2:][::-1] != grid.mask_rho.shape:
         raise ValueError("Model w and analysis grid have different horizontal shapes")
+    if grid.z_r.shape[:2] != grid.mask_rho.shape or grid.z_r.shape[2] != wvar.shape[1]:
+        raise ValueError("Expected grid.z_r with (x, y, 31) matching native w")
     results, maps = [], {}
     for fraction in fractions:
         ii, jj = core_indices(row, grid, fraction)
@@ -64,18 +46,20 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
             continue
         i0, i1, j0, j1 = ii.min(), ii.max() + 1, jj.min(), jj.max() + 1
         local_i, local_j = ii - i0, jj - j0
-        # raw = wvar[t, :, i0:i1, j0:j1]
-        raw = wvar[i0:i1, j0:j1, :]
-        vel = np.asarray(np.ma.filled(raw, np.nan), float)
+        raw = wvar[t, :, j0:j1, i0:i1]
+        vel = np.flip(np.ma.filled(raw, np.nan).transpose(2, 1, 0), axis=2)[:, :, 1:]
+        vel = np.asarray(vel, float)
         vel[np.abs(vel) >= 1e30] = np.nan
-        z = interface_depths(ds, t, ii, jj)
+        z = np.asarray(grid.z_r[ii, jj, 1:], float)
+        if z.shape != (len(ii), vel.shape[2]):
+            raise ValueError("Converted w and local z_r depths have different shapes")
         for depth in profile_depths:
             if depth < 0 or depth > max_depth_m:
                 continue
-            nearest = np.argmin(np.abs(z + depth), axis=0)
-            actual_z = z[nearest, np.arange(len(ii))]
+            nearest = np.argmin(np.abs(z + depth), axis=1)
+            actual_z = z[np.arange(len(ii)), nearest]
             mismatch = np.abs(actual_z + depth)
-            values = vel[nearest, local_i, local_j]
+            values = vel[local_i, local_j, nearest]
             valid = np.isfinite(values) & np.isfinite(mismatch) & (mismatch <= max_mismatch_m)
             record = dict(Eddy=int(row.Eddy), Day=int(row.Day), fraction=float(fraction),
                           Depth=float(depth), n_core=len(ii), n_valid=int(valid.sum()),
