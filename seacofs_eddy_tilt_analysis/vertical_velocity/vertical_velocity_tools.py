@@ -51,6 +51,8 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
     """
     t = model_time_index(ds, row.Day)
     wvar = ds["w"]
+    wvar = wvar[:,:1,:,:]
+    wvar = np.flip(np.asarray(wvar[t].T, float), axis=2)
     if tuple(wvar.dimensions[1:]) != ("s_w", "eta_rho", "xi_rho"):
         raise ValueError(f"Unexpected w dimensions: {wvar.dimensions}")
     if wvar.shape[2:] != grid.mask_rho.shape:
@@ -62,7 +64,8 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
             continue
         i0, i1, j0, j1 = ii.min(), ii.max() + 1, jj.min(), jj.max() + 1
         local_i, local_j = ii - i0, jj - j0
-        raw = wvar[t, :, i0:i1, j0:j1]
+        # raw = wvar[t, :, i0:i1, j0:j1]
+        raw = wvar[i0:i1, j0:j1, :]
         vel = np.asarray(np.ma.filled(raw, np.nan), float)
         vel[np.abs(vel) >= 1e30] = np.nan
         z = interface_depths(ds, t, ii, jj)
