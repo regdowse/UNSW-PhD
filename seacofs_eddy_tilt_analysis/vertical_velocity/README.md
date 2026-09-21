@@ -25,10 +25,10 @@ across fitted depths. Its one Parquet cache and settings JSON live under
 an arithmetic mean over the sampled depth-cell values, not a volume flux.
 
 Run `03_tilt_vertical_velocity.ipynb` after notebook 02. It uses the saved
-per-depth cache and fixes the footprint at core fraction 1.5. Its primary test
-relates `TiltDis` to RMS vertical velocity in the upper 1,000 m. Peak absolute
-velocity, upward-to-downward range and absolute signed mean are sensitivity
-metrics. The notebook includes eddy-equal correlations, low/high tilt-quartile
-comparisons, depth-resolved relationships, within-eddy anomaly tests and an
-adjusted log-linear model. Signed mean flow remains separate from vertical
-velocity strength. No model NetCDF files are reread.
+per-depth cache and fixes the footprint at core fraction 1.5. It plots vertical
+velocity profiles for a reproducible sample of individual eddy-days, then
+compares each day's `TiltDis` and `TiltDir` with its upper-1,000 m signed core
+mean and largest absolute vertical velocity. Upward and downward extrema are
+retained separately. The notebook uses descriptive eddy-day scatterplots and
+direction sectors; it does not treat repeated days as independent evidence.
+No model NetCDF files are reread.
