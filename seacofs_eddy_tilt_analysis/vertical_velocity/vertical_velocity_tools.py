@@ -50,7 +50,7 @@ def sample_snapshot(ds, row, profile_depths, grid, fractions=(0.5, 1, 1.5),
         vel = np.flip(np.ma.filled(raw, np.nan).transpose(2, 1, 0), axis=2)[:, :, 1:]
         vel = np.asarray(vel, float)
         vel[np.abs(vel) >= 1e30] = np.nan
-        z = np.asarray(grid.z_r[ii, jj, 1:], float)
+        z = np.asarray(grid.z_r[ii, jj, :], float)
         if z.shape != (len(ii), vel.shape[2]):
             raise ValueError("Converted w and local z_r depths have different shapes")
         for depth in profile_depths:
