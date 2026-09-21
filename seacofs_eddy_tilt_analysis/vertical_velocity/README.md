@@ -32,3 +32,11 @@ mean and largest absolute vertical velocity. Upward and downward extrema are
 retained separately. The notebook uses descriptive eddy-day scatterplots and
 direction sectors; it does not treat repeated days as independent evidence.
 No model NetCDF files are reread.
+
+`04_vertical_velocity_depth_change.ipynb` uses the same cache for a simple
+vortex-stretching screening diagnostic. It plots core-mean, maximum and
+minimum `w` profiles for selected eddy-days, then compares `TiltDis` with a
+broad upper-versus-deep change in core-mean `w` (100–300 m versus 500–900 m).
+This is a moving-footprint proxy for the vertical gradient, not the pointwise
+vorticity-budget stretching term. It uses individual eddy-days and no bootstrap
+or model NetCDF reads.
