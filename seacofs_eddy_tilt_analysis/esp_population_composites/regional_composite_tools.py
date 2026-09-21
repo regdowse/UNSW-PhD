@@ -334,3 +334,58 @@ def plot_combined_regions(results,split_rossby=False,normalised=False,min_eddies
     fig.suptitle(('Low |Ro| < 0.5 solid; high |Ro| ≥ 0.5 dashed' if split_rossby else 'All Rossby numbers pooled')+
                  f'; 95% CI; open circles <{sparse_eddies} eddies')
     return fig,axs
+
+
+def plot_combined_region_components(results, ro_class='all', normalised=False,
+                                    min_eddies=2, sparse_eddies=20):
+    """Signed geographic components: shallow/deep rows, S/U/D columns.
+
+    Each panel overlays AE/CE (colour) and east/north (solid/dashed).
+    Uses existing constituent-centre means and whole-track bootstrap intervals;
+    normalised statistics divide each constituent by its own surface Rc first.
+    """
+    import matplotlib.pyplot as plt
+    if ro_class not in ('all', 'low', 'high'):
+        raise ValueError("ro_class must be 'all', 'low', or 'high'")
+    fig, axs = plt.subplots(2, 3, figsize=(12, 8), constrained_layout=True)
+    field = 'normalised_stats' if normalised else 'stats'
+    suffix = '_Rc' if normalised else ''
+    for i, cohort in enumerate(['shallow', 'deep']):
+        deepest = 1.
+        for j, region in enumerate(REGION_GROUPS):
+            ax = axs[i, j]
+            found = False
+            for cyc in ['AE', 'CE']:
+                result = results.get((region, cohort, ro_class, cyc))
+                if result is None or result[field].empty:
+                    continue
+                s = result[field].sort_values('Depth')
+                ok = s.n_eddies.ge(min_eddies)
+                deepest = max(deepest, float(s.Depth.max()))
+                found |= bool(ok.any())
+                for component, label, style in [('east', 'zonal', '-'), ('north', 'meridional', '--')]:
+                    col = f'mean_{component}{suffix}'
+                    ax.plot(s[col].where(ok), s.Depth, style, color=COLORS[cyc], label=f'{cyc} {label}')
+                    ax.fill_betweenx(s.Depth, s[col+'_ci_low'].where(ok),
+                                     s[col+'_ci_high'].where(ok), color=COLORS[cyc], alpha=.10)
+                    sparse = ok & s.n_eddies.lt(sparse_eddies)
+                    ax.scatter(s.loc[sparse, col], s.loc[sparse, 'Depth'], s=18,
+                               facecolors='none', edgecolors=COLORS[cyc])
+            ax.axvline(0, color='.4', lw=.7)
+            ax.grid(alpha=.15)
+            ax.set(title=f'{region} — {cohort}',
+                   xlabel='Signed displacement / surface Rc' if normalised else 'Signed displacement (km)',
+                   ylabel='Depth (m)' if j == 0 else '')
+            if found:
+                ax.legend(fontsize=8)
+            else:
+                ax.text(.5, .5, 'Insufficient contributors', ha='center', transform=ax.transAxes)
+        for ax in axs[i]:
+            ax.set_ylim(deepest, 0)
+    limit = max(1e-6, max(abs(v) for ax in axs.flat for v in ax.get_xlim()))
+    for ax in axs.flat:
+        ax.set_xlim(-limit, limit)
+    title = 'All Rossby classes pooled' if ro_class == 'all' else f'{ro_class.capitalize()} Rossby class'
+    fig.suptitle(title + '\nZonal solid (+east); meridional dashed (+north); 95% CI; '
+                 + f'open circles <{sparse_eddies} eddies')
+    return fig, axs
