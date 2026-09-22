@@ -2137,7 +2137,8 @@ def plot_pv_dominance(
     *,
     rule='fd',
     figsize=(6, 6),
-    clabel='Fraction of eddy-days with $|\\nabla PV_{plan}| < |\\nabla PV_{topo}|$'
+    clabel='Fraction of eddy-days with $|\\nabla PV_{plan}| < |\\nabla PV_{topo}|$',
+    cmap='PiYG_r'
 ):
 
     xbins = bin_edges_fd(df.xc.values, grid.X_grid, rule=rule)
@@ -2174,7 +2175,7 @@ def plot_pv_dominance(
 
         m = ax.pcolormesh(
             xbins, ybins, H,
-            cmap='PiYG_r', #'RdBu_r',
+            cmap=cmap, #'RdBu_r',
             vmin=0, vmax=1,
             shading='auto'
         )

@@ -304,10 +304,10 @@ def combine_region_labels(surface):
     return s
 
 
-def plot_combined_regions(results,split_rossby=False,normalised=False,min_eddies=2,sparse_eddies=20):
+def plot_combined_regions(results,split_rossby=False,normalised=False,min_eddies=2,sparse_eddies=20, figsize=(12,8), title=True, sharex=False):
     """2x3: shallow/deep rows and S/U/D columns, equal-day pooled estimates."""
     import matplotlib.pyplot as plt
-    fig,axs=plt.subplots(2,3,figsize=(12,8),constrained_layout=True)
+    fig,axs=plt.subplots(2,3,figsize=figsize,constrained_layout=True, sharex=sharex)
     field='normalised_stats' if normalised else 'stats'
     col,lo,hi=('distance_Rc','distance_Rc_ci_low','distance_Rc_ci_high') if normalised else ('distance_km','distance_ci_low','distance_ci_high')
     styles=[('low','-'),('high','--')] if split_rossby else [('all','-')]
@@ -324,8 +324,12 @@ def plot_combined_regions(results,split_rossby=False,normalised=False,min_eddies
                     ax.fill_betweenx(s.Depth,s[lo].where(ok),s[hi].where(ok),color=COLORS[cyc],alpha=.12)
                     sparse=ok&s.n_eddies.lt(sparse_eddies)
                     ax.scatter(s.loc[sparse,col],s.loc[sparse,'Depth'],s=20,facecolors='none',edgecolors=COLORS[cyc])
-            ax.set(title=f'{region} — {cohort}',xlabel='Tilt / surface Rc' if normalised else 'Tilt distance (km)',
-                   ylabel='Depth (m)' if j==0 else '')
+            if title: ax.set_title(f'{region} — {cohort}')
+            if sharex and (i==1): 
+                ax.set_xlabel='Tilt / surface Rc' if normalised else 'Tilt distance (km)'
+            if not sharex:
+                ax.set_xlabel='Tilt / surface Rc' if normalised else 'Tilt distance (km)'
+            ax.set(ylabel='Depth (m)' if j==0 else '')
             if found:ax.legend(fontsize=8)
             else:ax.text(.5,.5,'No contributors',ha='center',transform=ax.transAxes)
         for ax in axs[i]:ax.set_ylim(deepest,0)
