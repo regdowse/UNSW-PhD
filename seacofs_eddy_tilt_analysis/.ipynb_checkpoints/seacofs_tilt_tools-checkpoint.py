@@ -27,6 +27,10 @@ DEFAULT_TILT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modula
 DEFAULT_VERT_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/vertical_profiles_confirmed/profiles.parquet")
 DEFAULT_GRID_PATH = Path("/srv/scratch/z3533156/26year_BRAN2020/outer_avg_01461.nc")
 DEFAULT_ZR_PATH = Path("/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy")
+DEFAULT_SURFACE_PV_CACHE = Path(
+    "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
+    "pv_gradient_surface/surface_pv.parquet"
+)
 DEFAULT_DEPTH_PV_ROOT = Path(
     "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
     "pv_gradient_depth_following"
@@ -379,14 +383,46 @@ def _surface_pv_footprint_statistics(
         ])
     return result.reindex(columns=expected)
 
+def _select_profile_peak_w(surface, vertical, max_depth_m):
+    """Select a signed profile amplitude, preserving surface row order/index."""
+    keys = ["Eddy", "Day"]
+    for table, required in ((surface, keys + ["w"]),
+                            (vertical, keys + ["Depth", "w"])):
+        missing = set(required) - set(table.columns)
+        if missing:
+            raise ValueError(f"Peak-w selection requires columns: {sorted(missing)}")
+    candidates = vertical[keys + ["Depth", "w"]].copy()
+    candidates = candidates.loc[
+        candidates[keys].notna().all(axis=1)
+        & np.isfinite(candidates["Depth"]) & np.isfinite(candidates["w"])
+        & candidates["Depth"].between(0, max_depth_m)
+    ]
+    candidates["magnitude"] = candidates["w"].abs()
+    counts = candidates.groupby(keys).size()
+    peaks = (candidates.sort_values(["magnitude", "Depth"], ascending=[False, True],
+                                   kind="stable")
+             .drop_duplicates(keys).set_index(keys))
+    lookup = pd.MultiIndex.from_frame(surface[keys])
+    out = surface.copy()
+    if "w_surface" not in out:
+        out["w_surface"] = out["w"]
+    out["w"] = peaks["w"].reindex(lookup).to_numpy()
+    out["w_selected_depth_m"] = peaks["Depth"].reindex(lookup).to_numpy()
+    out["w_profile_n"] = counts.reindex(lookup, fill_value=0).to_numpy()
+    return out
+
+
 def add_pv_gradient_terms(
     df: pd.DataFrame | None = None,
     grid: Grid | None = None,
     core_mean: bool = False,
     *,
     source: str = "original",
+    use_cache: bool | None = None,
+    cache_path: Path | str = DEFAULT_SURFACE_PV_CACHE,
     cache_root: Path | str = DEFAULT_DEPTH_PV_ROOT,
     depth_following: bool = False,
+    use_max_abs_w: bool = False,
     vertical: pd.DataFrame | None = None,
     max_depth_m: float = 1000.0,
     progress_every: int | None = None,
@@ -396,6 +432,27 @@ def add_pv_gradient_terms(
     surface_method: str = "uniform",
 ):
     """Compute planetary, topographic, and total shallow-water PV gradients.
+
+    ``use_cache=True`` loads the entire saved surface result without using
+    ``df`` or ``grid``. ``use_cache=False`` recalculates and atomically replaces
+    ``cache_path``. Omitting the flag preserves the previous calculation-only
+    behaviour (no file writes). The Parquet file includes calculation settings
+    in its attributes; loading with different footprint/method settings raises
+    an error. Refresh with False after changing source data or the model grid.
+    Only one file is retained. Recalculating with different settings overwrites
+    the same cache_path; no settings-specific versions are created.
+    This flag applies only to source='original', depth_following=False.
+
+    ``use_max_abs_w=True`` selects the signed w with largest magnitude for
+    each (Eddy, Day) at 0 <= Depth <= max_depth_m (default 1000 m). Pass
+    ``vertical=tilt.load_vert()`` or omit it to load the default profile table.
+    Ties select the shallowest depth; missing finite samples produce NaN w.
+    ``w_surface`` preserves the original value, ``w_selected_depth_m`` records
+    the selected depth, and ``w_profile_n`` counts valid candidate samples.
+    All w-dependent PV terms and Ro use this amplitude with the SURFACE
+    ellipse geometry. Turning the flag off restores w_surface if present.
+    The option applies only to the surface calculation; cache loads do not
+    load profiles. Refresh the single cache after changing this option.
 
     ``source='original'`` (the default) runs the surface-centred calculation.
     With ``core_mean=True``, ``averaging='nonlinear'`` averages the completed
@@ -417,9 +474,64 @@ def add_pv_gradient_terms(
     ``(snapshot_df, depth_df)``.  The snapshot vectors are thickness-weighted
     over the sampled column before magnitudes and bearings are reconstructed.
     """
+    if not isinstance(use_max_abs_w, bool):
+        raise TypeError("use_max_abs_w must be True or False")
+    if use_max_abs_w:
+        if source != "original" or depth_following:
+            raise ValueError("use_max_abs_w applies only to the surface calculation")
+        if not np.isfinite(max_depth_m) or max_depth_m <= 0:
+            raise ValueError("max_depth_m must be finite and positive")
     valid_sources = {"original", "depth_snapshot", "depth"}
     if source not in valid_sources:
         raise ValueError(f"source must be one of {sorted(valid_sources)}")
+    if use_cache is not None:
+        if not isinstance(use_cache, bool):
+            raise TypeError("use_cache must be True, False, or None")
+        if source != "original" or depth_following:
+            raise ValueError("use_cache applies only to the surface calculation (source='original')")
+        cache_path = Path(cache_path).expanduser()
+        if cache_path.suffix.lower() != ".parquet":
+            raise ValueError("cache_path must end in .parquet")
+        frac, inner_frac = _validate_ellipse_fractions(frac, inner_frac)
+        settings = dict(version=1, core_mean=bool(core_mean), frac=frac,
+                        inner_frac=inner_frac, averaging=averaging,
+                        surface_method=surface_method)
+        if use_max_abs_w:
+            settings.update(use_max_abs_w=True, max_depth_m=float(max_depth_m))
+        if use_cache:
+            if not cache_path.is_file():
+                raise FileNotFoundError(
+                    f"No surface PV cache at {cache_path}. Run once with use_cache=False."
+                )
+            cached = pd.read_parquet(cache_path)
+            if cached.attrs.get("surface_pv_cache_settings") != settings:
+                raise ValueError(
+                    "Saved surface PV settings differ or metadata is missing. "
+                    "Run with use_cache=False to overwrite the same cache file."
+                )
+            return cached
+        result = add_pv_gradient_terms(
+            df, grid, core_mean=core_mean, source=source,
+            frac=frac, inner_frac=inner_frac, averaging=averaging,
+            surface_method=surface_method, progress_every=progress_every,
+            use_max_abs_w=use_max_abs_w, vertical=vertical, max_depth_m=max_depth_m,
+        )
+        # Save only after successful calculation; leave an existing cache intact
+        # if either calculation or serialisation fails.
+        import tempfile
+        from datetime import datetime, timezone
+        result.attrs["surface_pv_cache_settings"] = settings
+        result.attrs["surface_pv_cache_created_utc"] = datetime.now(timezone.utc).isoformat()
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=cache_path.parent, suffix=".parquet", delete=False) as handle:
+            temporary = Path(handle.name)
+        try:
+            result.to_parquet(temporary, index=True)
+            temporary.replace(cache_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return result
+
     if source != "original":
         if depth_following:
             raise ValueError("depth_following cannot be combined with a cached source")
@@ -453,6 +565,12 @@ def add_pv_gradient_terms(
         )
 
     out = df.copy()
+    if use_max_abs_w:
+        out = _select_profile_peak_w(out, load_vert() if vertical is None else vertical,
+                                     max_depth_m)
+    elif "w_surface" in out:
+        out["w"] = out["w_surface"]
+        out = out.drop(columns=["w_selected_depth_m", "w_profile_n"], errors="ignore")
     dhdx, dhdy = phys_grad(grid.h, grid.X_grid * 1e3, grid.Y_grid * 1e3, grid.mask_rho)
     dh_dN = np.sin(grid.angle) * dhdx + np.cos(grid.angle) * dhdy
     dh_dE = np.cos(grid.angle) * dhdx - np.sin(grid.angle) * dhdy
@@ -2122,44 +2240,95 @@ def plot_ellipse(ax, row, grid=Grid, frac=1, color='k', lw=1, zorder=None, alpha
                colors=[color], linewidths=lw, zorder=zorder, alpha=alpha)
     return
 
-def plot_tilt_summary(df, grid=Grid, mag_bins=[5,10,20,30,40,np.inf]):
+# def plot_tilt_summary(df, grid=Grid, mag_bins=[5,10,20,30,40,np.inf],
+#                      step=None, rlim=None)):
+#     fig=plt.figure(figsize=(14,4),constrained_layout=True)
+#     axs=[fig.add_subplot(1,4,1),fig.add_subplot(1,4,2,projection='polar'),
+#          fig.add_subplot(1,4,3),fig.add_subplot(1,4,4,projection='polar')]
+
+#     for i,cyc in enumerate(['AE','CE']):
+#         ax,axw=axs[2*i],axs[2*i+1]
+#         d=df[df.Cyc.eq(cyc)].copy()
+#         cmap='Reds' if cyc=='AE' else 'Blues'
+#         col='r' if cyc=='AE' else 'dodgerblue'
+#         colors=getattr(plt.cm,cmap)(np.linspace(.15,1,len(mag_bins)-1))
+
+#         bath=ax.contourf(grid.X_grid,grid.Y_grid,np.where(grid.mask_rho,grid.h/1e3,np.nan),cmap='Greys_r')
+#         ax.hist2d(d.xc,d.yc,bins=50,cmap=cmap,alpha=.6,cmin=2)
+#         ax.scatter(d.xc,d.yc,s=3,c=col,alpha=.5,edgecolors='none')
+#         lat_lon_contours(ax,grid)
+#         ax.set(xlabel='x (km)',ylabel='y (km)',xlim=(grid.X_grid.min(),grid.X_grid.max()),
+#                ylim=(grid.Y_grid.min(),grid.Y_grid.max()),aspect='equal')
+
+#         d=d.dropna(subset=['TiltDir','TiltDis'])
+#         plot_windrose(axw,d,title='',mag_bins=mag_bins,colors=colors,
+#                       step=step, rlim=rlim)
+
+#         theta=np.deg2rad(d.TiltDir)
+#         theta_mean=np.arctan2(np.mean(np.sin(theta)),np.mean(np.cos(theta)))
+#         print(f'{cyc} mean tilt dir {np.rad2deg(theta_mean):.0f}, tilt dis {d.TiltDis.mean():.0f} km')
+
+#         rmax=axw.get_ylim()[1]
+#         axw.annotate('',xy=(theta_mean,.9*rmax),xytext=(theta_mean,0),
+#                      arrowprops=dict(arrowstyle='->',lw=2.5,color='magenta'))
+#         axw.legend(title=f'{cyc}\ntilt dist. (km)',loc='upper left',
+#                    bbox_to_anchor=(1,1.25),frameon=False)
+
+#     cbar=fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.02,pad=.01)
+#     cbar.set_label('Depth (km)')
+
+#     for ax,label in zip(axs,['a)','b)','c)','d)']):
+#         ax.text(-.1,1.01,label,transform=ax.transAxes,ha='left',va='top',
+#                 fontsize=12,fontweight='bold')
+
+#     plt.show()
+#     return fig,axs
+def plot_tilt_summary(df,grid=Grid,mag_bins=[5,10,20,30,40,np.inf],
+                      step=None,rlim=None,density=False,cbar_lims=None):
     fig=plt.figure(figsize=(14,4),constrained_layout=True)
     axs=[fig.add_subplot(1,4,1),fig.add_subplot(1,4,2,projection='polar'),
          fig.add_subplot(1,4,3),fig.add_subplot(1,4,4,projection='polar')]
+    hs={}
 
     for i,cyc in enumerate(['AE','CE']):
-        ax,axw=axs[2*i],axs[2*i+1]
-        d=df[df.Cyc.eq(cyc)].copy()
-        cmap='Reds' if cyc=='AE' else 'Blues'
-        col='r' if cyc=='AE' else 'dodgerblue'
+        ax,axw=axs[2*i:2*i+2]; d=df[df.Cyc.eq(cyc)].copy()
+        cmap='Reds' if cyc=='AE' else 'Blues'; col='r' if cyc=='AE' else 'dodgerblue'
         colors=getattr(plt.cm,cmap)(np.linspace(.15,1,len(mag_bins)-1))
+        lims=cbar_lims.get(cyc,(None,None)) if cbar_lims else (None,None)
 
         bath=ax.contourf(grid.X_grid,grid.Y_grid,np.where(grid.mask_rho,grid.h/1e3,np.nan),cmap='Greys_r')
-        ax.hist2d(d.xc,d.yc,bins=50,cmap=cmap,alpha=.6,cmin=2)
-        ax.scatter(d.xc,d.yc,s=3,c=col,alpha=.5,edgecolors='none')
+        h=ax.hist2d(d.xc,d.yc,bins=50,cmap=cmap,cmin=2,alpha=.7,vmin=lims[0],vmax=lims[1])
+        if density: hs[cyc]=h[3]
+        else: ax.scatter(d.xc,d.yc,s=3,c=col,alpha=.5,edgecolors='none')
+
         lat_lon_contours(ax,grid)
         ax.set(xlabel='x (km)',ylabel='y (km)',xlim=(grid.X_grid.min(),grid.X_grid.max()),
                ylim=(grid.Y_grid.min(),grid.Y_grid.max()),aspect='equal')
 
         d=d.dropna(subset=['TiltDir','TiltDis'])
-        plot_windrose(axw,d,title='',mag_bins=mag_bins,colors=colors)
-
-        theta=np.deg2rad(d.TiltDir)
-        theta_mean=np.arctan2(np.mean(np.sin(theta)),np.mean(np.cos(theta)))
-        print(f'{cyc} mean tilt dir {np.rad2deg(theta_mean):.0f}, tilt dis {d.TiltDis.mean():.0f} km')
-
-        rmax=axw.get_ylim()[1]
-        axw.annotate('',xy=(theta_mean,.9*rmax),xytext=(theta_mean,0),
+        plot_windrose(axw,d,title='',mag_bins=mag_bins,colors=colors,step=step,rlim=rlim)
+        th=np.deg2rad(d.TiltDir); thm=np.arctan2(np.mean(np.sin(th)),np.mean(np.cos(th)))
+        print(f'{cyc} mean tilt dir {np.rad2deg(thm):.0f}, tilt dis {d.TiltDis.mean():.0f} km')
+        axw.annotate('',xy=(thm,.9*axw.get_ylim()[1]),xytext=(thm,0),
                      arrowprops=dict(arrowstyle='->',lw=2.5,color='magenta'))
         axw.legend(title=f'{cyc}\ntilt dist. (km)',loc='upper left',
                    bbox_to_anchor=(1,1.25),frameon=False)
 
-    cbar=fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.02,pad=.01)
-    cbar.set_label('Depth (km)')
+    cb=fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.02,pad=.01)
+    cb.set_label('Depth (km)')
 
-    for ax,label in zip(axs,['a)','b)','c)','d)']):
-        ax.text(-.1,1.01,label,transform=ax.transAxes,ha='left',va='top',
+    for ax,l in zip(axs,['a)','b)','c)','d)']):
+        ax.text(-.1,1.01,l,transform=ax.transAxes,ha='left',va='top',
                 fontsize=12,fontweight='bold')
 
+    if density:
+        fig.canvas.draw()
+        for cyc,ax in zip(['AE','CE'],axs[::2]):
+            p=ax.get_position()
+            cax=fig.add_axes([p.x0+.005,p.y1+.012,p.width,.025])
+            cb=fig.colorbar(hs[cyc],cax=cax,orientation='horizontal',extend='max')
+            cb.set_label(f'{cyc}-days')
+            cb.ax.xaxis.set_ticks_position('top')
+            cb.ax.xaxis.set_label_position('top')
     plt.show()
     return fig,axs

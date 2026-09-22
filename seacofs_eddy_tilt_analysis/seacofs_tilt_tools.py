@@ -2240,44 +2240,95 @@ def plot_ellipse(ax, row, grid=Grid, frac=1, color='k', lw=1, zorder=None, alpha
                colors=[color], linewidths=lw, zorder=zorder, alpha=alpha)
     return
 
-def plot_tilt_summary(df, grid=Grid, mag_bins=[5,10,20,30,40,np.inf]):
+# def plot_tilt_summary(df, grid=Grid, mag_bins=[5,10,20,30,40,np.inf],
+#                      step=None, rlim=None)):
+#     fig=plt.figure(figsize=(14,4),constrained_layout=True)
+#     axs=[fig.add_subplot(1,4,1),fig.add_subplot(1,4,2,projection='polar'),
+#          fig.add_subplot(1,4,3),fig.add_subplot(1,4,4,projection='polar')]
+
+#     for i,cyc in enumerate(['AE','CE']):
+#         ax,axw=axs[2*i],axs[2*i+1]
+#         d=df[df.Cyc.eq(cyc)].copy()
+#         cmap='Reds' if cyc=='AE' else 'Blues'
+#         col='r' if cyc=='AE' else 'dodgerblue'
+#         colors=getattr(plt.cm,cmap)(np.linspace(.15,1,len(mag_bins)-1))
+
+#         bath=ax.contourf(grid.X_grid,grid.Y_grid,np.where(grid.mask_rho,grid.h/1e3,np.nan),cmap='Greys_r')
+#         ax.hist2d(d.xc,d.yc,bins=50,cmap=cmap,alpha=.6,cmin=2)
+#         ax.scatter(d.xc,d.yc,s=3,c=col,alpha=.5,edgecolors='none')
+#         lat_lon_contours(ax,grid)
+#         ax.set(xlabel='x (km)',ylabel='y (km)',xlim=(grid.X_grid.min(),grid.X_grid.max()),
+#                ylim=(grid.Y_grid.min(),grid.Y_grid.max()),aspect='equal')
+
+#         d=d.dropna(subset=['TiltDir','TiltDis'])
+#         plot_windrose(axw,d,title='',mag_bins=mag_bins,colors=colors,
+#                       step=step, rlim=rlim)
+
+#         theta=np.deg2rad(d.TiltDir)
+#         theta_mean=np.arctan2(np.mean(np.sin(theta)),np.mean(np.cos(theta)))
+#         print(f'{cyc} mean tilt dir {np.rad2deg(theta_mean):.0f}, tilt dis {d.TiltDis.mean():.0f} km')
+
+#         rmax=axw.get_ylim()[1]
+#         axw.annotate('',xy=(theta_mean,.9*rmax),xytext=(theta_mean,0),
+#                      arrowprops=dict(arrowstyle='->',lw=2.5,color='magenta'))
+#         axw.legend(title=f'{cyc}\ntilt dist. (km)',loc='upper left',
+#                    bbox_to_anchor=(1,1.25),frameon=False)
+
+#     cbar=fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.02,pad=.01)
+#     cbar.set_label('Depth (km)')
+
+#     for ax,label in zip(axs,['a)','b)','c)','d)']):
+#         ax.text(-.1,1.01,label,transform=ax.transAxes,ha='left',va='top',
+#                 fontsize=12,fontweight='bold')
+
+#     plt.show()
+#     return fig,axs
+def plot_tilt_summary(df,grid=Grid,mag_bins=[5,10,20,30,40,np.inf],
+                      step=None,rlim=None,density=False,cbar_lims=None):
     fig=plt.figure(figsize=(14,4),constrained_layout=True)
     axs=[fig.add_subplot(1,4,1),fig.add_subplot(1,4,2,projection='polar'),
          fig.add_subplot(1,4,3),fig.add_subplot(1,4,4,projection='polar')]
+    hs={}
 
     for i,cyc in enumerate(['AE','CE']):
-        ax,axw=axs[2*i],axs[2*i+1]
-        d=df[df.Cyc.eq(cyc)].copy()
-        cmap='Reds' if cyc=='AE' else 'Blues'
-        col='r' if cyc=='AE' else 'dodgerblue'
+        ax,axw=axs[2*i:2*i+2]; d=df[df.Cyc.eq(cyc)].copy()
+        cmap='Reds' if cyc=='AE' else 'Blues'; col='r' if cyc=='AE' else 'dodgerblue'
         colors=getattr(plt.cm,cmap)(np.linspace(.15,1,len(mag_bins)-1))
+        lims=cbar_lims.get(cyc,(None,None)) if cbar_lims else (None,None)
 
         bath=ax.contourf(grid.X_grid,grid.Y_grid,np.where(grid.mask_rho,grid.h/1e3,np.nan),cmap='Greys_r')
-        ax.hist2d(d.xc,d.yc,bins=50,cmap=cmap,alpha=.6,cmin=2)
-        ax.scatter(d.xc,d.yc,s=3,c=col,alpha=.5,edgecolors='none')
+        h=ax.hist2d(d.xc,d.yc,bins=50,cmap=cmap,cmin=2,alpha=.7,vmin=lims[0],vmax=lims[1])
+        if density: hs[cyc]=h[3]
+        else: ax.scatter(d.xc,d.yc,s=3,c=col,alpha=.5,edgecolors='none')
+
         lat_lon_contours(ax,grid)
         ax.set(xlabel='x (km)',ylabel='y (km)',xlim=(grid.X_grid.min(),grid.X_grid.max()),
                ylim=(grid.Y_grid.min(),grid.Y_grid.max()),aspect='equal')
 
         d=d.dropna(subset=['TiltDir','TiltDis'])
-        plot_windrose(axw,d,title='',mag_bins=mag_bins,colors=colors)
-
-        theta=np.deg2rad(d.TiltDir)
-        theta_mean=np.arctan2(np.mean(np.sin(theta)),np.mean(np.cos(theta)))
-        print(f'{cyc} mean tilt dir {np.rad2deg(theta_mean):.0f}, tilt dis {d.TiltDis.mean():.0f} km')
-
-        rmax=axw.get_ylim()[1]
-        axw.annotate('',xy=(theta_mean,.9*rmax),xytext=(theta_mean,0),
+        plot_windrose(axw,d,title='',mag_bins=mag_bins,colors=colors,step=step,rlim=rlim)
+        th=np.deg2rad(d.TiltDir); thm=np.arctan2(np.mean(np.sin(th)),np.mean(np.cos(th)))
+        print(f'{cyc} mean tilt dir {np.rad2deg(thm):.0f}, tilt dis {d.TiltDis.mean():.0f} km')
+        axw.annotate('',xy=(thm,.9*axw.get_ylim()[1]),xytext=(thm,0),
                      arrowprops=dict(arrowstyle='->',lw=2.5,color='magenta'))
         axw.legend(title=f'{cyc}\ntilt dist. (km)',loc='upper left',
                    bbox_to_anchor=(1,1.25),frameon=False)
 
-    cbar=fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.02,pad=.01)
-    cbar.set_label('Depth (km)')
+    cb=fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.02,pad=.01)
+    cb.set_label('Depth (km)')
 
-    for ax,label in zip(axs,['a)','b)','c)','d)']):
-        ax.text(-.1,1.01,label,transform=ax.transAxes,ha='left',va='top',
+    for ax,l in zip(axs,['a)','b)','c)','d)']):
+        ax.text(-.1,1.01,l,transform=ax.transAxes,ha='left',va='top',
                 fontsize=12,fontweight='bold')
 
+    if density:
+        fig.canvas.draw()
+        for cyc,ax in zip(['AE','CE'],axs[::2]):
+            p=ax.get_position()
+            cax=fig.add_axes([p.x0+.005,p.y1+.012,p.width,.025])
+            cb=fig.colorbar(hs[cyc],cax=cax,orientation='horizontal',extend='max')
+            cb.set_label(f'{cyc}-days')
+            cb.ax.xaxis.set_ticks_position('top')
+            cb.ax.xaxis.set_label_position('top')
     plt.show()
     return fig,axs
