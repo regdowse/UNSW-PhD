@@ -11,3 +11,9 @@ Selection is screened for illustration, not an unbiased population sample. Run f
 Panel a shows daily centre profiles; b shows the mean-increment reconstruction, variance-weighted line and deep-to-shallow direction; c compares fitted tilt distance with the reference day's projected horizontal extent. The ribbon represents relative fit weight, not uncertainty. The illustrated fit is checked against the production `compute_weighted_tilt` function.
 
 PNG and PDF figures are exported here with the selected Eddy ID and Day in their names when `SAVE=True`. See the notebook for exact depth indexing and coordinate conventions. Real-data execution requires the Katana profile file.
+
+## Temporal-weight sensitivity
+
+Run `delta_temporal_weight_sensitivity.ipynb` on Katana to compare equal, Gaussian 2-day and Gaussian 1.5-day temporal means on 10 random eligible real eddy-days. Change `SEED` or restrict `EDDY_IDS`. It overlays three-panel snapshot schematics and plots the three delta estimates plus maximum pairwise horizontal centre separation over each sampled eddy's available lifetime. The existing unweighted depth-variance weights are held fixed. Equal-weight lifetime estimates are checked against production.
+
+The small `delta_sensitivity_tools.py` helper keeps the notebook concise. SciPy supplies pairwise distances. Figures/CSV files are optional (`SAVE=False` by default); generated outputs are ignored by Git. No production method or cache is changed.

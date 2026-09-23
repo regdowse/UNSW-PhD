@@ -1,3 +1,5 @@
 delta_tilt_schematic_*.png
 delta_tilt_schematic_*.pdf
 .ipynb_checkpoints/
+sensitivity_outputs/
+__pycache__/
