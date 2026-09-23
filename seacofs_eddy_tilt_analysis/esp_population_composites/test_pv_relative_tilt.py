@@ -11,7 +11,7 @@ def population():
         for day in [1,2]:
             deep=e%2==0
             surface.append(dict(Eddy=e,Day=day,Cyc='AE' if e%4<2 else 'CE',
-                Region=['S1','U2','D1'][e%3],Ro=.2 if day==1 else .8,
+                Rc=30.,Region=['S1','U2','D1'][e%3],Ro=.2 if day==1 else .8,
                 PV_grad_mag=1.,PV_grad_theta=90.,
                 PV_grad_plan_mag=[1.,1.,.1][e%3],PV_grad_topo_mag=[.1,1.,1.][e%3]))
             for z in ([0.,200.,500.,1000.,1500.] if deep else [0.,200.,500.]):
@@ -141,9 +141,9 @@ def test_notebook_end_to_end(monkeypatch, tmp_path):
     for i,c in enumerate(nb['cells']):
         if c['cell_type']!='code':continue
         source=''.join(c['source']).replace('from IPython.display import display','display = lambda *args, **kw: None')
-        source=source.replace('BOOTSTRAPS = 500','BOOTSTRAPS = 20').replace('SAVE_RESULTS = False','SAVE_RESULTS = True')
+        source=source.replace('BOOTSTRAPS = 500','BOOTSTRAPS = 100').replace('SAVE_RESULTS = False','SAVE_RESULTS = True')
         exec(compile(source,f'cell_{i}','exec'),ns)
         ns['OUTPUT']=tmp_path
-    assert len(shown)==16
+    assert len(shown)==19
     assert len(list(tmp_path.iterdir()))==12
     assert not ns['profile_stats'].empty

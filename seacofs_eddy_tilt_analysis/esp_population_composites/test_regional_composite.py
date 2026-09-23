@@ -30,7 +30,7 @@ def fixture():
                     for member in range(2):
                         e+=1
                         for day in [1,2]:
-                            rows.append(dict(Eddy=e,Day=day,Region=region,Cyc=cyc,Ro=-ro if cyc=='AE' else ro,
+                            rows.append(dict(Eddy=e,Day=day,Region=region,Cyc=cyc,Rc=40.+member*5,Ro=-ro if cyc=='AE' else ro,
                                 topo_plan_ratio=np.log(3) if member else -np.log(3),lon=154. if day==1 else 155.,h=1800.))
                             for z in ([0.,200.,500.,850.] if cohort=='shallow' else [0.,200.,500.,850.,1500.]):
                                 profiles.append(dict(Eddy=e,Day=day,Depth=z,xc=100+z/100+member,yc=100+z/200,
