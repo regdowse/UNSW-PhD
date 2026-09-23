@@ -70,14 +70,16 @@ def compare_regions(members, audit, surface, frame='geographic', n_boot=500, see
     return (pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(), pd.DataFrame(inventory))
 
 
-def plot_comparison(stats, cohort='all', frame='geographic', min_eddies=2, sparse_eddies=20):
+def plot_comparison(stats, cohort='all', frame='geographic', min_eddies=2, sparse_eddies=20, figsize=None):
     """Rows: km / surface Rc; columns: geographic components+norm, or PV components."""
     import matplotlib.pyplot as plt
     if cohort not in ('all','shallow','deep') or frame not in ('geographic','pv'):
         raise ValueError('Invalid cohort or frame')
     labels = ['Zonal (+east)', 'Meridional (+north)', 'Tilt distance'] if frame == 'geographic' else ['Along PV gradient', 'Perpendicular (+CCW)']
     metrics = ['mean_east','mean_north','distance_km'][:len(labels)]
-    fig, axes = plt.subplots(2,len(labels),figsize=(4.5*len(labels),8),squeeze=False,constrained_layout=True)
+    if figsize is None:
+        figsize=(4.5*len(labels),8)
+    fig, axes = plt.subplots(2,len(labels),figsize=figsize,squeeze=False,constrained_layout=True)
     deepest = 1000. if cohort != 'deep' else 1.
     for i, unit in enumerate(['km','Rc']):
         for j, (metric,label) in enumerate(zip(metrics,labels)):
