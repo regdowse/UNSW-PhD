@@ -3,8 +3,12 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.distance import pdist
 
-METHODS = {'Equal': None, 'Gaussian 2 d': 2.0, 'Gaussian 1.5 d': 1.5}
-
+# METHODS = {'Equal': None, 'Gaussian 2 d': 2.0, 'Gaussian 1.5 d': 1.5}
+METHODS = {
+    'Equal': None,
+    'Gaussian 1.5 d': 1.5,
+    'Gaussian 1.0 d': 1.0,
+}
 
 def increments(track, depth_int=10, max_depth=1000):
     """Calendar-day columns and upper-interval depth labels match production."""
