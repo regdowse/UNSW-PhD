@@ -41,7 +41,7 @@ def bearing(a, b) -> float:
 def compute_weighted_tilt(
     profiles: pd.DataFrame,
     eddy: int,
-    num: int = 6,
+    num: int = 5,
     depth_int: int = 10,
     max_depth: int = 1000,
     min_depth_range: int = 200,
@@ -49,7 +49,32 @@ def compute_weighted_tilt(
     eps: float = 1e-10,
     min_points: int = 5,
     bearing_offset: float = 20.0,
+    temporal_sigma_days: float | None = 1.0,
 ) -> pd.DataFrame:
+    """Fit delta tilt using a centred calendar window and Gaussian mean increments.
+
+    ``num=5`` selects k-2 through k+2. For legacy callers, even ``num``
+    still selects ``num + 1`` days (e.g. 6 selects seven). Set
+    ``temporal_sigma_days=None`` for the old equal temporal mean.
+    Depth weights retain unweighted sample variance over the selected window.
+    """
+    if not isinstance(num, (int, np.integer)) or num < 3:
+        raise ValueError("num must be an integer of at least 3")
+    if temporal_sigma_days is not None and (
+        not np.isfinite(temporal_sigma_days) or temporal_sigma_days <= 0
+    ):
+        raise ValueError("temporal_sigma_days must be positive and finite, or None")
+    offsets = np.arange(-(num // 2), num // 2 + 1)
+    temporal_weights = (
+        np.ones(len(offsets)) if temporal_sigma_days is None
+        else np.exp(-0.5 * (offsets / temporal_sigma_days) ** 2)
+    )
+
+    def temporal_mean(values: pd.DataFrame) -> pd.Series:
+        # Renormalize separately at each depth over available calendar days.
+        denominator = values.notna().mul(temporal_weights, axis=1).sum(axis=1)
+        return values.mul(temporal_weights, axis=1).sum(axis=1, min_count=1) / denominator.replace(0, np.nan)
+
     rows = []
     df_eddy = profiles.loc[profiles["Eddy"].eq(eddy)].copy()
     if df_eddy.empty:
@@ -91,8 +116,8 @@ def compute_weighted_tilt(
         df_x = df_x_all.iloc[:, ref_idx - num // 2 : ref_idx + num // 2 + 1]
         df_y = df_y_all.iloc[:, ref_idx - num // 2 : ref_idx + num // 2 + 1]
         df_data = pd.DataFrame(index=df_x.index)
-        df_data["dxc"] = df_x.mean(axis=1)
-        df_data["dyc"] = df_y.mean(axis=1)
+        df_data["dxc"] = temporal_mean(df_x)
+        df_data["dyc"] = temporal_mean(df_y)
         df_data["sum_dxc"] = df_data["dxc"].cumsum()
         df_data["sum_dyc"] = df_data["dyc"].cumsum()
         df_data["total_var"] = df_x.var(axis=1) + df_y.var(axis=1)

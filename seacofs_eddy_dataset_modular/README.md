@@ -97,6 +97,24 @@ python -m seacofs_eddy_dataset.cli run-all --config config/example.yaml
 
 ## Output And Parallelisation
 
+### Delta Tilt Settings
+
+The production delta method uses `tilt.smoothing_days: 5` and
+`tilt.temporal_sigma_days: 1.0`: calendar days k-2 through k+2, with Gaussian
+weights of approximately 5.45%, 24.42%, 40.26%, 24.42%, and 5.45%.
+Temporal weights apply to mean depth increments and renormalize at each depth
+over available values. Depth-fit weights still use unweighted sample variance
+over the five-day window. The first and last two calendar days are excluded;
+missing interior days retain the existing neighbouring-profile behaviour.
+Depth limits, line fitting, and the deep-to-shallow bearing are unchanged.
+
+To regenerate existing results, set `parallel.skip_existing: false`, reload
+the configuration, and rerun `compute_tilt` followed by `analyse_tilt`.
+This overwrites `tilt/tilt_dataset.parquet`; vertical profiles need not be rerun.
+Refresh downstream analysis tables that cache tilt values after regeneration.
+For the legacy seven-day equal-weight result, use `smoothing_days: 6` and
+`temporal_sigma_days: null` (legacy even window values select one extra day).
+
 Set output locations and parallel worker counts in your config file. Start by
 copying `config/example.yaml` to `config/local.yaml`, then edit the paths:
 

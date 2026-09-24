@@ -76,7 +76,8 @@ vertical_profiles:
 tilt:
   min_profile_depth_count: 3
   min_track_length_days: 2
-  smoothing_days: 6
+  smoothing_days: 5 # centred window: day -2 through day +2
+  temporal_sigma_days: 1.0 # Gaussian temporal mean; null restores equal weighting
   depth_interval_m: 10
   max_depth_m: 1000
   min_depth_range_m: 200

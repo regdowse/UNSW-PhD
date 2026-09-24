@@ -32,7 +32,8 @@ def run(config: PipelineConfig) -> None:
         compute_weighted_tilt(
             profiles,
             int(eddy),
-            num=int(settings.get("smoothing_days", 6)),
+            num=int(settings.get("smoothing_days", 5)),
+            temporal_sigma_days=settings.get("temporal_sigma_days", 1.0),
             depth_int=int(settings.get("depth_interval_m", 10)),
             max_depth=int(settings.get("max_depth_m", 1000)),
             min_depth_range=int(settings.get("min_depth_range_m", 200)),

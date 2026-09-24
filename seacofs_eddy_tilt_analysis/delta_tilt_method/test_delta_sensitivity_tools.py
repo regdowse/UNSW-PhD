@@ -20,11 +20,41 @@ def fixture():
 
 
 class SensitivityTests(unittest.TestCase):
+    def test_five_day_gaussian_matches_independent_fit_with_gaps(self):
+        p = fixture().loc[lambda d: ~d.Day.isin([5, 8])]
+        dx, dy = increments(p)
+        actual = compute_weighted_tilt(p, 1)
+        self.assertEqual(actual.Day.tolist(), list(range(2, 18)))
+        for row in actual.itertuples():
+            expected = fit_snapshot(dx, dy, row.Day, sigma=1.0, half_window=2)
+            self.assertIsNotNone(expected)
+            np.testing.assert_allclose(
+                [row.TiltDis, row.TiltDir],
+                [expected['TiltDis'], expected['TiltDir']], rtol=1e-9, atol=1e-9)
+
+    def test_gaussian_central_day_contribution_and_window(self):
+        z = np.arange(0, 301, 10.)
+        p = pd.concat([pd.DataFrame({'Eddy': 1, 'Day': day, 'Depth': z,
+            'xc': z * (0.01 if day == 2 else 0.), 'yc': z * 0.})
+            for day in range(5)], ignore_index=True)
+        result = compute_weighted_tilt(p, 1)
+        a = np.exp(-0.5 * np.arange(-2, 3)**2)
+        self.assertEqual(result.Day.tolist(), [2])
+        # Upper-interval labels span 0..290 m, preserving existing convention.
+        self.assertAlmostEqual(result.TiltDis.iloc[0], 290 * .01 * a[2] / a.sum())
+        self.assertAlmostEqual(result.TiltDir.iloc[0], 290.)
+        self.assertTrue(compute_weighted_tilt(p.loc[p.Day.lt(4)], 1).empty)
+
+    def test_invalid_sigma(self):
+        for sigma in [0, -1, np.nan, np.inf]:
+            with self.assertRaises(ValueError):
+                compute_weighted_tilt(fixture(), 1, temporal_sigma_days=sigma)
+
     def test_equal_matches_production_with_missing_days_and_depths(self):
         p = fixture()
         p = p.loc[~p.Day.isin([5, 8])]
         table, _, _ = lifetime(p)
-        baseline = compute_weighted_tilt(p, 1)
+        baseline = compute_weighted_tilt(p, 1, num=6, temporal_sigma_days=None)
         joined = table.merge(baseline, on='Day')
         np.testing.assert_allclose(joined['Equal'], joined.TiltDis, rtol=1e-9, atol=1e-9, equal_nan=True)
 
