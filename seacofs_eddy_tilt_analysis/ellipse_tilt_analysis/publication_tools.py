@@ -164,7 +164,7 @@ def plot_direction(data):
             # Equally spaced categorical classes avoid implying a fitted continuous curve.
             x = np.arange(len(g))
             _line_interval(ax, x, g, colour)
-            ax.set(xticks=x, xticklabels=[f'{r.lower:g}–{r.upper:g}' for r in g.itertuples()],
+            ax.set(xticks=x, xticklabels=[f'[{r.lower:g},{r.upper:g})' for r in g.itertuples()],
                    ylim=(ymin,ymax), xlabel='Surface axis-ratio class', ylabel='Major-axis alignment score')
             ax.tick_params(axis='x', labelsize=6.5)
             ax.axhline(0, color='.4', ls='--', lw=.8)
