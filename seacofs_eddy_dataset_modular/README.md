@@ -105,15 +105,23 @@ weights of approximately 5.45%, 24.42%, 40.26%, 24.42%, and 5.45%.
 Temporal weights apply to mean depth increments and renormalize at each depth
 over available values. Depth-fit weights still use unweighted sample variance
 over the five-day window. The first and last two calendar days are excluded;
-missing interior days retain the existing neighbouring-profile behaviour.
+only intervals with finite x/y increments on the reference day are used.
+This restriction is applied before temporal averaging, variance estimation,
+and cumulative reconstruction. Neighbours cannot extend the reference depth
+range, and missing reference days receive missing tilt values. A 0-200 m
+profile supplies fit labels 0-190 m and fails the unchanged 200 m minimum span.
 Depth limits, line fitting, and the deep-to-shallow bearing are unchanged.
 
 To regenerate existing results, set `parallel.skip_existing: false`, reload
 the configuration, and rerun `compute_tilt` followed by `analyse_tilt`.
 This overwrites `tilt/tilt_dataset.parquet`; vertical profiles need not be rerun.
 Refresh downstream analysis tables that cache tilt values after regeneration.
-For the legacy seven-day equal-weight result, use `smoothing_days: 6` and
+For seven-day equal temporal weighting, use `smoothing_days: 6` and
 `temporal_sigma_days: null` (legacy even window values select one extra day).
+The reference-day depth restriction applies to every temporal weighting choice.
+`analyse_tilt` summarises the regenerated Delta estimates, excluding missing
+estimates from its means and medians. Its separate `profile_tilt_summaries`
+table remains a raw per-day displacement diagnostic, not a Delta fit.
 
 Set output locations and parallel worker counts in your config file. Start by
 copying `config/example.yaml` to `config/local.yaml`, then edit the paths:

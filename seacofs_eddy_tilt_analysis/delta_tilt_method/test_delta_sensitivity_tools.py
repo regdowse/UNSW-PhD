@@ -1,11 +1,15 @@
 """Synthetic invariants for the isolated temporal-weight experiment."""
 import sys
 import unittest
+import warnings
 from pathlib import Path
+from unittest.mock import patch
 import numpy as np
 import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'seacofs_eddy_dataset_modular' / 'src'))
 from seacofs_eddy_dataset.core.tilt import compute_weighted_tilt
+from seacofs_eddy_dataset.config import PipelineConfig
+from seacofs_eddy_dataset.stages import tilt as tilt_stage
 from delta_sensitivity_tools import increments, fit_snapshot, lifetime, maximum_span
 
 
@@ -20,6 +24,63 @@ def fixture():
 
 
 class SensitivityTests(unittest.TestCase):
+    def test_stages_summarise_reference_limited_estimates(self):
+        config = PipelineConfig(raw={'paths': {'output_root': '/unused'},
+            'parallel': {'skip_existing': False}}, config_path=Path('/unused/config.yaml'))
+        for all_shallow in [False, True]:
+            p = fixture().loc[lambda d: d.Depth.le(200) if all_shallow
+                else (~d.Day.eq(10) | d.Depth.le(200))]
+            with patch.object(Path, 'exists', return_value=True), \
+                 patch.object(tilt_stage.pd, 'read_parquet', return_value=p), \
+                 patch.object(tilt_stage, 'write_partition') as write, \
+                 patch('builtins.print'):
+                tilt_stage.run(config)
+                result = write.call_args.args[0]
+            self.assertTrue(result.loc[result.Day.eq(10), ['TiltDis', 'TiltDir']].isna().all().all())
+            with patch.object(Path, 'exists', return_value=True), \
+                 patch.object(tilt_stage.pd, 'read_parquet', side_effect=[result, p]), \
+                 patch.object(tilt_stage, 'write_partition') as write, \
+                 patch('builtins.print'), warnings.catch_warnings():
+                warnings.simplefilter('error', RuntimeWarning)
+                tilt_stage.run_analysis(config)
+                summary = write.call_args_list[0].args[0].iloc[0]
+            self.assertEqual(summary.n_valid_tilts, result.TiltDis.notna().sum())
+            if all_shallow:
+                self.assertTrue(np.isnan(summary.mean_tilt_distance_km))
+                self.assertTrue(np.isnan(summary.median_tilt_distance_km))
+            else:
+                self.assertAlmostEqual(summary.mean_tilt_distance_km, result.TiltDis.mean())
+
+    def test_production_matches_notebook_with_reference_depth_limits(self):
+        p = fixture()
+        p = p.loc[~p.Day.eq(10) | p.Depth.le(200)]
+        p = p.loc[~p.Day.eq(11) | p.Depth.between(100, 400)]
+        p = p.loc[~p.Day.eq(8)]
+        dx, dy = increments(p)
+        for num, sigma in [(5, 1.0), (6, None), (5, 1.5)]:
+            result = compute_weighted_tilt(p, 1, num=num, temporal_sigma_days=sigma)
+            for row in result.itertuples():
+                expected = fit_snapshot(dx, dy, row.Day, sigma=sigma, half_window=num // 2)
+                if expected is None:
+                    self.assertTrue(np.isnan([row.TiltDis, row.TiltDir]).all())
+                else:
+                    np.testing.assert_allclose([row.TiltDis, row.TiltDir],
+                        [expected['TiltDis'], expected['TiltDir']], atol=1e-9)
+
+    def test_production_ignores_neighbours_below_reference(self):
+        p = fixture().loc[lambda d: ~d.Day.eq(10) | d.Depth.le(400)].copy()
+        before = compute_weighted_tilt(p, 1).set_index('Day').loc[10]
+        p.loc[p.Depth.gt(400), 'xc'] += 10000
+        p.loc[p.Depth.gt(400), 'yc'] -= 9000
+        after = compute_weighted_tilt(p, 1).set_index('Day').loc[10]
+        np.testing.assert_allclose(before, after, atol=1e-9)
+
+    def test_production_profile_outside_depth_cap_has_no_estimate(self):
+        p = fixture()
+        p.loc[p.Day.eq(10), 'Depth'] += 2000
+        result = compute_weighted_tilt(p, 1).set_index('Day').loc[10]
+        self.assertTrue(result[['TiltDis', 'TiltDir']].isna().all())
+
     def test_five_day_gaussian_matches_production_when_support_is_equal(self):
         p = fixture().loc[lambda d: d.Depth.le(600)]
         dx, dy = increments(p)

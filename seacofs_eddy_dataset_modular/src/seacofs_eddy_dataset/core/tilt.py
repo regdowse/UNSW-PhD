@@ -57,6 +57,9 @@ def compute_weighted_tilt(
     still selects ``num + 1`` days (e.g. 6 selects seven). Set
     ``temporal_sigma_days=None`` for the old equal temporal mean.
     Depth weights retain unweighted sample variance over the selected window.
+    Only finite increment pairs supported by the reference day enter the
+    temporal mean, variance, and cumulative reconstruction. Neighbours cannot
+    extend its depth range or replace a missing reference profile.
     """
     if not isinstance(num, (int, np.integer)) or num < 3:
         raise ValueError("num must be an integer of at least 3")
@@ -97,6 +100,10 @@ def compute_weighted_tilt(
         if var == "Depth":
             df_day[var] = np.abs(df_day[var])
         df_day = df_day.loc[df_day[var] <= max_depth].set_index(var).sort_index()
+        if len(df_day) < 2:
+            diffs_xc[key] = pd.Series(np.nan, index=full_idx)
+            diffs_yc[key] = pd.Series(np.nan, index=full_idx)
+            continue
         depths = df_day.index.values
         valid_depths = target_depths[(target_depths >= depths.min()) & (target_depths <= depths.max())]
         if len(valid_depths) < 2:
@@ -113,8 +120,15 @@ def compute_weighted_tilt(
     df_y_all = pd.DataFrame(diffs_yc)
 
     for ref_idx in range(num // 2, len(day_nums) - num // 2):
-        df_x = df_x_all.iloc[:, ref_idx - num // 2 : ref_idx + num // 2 + 1]
-        df_y = df_y_all.iloc[:, ref_idx - num // 2 : ref_idx + num // 2 + 1]
+        reference_support = (
+            np.isfinite(df_x_all.iloc[:, ref_idx])
+            & np.isfinite(df_y_all.iloc[:, ref_idx])
+        )
+        # Restrict before cumsum so unsupported neighbouring depths never enter
+        # the reconstructed profile, even when the reference starts below 0 m.
+        window = slice(ref_idx - num // 2, ref_idx + num // 2 + 1)
+        df_x = df_x_all.loc[reference_support].iloc[:, window]
+        df_y = df_y_all.loc[reference_support].iloc[:, window]
         df_data = pd.DataFrame(index=df_x.index)
         df_data["dxc"] = temporal_mean(df_x)
         df_data["dyc"] = temporal_mean(df_y)

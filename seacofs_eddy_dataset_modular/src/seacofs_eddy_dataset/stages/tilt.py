@@ -57,11 +57,14 @@ def run_analysis(config: PipelineConfig) -> None:
     profiles = pd.read_parquet(profiles_path) if profiles_path.exists() else pd.DataFrame()
     out_dir = config.output_root / "analysis"
 
+    # Rejected reference-day profiles remain rows with missing tilt values.
+    valid = np.isfinite(tilt["TiltDis"]) & np.isfinite(tilt["TiltDir"])
+    distances = tilt.loc[valid, "TiltDis"]
     summary = {
         "n_tilt_rows": len(tilt),
-        "n_valid_tilts": int(tilt["TiltDis"].notna().sum()) if "TiltDis" in tilt else 0,
-        "median_tilt_distance_km": float(np.nanmedian(tilt["TiltDis"])) if len(tilt) else np.nan,
-        "mean_tilt_distance_km": float(np.nanmean(tilt["TiltDis"])) if len(tilt) else np.nan,
+        "n_valid_tilts": int(valid.sum()),
+        "median_tilt_distance_km": float(distances.median()) if len(distances) else np.nan,
+        "mean_tilt_distance_km": float(distances.mean()) if len(distances) else np.nan,
     }
     write_partition(pd.DataFrame([summary]), out_dir / "tilt_summary.parquet")
 

@@ -11,7 +11,7 @@ The schematic retains a centred five-day window and Gaussian temporal sigma of o
 
 Selection is screened for illustration, not an unbiased population sample. Run from this folder or elsewhere inside UNSW-PhD. Dependencies are NumPy, pandas, Matplotlib and a Parquet engine. Defaults match the pipeline tilt configuration.
 
-Panel a shows daily centre profiles; b shows the mean-increment reconstruction, variance-weighted line and deep-to-shallow direction; c compares fitted tilt distance with the reference day's projected horizontal extent. The ribbon represents relative fit weight, not uncertainty. The schematic and sensitivity notebook share the local `fit_snapshot` helper. They intentionally differ from production where neighbours extend beyond the reference profile.
+Panel a shows daily centre profiles; b shows the mean-increment reconstruction, variance-weighted line and deep-to-shallow direction; c compares fitted tilt distance with the reference day's projected horizontal extent. The ribbon represents relative fit weight, not uncertainty. The schematic and sensitivity notebook share the local `fit_snapshot` helper. Production now applies the same reference-day support restriction.
 
 PNG and PDF figures are exported here with the selected Eddy ID and Day in their names when `SAVE=True`, along with `delta_tilt_schematic_selected_examples.csv`. By default figures display inline without saving. If fewer eligible pairs exist than requested, all available pairs are shown with a message. See the notebook for exact depth indexing and coordinate conventions. Real-data execution requires the Katana profile file.
 
@@ -21,10 +21,10 @@ Run `delta_temporal_weight_sensitivity.ipynb` on Katana to compare equal, Gaussi
 
 The small `delta_sensitivity_tools.py` helper keeps the notebook concise. SciPy supplies pairwise distances. Figures/CSV files are optional (`SAVE=False` by default); generated outputs are ignored by Git. This experiment retains its seven-day windows but now limits every estimate to its reference day’s depth support. It does not regenerate the production dataset.
 
-## Reference-day depth limit (notebook experiment)
+## Reference-day depth limit
 
 Both notebooks now exclude intervals not supported by the reference day **before** temporal averaging, depth-variance weighting and cumulative reconstruction. Neighbouring profiles still contribute inside that range, but cannot extend it above/below the reference profile. No reference profile means no estimate. All temporal kernels use the same depth restriction; lifetime curves apply it separately each day.
 
 The interpolation and upper-interval labels are retained: a profile from 0 to 200 m supplies intervals labelled 0 to 190 m. It therefore fails the unchanged 200 m minimum fit-label range and yields no estimate. The maximum-depth control remains an additional cap. Existing interpolation between fitted levels is retained, with no extrapolation outside the measured range.
 
-The main pipeline in `seacofs_eddy_dataset_modular` and its generated climatology are **unchanged**. Production-equality assertions have been removed from the notebooks because differing estimates are now expected. Tests retain agreement checks where all daily depth ranges coincide, plus shallow-reference/deep-neighbour, missing-day and interval-boundary regressions. Old notebook outputs were cleared to avoid displaying the pre-correction estimates; rerun on Katana.
+The main pipeline in `seacofs_eddy_dataset_modular` now uses this restriction too. Tests compare production against the notebook helper with varying depth ranges, shallow references and missing days. Regenerate the saved climatology by rerunning `compute_tilt` and then `analyse_tilt` with `parallel.skip_existing: false`; existing files do not change merely by updating the code. The production default remains five days with Gaussian sigma = one day, while the sensitivity experiment retains its explicitly configured seven-day windows.
