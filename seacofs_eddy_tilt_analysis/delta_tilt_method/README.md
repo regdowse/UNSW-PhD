@@ -1,18 +1,19 @@
 # Delta tilt method
 
-Open `delta_tilt_schematic.ipynb` on Katana and run all cells. It loads the actual confirmed vertical profiles from `/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/vertical_profiles_confirmed/profiles.parquet` and randomly chooses a real eddy-day with five consecutive usable profiles and a finite, nonzero production tilt. No synthetic fallback is used.
+Open `delta_tilt_schematic.ipynb` on Katana and run all cells. It loads the actual confirmed vertical profiles from `/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/vertical_profiles_confirmed/profiles.parquet` and randomly chooses `N_IMAGES=10` unique real eddy-days with five consecutive usable profiles and a finite, nonzero production tilt. No synthetic fallback is used.
 
 The production method now uses a centred five-day window and Gaussian temporal sigma of one day. The schematic uses these defaults; depth weights remain inverse unweighted sample variance across the five days.
 
-- Change `SEED` to try another example (default 731).
-- Set `EDDY_ID` to choose an eddy, leaving `REFERENCE_DAY=None` for a random eligible day.
-- Set both controls to reproduce a particular example. The notebook prints the selected values.
+- Set `N_IMAGES` to the desired batch size (default 10).
+- Change `SEED` to try another batch (default 46). Eddies are visited in random order once per round before selecting more days from them.
+- Set `EDDY_ID` to choose an eddy, leaving `REFERENCE_DAY=None` for a batch of random eligible days from that eddy.
+- Set both controls to reproduce a particular example. This produces one figure regardless of `N_IMAGES`. The notebook prints a selection table and checks each result against production.
 
 Selection is screened for illustration, not an unbiased population sample. Run from this folder or elsewhere inside UNSW-PhD. Dependencies are NumPy, pandas, Matplotlib and a Parquet engine. Defaults match the pipeline tilt configuration.
 
 Panel a shows daily centre profiles; b shows the mean-increment reconstruction, variance-weighted line and deep-to-shallow direction; c compares fitted tilt distance with the reference day's projected horizontal extent. The ribbon represents relative fit weight, not uncertainty. The illustrated fit is checked against the production `compute_weighted_tilt` function.
 
-PNG and PDF figures are exported here with the selected Eddy ID and Day in their names when `SAVE=True`. See the notebook for exact depth indexing and coordinate conventions. Real-data execution requires the Katana profile file.
+PNG and PDF figures are exported here with the selected Eddy ID and Day in their names when `SAVE=True`, along with `delta_tilt_schematic_selected_examples.csv`. By default figures display inline without saving. If fewer eligible pairs exist than requested, all available pairs are shown with a message. See the notebook for exact depth indexing and coordinate conventions. Real-data execution requires the Katana profile file.
 
 ## Temporal-weight sensitivity
 
