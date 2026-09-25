@@ -12,7 +12,7 @@ DEFAULT_CACHE_ROOT = Path(
     "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
     "pv_gradient_surface_esp_gaussian"
 )
-DEFAULT_CACHE_NAME = "surface_pv_esp_gaussian_comparison.parquet"
+DEFAULT_CACHE_NAME = "surface_pv_esp_gaussian_laplacian_v2.parquet"
 
 
 def method_specs():
@@ -99,16 +99,18 @@ def paired_to(df, reference="esp_gaussian_1"):
 
 
 def local_esp_fields(row, grid, frac=1.0):
-    """Return local reconstructed fields for visualising one eddy snapshot."""
+    """Return Laplacian-derived local fields for one eddy snapshot."""
     import seacofs_tilt_tools as tilt
 
     ii, jj = tilt.core_grid_indices(row, grid, frac=frac)
-    q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
     dx = grid.x_grid[ii] - float(row.xc)
     dy = grid.y_grid[jj] - float(row.yc)
-    rho2 = q[0, 0] * dx**2 + 2 * q[0, 1] * dx * dy + q[1, 1] * dy**2
-    shape = np.exp(-rho2 / float(row.Rc)**2)
-    zeta = float(row.w) * shape
+    reconstruction = tilt._esp_gaussian_vorticity(
+        row.w, row.Rc, row.q11, row.q12, row.q22, dx, dy
+    )
+    rho2 = reconstruction["rho2"]
+    shape = reconstruction["gaussian"]
+    zeta = reconstruction["zeta"]
     dhdx, dhdy = tilt.phys_grad(grid.h, grid.X_grid*1e3, grid.Y_grid*1e3, grid.mask_rho)
     dh_n = np.sin(grid.angle)*dhdx + np.cos(grid.angle)*dhdy
     dh_e = np.cos(grid.angle)*dhdx - np.sin(grid.angle)*dhdy
@@ -118,13 +120,12 @@ def local_esp_fields(row, grid, frac=1.0):
     plan_e, plan_n = np.zeros(len(ii)), beta[ii, jj]/h
     topo_e = -(f+zeta)*dh_e[ii, jj]/h**2
     topo_n = -(f+zeta)*dh_n[ii, jj]/h**2
-    qr_e = q[0,0]*dx + q[0,1]*dy
-    qr_n = q[1,0]*dx + q[1,1]*dy
-    eddy_e = (-2*zeta*qr_e/float(row.Rc)**2/1000)/h
-    eddy_n = (-2*zeta*qr_n/float(row.Rc)**2/1000)/h
+    eddy_e = reconstruction["dzeta_dx"]/h
+    eddy_n = reconstruction["dzeta_dy"]/h
     return pd.DataFrame({
         "i": ii, "j": jj, "x": grid.X_grid[ii,jj], "y": grid.Y_grid[ii,jj],
         "rho_over_Rc": np.sqrt(rho2)/float(row.Rc), "weight": shape,
+        "vorticity_shape": reconstruction["laplacian_shape"],
         "zeta": zeta, "PV": (f+zeta)/h,
         "environment_east": plan_e+topo_e, "environment_north": plan_n+topo_n,
         "environment_mag": np.hypot(plan_e+topo_e, plan_n+topo_n),

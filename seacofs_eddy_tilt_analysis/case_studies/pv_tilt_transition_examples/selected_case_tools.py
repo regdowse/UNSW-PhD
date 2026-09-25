@@ -27,7 +27,7 @@ DEFAULT_CACHE_ROOT = Path(
     "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/"
     "pv_gradient_selected_case_studies"
 )
-DEFAULT_CACHE_NAME = "selected_eddy_surface_esp_gaussian_frac1.parquet"
+DEFAULT_CACHE_NAME = "selected_eddy_surface_esp_gaussian_laplacian_v2_frac1.parquet"
 REGIME_COLOURS = {
     "planetary": "#2ca25f",
     "mixed": "#8c8c8c",

@@ -6,11 +6,14 @@ grid cell,
 
 `rho**2 = [x-xc, y-yc] Q [x-xc, y-yc].T`
 
-and
+The fitted Gaussian describes the streamfunction envelope. With `w` denoting
+the fitted central relative vorticity, its Laplacian gives
 
-`zeta(x,y) = w * exp(-rho**2 / Rc**2)`.
+`zeta = w * exp(-rho**2/Rc**2) *`
+`[1 - 2 * (r.T @ Q**2 @ r)/(Rc**2 * trace(Q))]`.
 
-The same dimensionless Gaussian shape supplies smooth spatial weights. The
+The positive dimensionless Gaussian envelope, rather than the signed
+vorticity field, supplies smooth spatial weights. The
 primary one-row-per-snapshot vector remains the environmental gradient:
 
 `grad(PV)_environment = grad(f)/h - (f + zeta) grad(h)/h**2`.
@@ -44,3 +47,7 @@ The cache contains only the primary `esp_gaussian_1` method and the directly
 comparable `uniform_1` control. Larger `FRAC` values are deliberately excluded
 because they answer a different physical question by sampling beyond the
 eddy core.
+
+The corrected Laplacian-derived reconstruction uses a versioned cache name.
+Older caches generated with `zeta = w * exp(-rho**2/Rc**2)` are intentionally
+not loaded; notebook 00 must be rerun before the remaining notebooks.

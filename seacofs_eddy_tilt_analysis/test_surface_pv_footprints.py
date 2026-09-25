@@ -101,6 +101,45 @@ def test_esp_gaussian_uses_saved_w_as_central_vorticity():
     assert result.PV_weight_effective_n == 1
 
 
+def test_axisymmetric_streamfunction_laplacian_vorticity_profile():
+    w, rc = -2e-5, 10.0
+    x = np.array([0.0, rc / np.sqrt(2), rc])
+    result = tilt._esp_gaussian_vorticity(
+        w, rc, 1.0, 0.0, 1.0, x, np.zeros_like(x)
+    )
+    expected = w * np.exp(-(x / rc) ** 2) * (1.0 - (x / rc) ** 2)
+    np.testing.assert_allclose(result["zeta"], expected, atol=1e-20)
+    np.testing.assert_allclose(result["zeta"][0], w)
+    np.testing.assert_allclose(result["zeta"][-1], 0.0, atol=1e-20)
+
+
+def test_nonaxisymmetric_vorticity_matches_streamfunction_laplacian():
+    w, rc = 3e-5, 18.0
+    q11, q12, q22 = 1.7, 0.25, 0.65
+    x, y = np.array([2.0, -4.0]), np.array([3.0, 1.5])
+    result = tilt._esp_gaussian_vorticity(w, rc, q11, q12, q22, x, y)
+    rho2 = q11*x**2 + 2*q12*x*y + q22*y**2
+    qr_x, qr_y = q11*x+q12*y, q12*x+q22*y
+    psi0 = -w*rc**2/(2*(q11+q22))
+    expected = psi0*np.exp(-rho2/rc**2)*(
+        -2*(q11+q22)/rc**2 + 4*(qr_x**2+qr_y**2)/rc**4
+    )
+    np.testing.assert_allclose(result["zeta"], expected, rtol=1e-14)
+
+
+def test_nonaxisymmetric_analytical_vorticity_gradient_matches_finite_difference():
+    arguments = dict(w=-2e-5, Rc=13.0, q11=1.4, q12=-0.2, q22=0.8)
+    x, y, step_km = 2.3, -1.7, 1e-5
+    centre = tilt._esp_gaussian_vorticity(**arguments, dx=x, dy=y)
+    plus_x = tilt._esp_gaussian_vorticity(**arguments, dx=x+step_km, dy=y)["zeta"]
+    minus_x = tilt._esp_gaussian_vorticity(**arguments, dx=x-step_km, dy=y)["zeta"]
+    plus_y = tilt._esp_gaussian_vorticity(**arguments, dx=x, dy=y+step_km)["zeta"]
+    minus_y = tilt._esp_gaussian_vorticity(**arguments, dx=x, dy=y-step_km)["zeta"]
+    # Finite differences are per kilometre; implementation returns per metre.
+    np.testing.assert_allclose(centre["dzeta_dx"], (plus_x-minus_x)/(2*step_km)/1000, rtol=1e-9)
+    np.testing.assert_allclose(centre["dzeta_dy"], (plus_y-minus_y)/(2*step_km)/1000, rtol=1e-9)
+
+
 def test_esp_gaussian_internal_gradient_has_zero_net_in_symmetric_footprint():
     grid = _grid()
     grid.h[:] = 2500.0

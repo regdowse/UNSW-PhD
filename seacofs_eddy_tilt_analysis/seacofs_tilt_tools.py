@@ -251,6 +251,56 @@ def _weighted_percentile(values, weights, percentile):
     return float(np.interp(float(percentile) / 100.0, cumulative, values))
 
 
+def _esp_gaussian_vorticity(w, Rc, q11, q12, q22, dx, dy):
+    """Reconstruct vorticity and its gradient from the Gaussian streamfunction.
+
+    ``w`` is the fitted central relative vorticity, not the streamfunction
+    amplitude. Coordinates and ``Rc`` are in kilometres. Returned vorticity
+    gradients are per metre, matching the bathymetric and Coriolis gradients.
+    The positive Gaussian envelope is returned separately for spatial
+    weighting; the Laplacian-derived vorticity shape may change sign.
+    """
+    Rc = float(Rc)
+    q11, q12, q22 = map(float, (q11, q12, q22))
+    dx = np.asarray(dx, dtype=float)
+    dy = np.asarray(dy, dtype=float)
+    trace_q = q11 + q22
+    if not np.isfinite(Rc) or Rc <= 0:
+        raise ValueError("Rc must be positive and finite")
+    if not np.isfinite(trace_q) or trace_q <= 0:
+        raise ValueError("The ESP shape matrix must have positive finite trace")
+
+    qr_x = q11 * dx + q12 * dy
+    qr_y = q12 * dx + q22 * dy
+    rho2 = q11 * dx**2 + 2.0 * q12 * dx * dy + q22 * dy**2
+    gaussian = np.exp(-rho2 / Rc**2)
+
+    # r.T @ Q**2 @ r == |Q @ r|**2 for symmetric Q.
+    r_q2_r = qr_x**2 + qr_y**2
+    laplacian_shape = 1.0 - 2.0 * r_q2_r / (Rc**2 * trace_q)
+    zeta = float(w) * gaussian * laplacian_shape
+
+    q2r_x = q11 * qr_x + q12 * qr_y
+    q2r_y = q12 * qr_x + q22 * qr_y
+    common = float(w) * gaussian
+    dzeta_dx_km = common * (
+        -2.0 * laplacian_shape * qr_x / Rc**2
+        -4.0 * q2r_x / (Rc**2 * trace_q)
+    )
+    dzeta_dy_km = common * (
+        -2.0 * laplacian_shape * qr_y / Rc**2
+        -4.0 * q2r_y / (Rc**2 * trace_q)
+    )
+    return {
+        "rho2": rho2,
+        "gaussian": gaussian,
+        "laplacian_shape": laplacian_shape,
+        "zeta": zeta,
+        "dzeta_dx": dzeta_dx_km / 1000.0,
+        "dzeta_dy": dzeta_dy_km / 1000.0,
+    }
+
+
 def _surface_pv_footprint_statistics(
     df, grid, *, frac, inner_frac, surface_method="uniform",
     dh_dE=None, dh_dN=None, beta=None,
@@ -260,8 +310,10 @@ def _surface_pv_footprint_statistics(
     Existing ``*_mag`` columns are the magnitude of the spatially averaged
     vector. ``*_mean_local_mag`` and ``*_rms_local_mag`` quantify exposure
     without cancellation. ``*_coherence`` is net magnitude divided by mean
-    local magnitude and lies in [0, 1]. ``surface_method='esp_gaussian'`` uses
-    zeta = w exp(-rho**2 / Rc**2) and the same Gaussian as spatial weights.
+    local magnitude and lies in [0, 1]. ``surface_method='esp_gaussian'``
+    reconstructs relative vorticity as the Laplacian of the fitted Gaussian
+    streamfunction, with ``w`` as its central value. The positive Gaussian
+    envelope remains the spatial weight.
     """
     if dh_dE is None or dh_dN is None or beta is None:
         dhdx, dhdy = phys_grad(
@@ -299,13 +351,13 @@ def _surface_pv_footprint_statistics(
             continue
         sample = stack[:, ii, jj]
         if surface_method == "esp_gaussian":
-            q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
             dx = grid.x_grid[ii] - float(row.xc)
             dy = grid.y_grid[jj] - float(row.yc)
-            rho2 = q[0, 0] * dx**2 + 2.0 * q[0, 1] * dx * dy + q[1, 1] * dy**2
-            shape = np.exp(-rho2 / float(row.Rc) ** 2)
-            zeta = float(row.w) * shape
-            weights = shape
+            reconstruction = _esp_gaussian_vorticity(
+                row.w, row.Rc, row.q11, row.q12, row.q22, dx, dy
+            )
+            zeta = reconstruction["zeta"]
+            weights = reconstruction["gaussian"]
         else:
             zeta = np.full(len(ii), float(row.w))
             weights = np.ones(len(ii), dtype=float)
@@ -322,13 +374,8 @@ def _surface_pv_footprint_statistics(
         topo_x = -(zeta * sample[names.index("dhdx_over_h2")] + sample[names.index("f_dhdx_over_h2")])
         topo_y = -(zeta * sample[names.index("dhdy_over_h2")] + sample[names.index("f_dhdy_over_h2")])
         if surface_method == "esp_gaussian":
-            q = np.array([[row.q11, row.q12], [row.q12, row.q22]], dtype=float)
-            qr_x = q[0, 0] * dx + q[0, 1] * dy
-            qr_y = q[1, 0] * dx + q[1, 1] * dy
-            dzeta_dx = -2.0 * zeta * qr_x / float(row.Rc) ** 2 / 1000.0
-            dzeta_dy = -2.0 * zeta * qr_y / float(row.Rc) ** 2 / 1000.0
-            eddy_x = dzeta_dx * sample[names.index("inv_h")]
-            eddy_y = dzeta_dy * sample[names.index("inv_h")]
+            eddy_x = reconstruction["dzeta_dx"] * sample[names.index("inv_h")]
+            eddy_y = reconstruction["dzeta_dy"] * sample[names.index("inv_h")]
         else:
             eddy_x = np.zeros(sample.shape[1], dtype=float)
             eddy_y = np.zeros(sample.shape[1], dtype=float)
@@ -459,11 +506,12 @@ def add_pv_gradient_terms(
     local PV-gradient components and is the default. ``averaging='legacy'``
     reproduces the historical mean-h/mean-slope calculation. ``frac`` is the
     outer linear ellipse scale and ``inner_frac > 0`` selects an annulus.
-    ``surface_method='esp_gaussian'`` reconstructs
-    ``zeta = w * exp(-rho**2 / Rc**2)`` and uses that Gaussian as the spatial
-    weight. The standard ``PV_grad_*`` fields remain the environmental
-    planetary-plus-topographic gradient; ``PV_grad_full_*`` additionally
-    includes the eddy's internal ``grad(zeta) / h`` contribution.
+    ``surface_method='esp_gaussian'`` reconstructs relative vorticity as the
+    Laplacian of the fitted non-axisymmetric Gaussian streamfunction, using
+    ``w`` as the central relative vorticity. The positive Gaussian envelope
+    remains the spatial weight. The standard ``PV_grad_*`` fields remain the
+    environmental planetary-plus-topographic gradient; ``PV_grad_full_*``
+    additionally includes the eddy's internal ``grad(zeta) / h`` contribution.
 
     ``source='depth_snapshot'`` or ``source='depth'`` loads the corresponding
     precomputed depth-following Parquet table and does not require ``df`` or
@@ -493,7 +541,7 @@ def add_pv_gradient_terms(
         if cache_path.suffix.lower() != ".parquet":
             raise ValueError("cache_path must end in .parquet")
         frac, inner_frac = _validate_ellipse_fractions(frac, inner_frac)
-        settings = dict(version=1, core_mean=bool(core_mean), frac=frac,
+        settings = dict(version=2, core_mean=bool(core_mean), frac=frac,
                         inner_frac=inner_frac, averaging=averaging,
                         surface_method=surface_method)
         if use_max_abs_w:
@@ -656,6 +704,11 @@ def add_pv_gradient_terms(
     out["ellipse_area_fraction"] = frac**2 - inner_frac**2
     out["pv_averaging"] = averaging
     out["pv_surface_method"] = surface_method
+    out["pv_vorticity_reconstruction"] = (
+        "gaussian_streamfunction_laplacian"
+        if surface_method == "esp_gaussian"
+        else "constant_core_vorticity"
+    )
     return out
 
 

@@ -248,7 +248,7 @@ Exploratory/code-only notebook; inspect source for purpose.
 
 ## seacofs_eddy_tilt_analysis/surface_pv_esp_gaussian/00_build_esp_gaussian_cache.ipynb
 
-# Build the fixed-core ESP-Gaussian cache Reconstruct $\zeta=w\exp(-\rho^2/R_c^2)$ and compare Gaussian weighting with an equal-weight control. Both methods use the same physically fixed `FRAC=1` radius-of-maximum-tangential-velocity core. Run this notebook first on Katana.
+# Build the fixed-core ESP-Gaussian cache Reconstruct relative vorticity as the Laplacian of the fitted non-axisymmetric Gaussian streamfunction, using $w=\zeta_0$ as the central value, and compare Gaussian-envelope weighting with an equal-weight control. Both methods use the same physically fixed `FRAC=1` radius-of-maximum-tangential-velocity core. Run this notebook first on Katana.
 
 ## seacofs_eddy_tilt_analysis/surface_pv_esp_gaussian/01_gaussian_reconstruction.ipynb
 

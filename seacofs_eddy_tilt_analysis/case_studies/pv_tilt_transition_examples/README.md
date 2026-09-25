@@ -10,8 +10,9 @@ following user-selected eddies:
 Run the notebooks on Katana in order:
 
 1. `00_build_selected_eddy_cache.ipynb` calculates the surface PV-gradient
-   terms only for the selected tracks using `FRAC=1`, Gaussian vorticity and
-   Gaussian spatial weighting.
+   terms only for the selected tracks using `FRAC=1`, the relative vorticity
+   obtained from the Laplacian of the fitted Gaussian streamfunction, and the
+   positive Gaussian envelope as the spatial weight.
 2. `01_eddy_overviews.ipynb` creates one compact time-series-and-map overview
    per eddy. Green, orange and grey denote planetary, topographic and mixed
    regimes, respectively. Blue arrows show tilt and magenta arrows show the
@@ -20,6 +21,9 @@ Run the notebooks on Katana in order:
    topographic days, lets the user override them, and plots the local
    fixed-core gradients, their Gaussian-weighted mean and the depth-resolved
    eddy spine.
+
+The Laplacian-derived vorticity calculation uses a new versioned cache file,
+so notebook 00 must be rerun before notebooks 01 and 02.
 
 The overview uses `PV_grad_mag` and `PV_grad_theta` as the primary
 environmental measure. Low-coherence directions are drawn with reduced
