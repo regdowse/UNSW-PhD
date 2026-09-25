@@ -417,8 +417,50 @@ def _interpolate_columns(values, z, target_depths):
     return np.moveaxis(output, -1, 0)
 
 
+def horizontal_relative_vorticity(u, v, x_km, y_km):
+    """Return ``dv/dx - du/dy`` from velocity components on a regular x-y grid.
+
+    Horizontal coordinates are supplied in kilometres and converted to metres,
+    so the returned relative vorticity is in s^-1. Leading dimensions (for
+    example depth) are preserved; the last two axes must be x and y.
+    """
+    u = np.asarray(u, float)
+    v = np.asarray(v, float)
+    x_m = np.asarray(x_km, float) * 1e3
+    y_m = np.asarray(y_km, float) * 1e3
+    if u.shape != v.shape:
+        raise ValueError(f"u and v must share a shape; got {u.shape} and {v.shape}.")
+    if u.shape[-2:] != (len(x_m), len(y_m)):
+        raise ValueError(
+            "The last two velocity dimensions must match the x and y coordinates."
+        )
+    edge_order = 2 if min(len(x_m), len(y_m)) >= 3 else 1
+    du_dx, du_dy = np.gradient(
+        u, x_m, y_m, axis=(-2, -1), edge_order=edge_order
+    )
+    dv_dx, dv_dy = np.gradient(
+        v, x_m, y_m, axis=(-2, -1), edge_order=edge_order
+    )
+    return dv_dx - du_dy
+
+
+def esp_relative_vorticity(X_km, Y_km, row):
+    """Analytical vorticity from the non-axisymmetric Gaussian ESP velocity."""
+    dx = (np.asarray(X_km, float) - float(row.xc)) * 1e3
+    dy = (np.asarray(Y_km, float) - float(row.yc)) * 1e3
+    rc = float(row.Rc) * 1e3
+    q11, q12, q22 = map(float, (row.q11, row.q12, row.q22))
+    qr_x = q11 * dx + q12 * dy
+    qr_y = q12 * dx + q22 * dy
+    rho2 = q11 * dx**2 + 2.0 * q12 * dx * dy + q22 * dy**2
+    r_q2_r = qr_x**2 + qr_y**2
+    return float(row.Omega) * np.exp(-rho2 / rc**2) * (
+        q11 + q22 - 2.0 * r_q2_r / rc**2
+    )
+
+
 def reconstruct_esp(case, esp_root=DEFAULT_ESP_ROOT):
-    """Return native velocity at fitted depths and the ESP 3-D reconstruction."""
+    """Return original and ESP velocity/vorticity at the fitted depths."""
     esp_root = Path(esp_root).expanduser()
     if str(esp_root) not in sys.path:
         sys.path.insert(0, str(esp_root))
@@ -432,7 +474,7 @@ def reconstruct_esp(case, esp_root=DEFAULT_ESP_ROOT):
     depths = case.profile.Depth.to_numpy(float)
     u_original = _interpolate_columns(case.u, case.z, depths)
     v_original = _interpolate_columns(case.v, case.z, depths)
-    u_esp, v_esp = [], []
+    u_esp, v_esp, zeta_esp = [], [], []
     for row in case.profile.itertuples(index=False):
         q = np.array([[row.q11, row.q12], [row.q12, row.q22]], float)
         u, v = esp.model_uv_at_xy(
@@ -442,12 +484,18 @@ def reconstruct_esp(case, esp_root=DEFAULT_ESP_ROOT):
         )
         u_esp.append(u)
         v_esp.append(v)
+        zeta_esp.append(esp_relative_vorticity(case.X, case.Y, row))
+    zeta_original = horizontal_relative_vorticity(
+        u_original, v_original, case.x, case.y
+    )
     return SimpleNamespace(
         depths=depths,
         u_original=u_original,
         v_original=v_original,
         u_esp=np.stack(u_esp),
         v_esp=np.stack(v_esp),
+        zeta_original=zeta_original,
+        zeta_esp=np.stack(zeta_esp),
     )
 
 
@@ -555,6 +603,108 @@ def plot_esp_sections(case, comparison):
             ax.invert_yaxis()
             fig.colorbar(mesh, ax=ax, label=label)
     return fig, axes
+
+
+def plot_horizontal_esp_comparison(
+    case,
+    comparison,
+    depth_m,
+    *,
+    quiver_step=5,
+    robust_percentile=99,
+):
+    """Compare original and ESP velocity/vorticity on one fitted-depth slice."""
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import TwoSlopeNorm
+
+    depths = np.asarray(comparison.depths, float)
+    if not len(depths):
+        raise ValueError("The ESP comparison contains no fitted depths.")
+    level = int(np.nanargmin(np.abs(depths - float(depth_m))))
+    selected_depth = float(depths[level])
+    original_speed = np.hypot(
+        comparison.u_original[level], comparison.v_original[level]
+    )
+    esp_speed = np.hypot(comparison.u_esp[level], comparison.v_esp[level])
+    speed_values = np.r_[original_speed.ravel(), esp_speed.ravel()]
+    speed_values = speed_values[np.isfinite(speed_values)]
+    if not speed_values.size:
+        raise ValueError(f"No finite velocity values at {selected_depth:g} m.")
+    speed_max = float(np.nanpercentile(speed_values, robust_percentile))
+
+    zeta_original = comparison.zeta_original[level]
+    zeta_esp = comparison.zeta_esp[level]
+    zeta_values = np.abs(np.r_[zeta_original.ravel(), zeta_esp.ravel()])
+    zeta_values = zeta_values[np.isfinite(zeta_values)]
+    if not zeta_values.size:
+        raise ValueError(f"No finite vorticity values at {selected_depth:g} m.")
+    zeta_limit = float(np.nanpercentile(zeta_values, robust_percentile))
+    zeta_limit = max(zeta_limit, np.finfo(float).eps)
+    zeta_norm = TwoSlopeNorm(vmin=-zeta_limit, vcenter=0.0, vmax=zeta_limit)
+
+    fig, axes = plt.subplots(2, 2, figsize=(13, 10), constrained_layout=True)
+    velocity = [
+        (comparison.u_original[level], comparison.v_original[level],
+         original_speed, "Original velocity anomaly"),
+        (comparison.u_esp[level], comparison.v_esp[level],
+         esp_speed, "ESP velocity"),
+    ]
+    step = max(1, int(quiver_step))
+    speed_mesh = None
+    for ax, (u, v, speed, title) in zip(axes[0], velocity):
+        speed_mesh = ax.pcolormesh(
+            case.X, case.Y, speed, cmap="magma", vmin=0, vmax=speed_max,
+            shading="auto",
+        )
+        ax.quiver(
+            case.X[::step, ::step], case.Y[::step, ::step],
+            u[::step, ::step], v[::step, ::step],
+            color="white", pivot="mid", alpha=.8,
+        )
+        ax.set(title=title)
+    fig.colorbar(
+        speed_mesh, ax=axes[0].tolist(), label="Speed (m s$^{-1}$)", shrink=.82
+    )
+
+    vorticity_mesh = None
+    for ax, zeta, title in zip(
+        axes[1],
+        (zeta_original, zeta_esp),
+        (r"Original $\zeta=\partial v/\partial x-\partial u/\partial y$",
+         r"ESP analytical $\zeta=\nabla_h^2\psi$"),
+    ):
+        vorticity_mesh = ax.pcolormesh(
+            case.X, case.Y, zeta, cmap="RdBu_r", norm=zeta_norm,
+            shading="auto",
+        )
+        ax.set(title=title)
+    fig.colorbar(
+        vorticity_mesh, ax=axes[1].tolist(), label=r"Relative vorticity (s$^{-1}$)",
+        shrink=.82,
+    )
+
+    fitted = case.profile.iloc[level]
+    dx = (case.X - float(fitted.xc)) * 1e3
+    dy = (case.Y - float(fitted.yc)) * 1e3
+    rho2 = (
+        float(fitted.q11) * dx**2
+        + 2.0 * float(fitted.q12) * dx * dy
+        + float(fitted.q22) * dy**2
+    )
+    core_level = (float(fitted.Rc) * 1e3)**2 / 2.0
+    for ax in axes.flat:
+        ax.contour(
+            case.X, case.Y, rho2, levels=[core_level], colors="cyan",
+            linewidths=1.5,
+        )
+        ax.scatter(fitted.xc, fitted.yc, color="cyan", edgecolor="black", s=35)
+        ax.set(xlabel="x (km)", ylabel="y (km)", aspect="equal")
+    fig.suptitle(
+        f"{case.surface.Cyc}{int(case.surface.Eddy)}, day {int(case.surface.Day)} — "
+        f"requested {float(depth_m):g} m; fitted slice {selected_depth:g} m",
+        fontweight="bold",
+    )
+    return fig, axes, selected_depth
 
 
 def plot_velocity_3d(case, comparison, *, xy_step=7, z_step=2):

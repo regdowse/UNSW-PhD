@@ -12,7 +12,16 @@ The notebook provides:
   horizontal interpolation but retaining native sigma levels vertically;
 - the matching v4 N² cache summary for the selected eddy-day;
 - depth-dependent ESP velocity reconstruction;
-- original-versus-ESP vertical sections and 3-D velocity-vector views.
+- original-versus-ESP vertical sections and 3-D velocity-vector views;
+- a selected horizontal slice comparing original and ESP velocity fields and
+  their relative-vorticity fields on common colour scales. The original
+  vorticity is the numerical curl of the interpolated velocity, while the ESP
+  vorticity is evaluated analytically from the fitted non-axisymmetric
+  Gaussian streamfunction.
+
+Set `HORIZONTAL_SLICE_DEPTH_M` in the controls cell to select the horizontal
+comparison. The nearest depth with an ESP fit is used and reported above the
+figure. `HORIZONTAL_QUIVER_STEP` controls the velocity-arrow density.
 
 The N² cache stores reduced eddy-core statistics, not spatial fields. Section
 N² is therefore calculated from the source `temp` and `salt` fields using the
