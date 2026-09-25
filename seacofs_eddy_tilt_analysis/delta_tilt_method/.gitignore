@@ -5,3 +5,4 @@ sensitivity_outputs/
 __pycache__/
 delta_tilt_schematic_selected_examples.csv
 delta_tilt_schematic_difference_ranking.csv
+extent_lifetime_outputs/
