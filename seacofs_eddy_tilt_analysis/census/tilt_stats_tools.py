@@ -95,7 +95,7 @@ def _ratio_stats(values: pd.Series) -> dict[str, float]:
     }
 
 
-def _modal_interval(values: pd.Series, width: float = 5.0) -> tuple[float, float]:
+def _modal_interval(values: pd.Series, width: float = 10.0) -> tuple[float, float]:
     x = pd.to_numeric(values, errors="coerce").dropna()
     if x.empty:
         return np.nan, np.nan
@@ -124,7 +124,7 @@ def _grouped_ratio_stats(data: pd.DataFrame, groups: Sequence[str], value: str) 
 def tilt_census_report(
     data: pd.DataFrame,
     *,
-    first_last_days: int = 3,
+    first_last_days: int = 2,
 ) -> dict[str, object]:
     """Calculate daily and per-eddy tilt-distance census statistics."""
     prepared = prepare_tilt_data(data, first_last_days=first_last_days)
@@ -160,7 +160,7 @@ def tilt_census_report(
     modal_rows = []
     for cyc in ("All", "AE", "CE"):
         group = valid if cyc == "All" else valid.loc[valid["Cyc"].eq(cyc)]
-        lower, upper = _modal_interval(group["TiltDis"], 5.0)
+        lower, upper = _modal_interval(group["TiltDis"], 10.0)
         modal_rows.append({"Cyc": cyc, "modal_bin_lower_km": lower, "modal_bin_upper_km": upper})
     modal_bins = pd.DataFrame(modal_rows).set_index("Cyc")
     eddy_summary = (
@@ -264,12 +264,12 @@ def tilt_census_sentences(report: dict[str, object]) -> list[str]:
         f"corresponding to {_fmt(all_row.raw_coverage_pct)}% of all eddy-days.",
         f"Valid tilt estimates were obtained for {int(ae_count.valid_tilt_days):,} AE-days and "
         f"{int(ce_count.valid_tilt_days):,} CE-days, covering {_fmt(ae_count.possible_coverage_pct)}% and "
-        f"{_fmt(ce_count.possible_coverage_pct)}% of eligible days, respectively, after excluding the first and last three days of each track.",
+        f"{_fmt(ce_count.possible_coverage_pct)}% of eligible days, respectively, after excluding the first and last two days of each track.",
     ]
     for cyc in ("AE", "CE"):
         s, r, m, life = daily.loc[cyc], ratio.loc[cyc], modal.loc[cyc], lifetime.loc[cyc]
         lines.extend([
-            f"The modal 5-km {cyc} tilt-distance interval was {m.modal_bin_lower_km:g}–{m.modal_bin_upper_km:g} km.",
+            f"The modal 10-km {cyc} tilt-distance interval was {m.modal_bin_lower_km:g}–{m.modal_bin_upper_km:g} km.",
             f"The median {cyc} tilt distance was {_fmt(s.median_km)} km "
             f"(IQR {_fmt(s.q25_km)}–{_fmt(s.q75_km)} km; mean {_fmt(s.mean_km)} km).",
             f"{cyc} tilt exceeded 50 km on {_fmt(s.over_50_pct)}% of eddy-days and 100 km on {_fmt(s.over_100_pct)}% of eddy-days.",
