@@ -35,10 +35,24 @@ def increments(track, depth_int=10, max_depth=1000):
 
 def fit_snapshot(dx, dy, day, sigma=None, half_window=3, min_depth_range=200,
                  min_points=5, bearing_offset=20.0, eps=1e-10):
+    """Fit only intervals supported by the reference day, before reconstruction.
+
+    Increment rows exist only when both interval endpoints lie within that
+    day's measured profile range. Neighbours can smooth these intervals, but
+    cannot add shallower or deeper intervals, or stand in for a missing day.
+    Upper-interval depth labels and all other fit conventions are retained.
+    """
     days = np.arange(day - half_window, day + half_window + 1)
     if days[0] < dx.columns.min() or days[-1] > dx.columns.max():
         return None
-    x, y = dx.reindex(columns=days), dy.reindex(columns=days)
+    if day not in dx.columns or day not in dy.columns:
+        return None
+    reference_support = np.isfinite(dx[day]) & np.isfinite(dy[day])
+    if not reference_support.any():
+        return None
+    # Clip BEFORE averaging, variance estimation, and cumulative reconstruction.
+    x = dx.loc[reference_support].reindex(columns=days)
+    y = dy.loc[reference_support].reindex(columns=days)
     a = pd.Series(1.0 if sigma is None else np.exp(-0.5*((days-day)/sigma)**2), index=days)
     def mean(d):
         return d.mul(a, axis=1).sum(axis=1, min_count=1) / d.notna().mul(a, axis=1).sum(axis=1).replace(0, np.nan)

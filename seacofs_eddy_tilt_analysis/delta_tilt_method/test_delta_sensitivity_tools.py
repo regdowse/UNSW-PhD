@@ -20,8 +20,8 @@ def fixture():
 
 
 class SensitivityTests(unittest.TestCase):
-    def test_five_day_gaussian_matches_independent_fit_with_gaps(self):
-        p = fixture().loc[lambda d: ~d.Day.isin([5, 8])]
+    def test_five_day_gaussian_matches_production_when_support_is_equal(self):
+        p = fixture().loc[lambda d: d.Depth.le(600)]
         dx, dy = increments(p)
         actual = compute_weighted_tilt(p, 1)
         self.assertEqual(actual.Day.tolist(), list(range(2, 18)))
@@ -50,13 +50,65 @@ class SensitivityTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 compute_weighted_tilt(fixture(), 1, temporal_sigma_days=sigma)
 
-    def test_equal_matches_production_with_missing_days_and_depths(self):
-        p = fixture()
-        p = p.loc[~p.Day.isin([5, 8])]
+    def test_equal_matches_production_when_support_is_equal(self):
+        p = fixture().loc[lambda d: d.Depth.le(600)]
         table, _, _ = lifetime(p)
         baseline = compute_weighted_tilt(p, 1, num=6, temporal_sigma_days=None)
         joined = table.merge(baseline, on='Day')
         np.testing.assert_allclose(joined['Equal'], joined.TiltDis, rtol=1e-9, atol=1e-9, equal_nan=True)
+
+    def test_shallow_reference_cannot_borrow_deeper_neighbours(self):
+        p = fixture()
+        p = p.loc[~p.Day.eq(10) | p.Depth.le(200)]
+        dx, dy = increments(p)
+        for sigma in [None, 1.0, 1.5]:
+            # Neighbours reach 800 m, but cannot rescue the 190 m fit-label span.
+            self.assertIsNone(fit_snapshot(dx, dy, 10, sigma=sigma))
+            fit = fit_snapshot(dx, dy, 10, sigma=sigma, min_depth_range=100)
+            self.assertEqual(fit['trace'].Depth.max(), 190)
+            self.assertEqual(fit['ends'][1, 2], 190)
+        # Changing only deeper neighbour centres has no effect on the estimate.
+        old = fit_snapshot(dx, dy, 10, sigma=1, min_depth_range=100)
+        p.loc[p.Depth.gt(200), 'xc'] += 10000
+        p.loc[p.Depth.gt(200), 'yc'] -= 9000
+        x2, y2 = increments(p)
+        new = fit_snapshot(x2, y2, 10, sigma=1, min_depth_range=100)
+        np.testing.assert_allclose(old['ends'], new['ends'])
+        np.testing.assert_allclose(old['trace'], new['trace'])
+
+    def test_missing_reference_day_has_no_lifetime_estimate(self):
+        p = fixture().loc[lambda d: ~d.Day.eq(10)]
+        table, dx, dy = lifetime(p)
+        self.assertIsNone(fit_snapshot(dx, dy, 10))
+        row = table.loc[table.Day.eq(10)].drop(columns='Day')
+        self.assertTrue(row.isna().to_numpy().all())
+
+    def test_nonzero_top_is_clipped_before_cumulative_sum(self):
+        # Reference support 100..405 m: full intervals have labels 100..390.
+        # Every day follows the same straight line. No increments from 0..100
+        # may be included in the cumulative sum at the reference's first row.
+        rows = []
+        for day in range(7):
+            z = np.r_[np.arange(100, 401, 10), 405.] if day == 3 else np.arange(0, 801, 10.)
+            rows.append(pd.DataFrame({'Eddy':1, 'Day':day, 'Depth':z,
+                                     'xc':day+z*.01, 'yc':day*2+z*.02}))
+        dx, dy = increments(pd.concat(rows, ignore_index=True))
+        fit = fit_snapshot(dx, dy, 3, sigma=1)
+        self.assertEqual(fit['trace'].Depth.min(), 100)
+        self.assertEqual(fit['trace'].Depth.max(), 390)
+        np.testing.assert_allclose(fit['trace'][['x','y']].iloc[0], [.1,.2])
+        self.assertAlmostEqual(fit['TiltDis'], 290*np.hypot(.01,.02))
+
+    def test_lifetime_limits_each_day_independently(self):
+        p = fixture()
+        p = p.loc[~p.Day.eq(10) | p.Depth.le(400)]
+        dx, dy = increments(p)
+        for day in range(3,17):
+            fit = fit_snapshot(dx, dy, day, sigma=1)
+            self.assertIsNotNone(fit)
+            deepest = p.loc[p.Day.eq(day), 'Depth'].max()
+            self.assertLessEqual(fit['trace'].Depth.max()+10, deepest)
+            self.assertLessEqual(fit['ends'][1,2]+10, deepest)
 
     def test_depth_weights_unchanged_and_translation_invariant(self):
         p = fixture()
