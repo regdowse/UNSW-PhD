@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'seacofs_eddy_datas
 from seacofs_eddy_dataset.core.tilt import compute_weighted_tilt
 from seacofs_eddy_dataset.config import PipelineConfig
 from seacofs_eddy_dataset.stages import tilt as tilt_stage
-from delta_sensitivity_tools import increments, fit_snapshot, lifetime, maximum_span
+from delta_sensitivity_tools import increments, fit_snapshot, lifetime, maximum_span, scan_projected_extent_differences
 
 
 def fixture():
@@ -195,6 +195,34 @@ class SensitivityTests(unittest.TestCase):
         expected = a[3]/a.sum()
         self.assertGreater(expected, .25)
         self.assertAlmostEqual(fit['trace'].x.iloc[0], expected)
+
+    def test_ranked_projected_difference_known_straight_profiles(self):
+        z = np.arange(0, 401, 10.)
+        profiles = pd.concat([pd.DataFrame({'Eddy': eddy, 'Day': day,
+            'Depth': z, 'xc': 0*z+day, 'yc': z*slope+day})
+            for eddy, slope in [(1, .01), (2, .04)] for day in range(9)], ignore_index=True)
+        progress = []
+        ranked = scan_projected_extent_differences(profiles, progress=lambda *x:progress.append(x))
+        self.assertEqual(len(ranked), 10)
+        self.assertEqual(ranked.iloc[:5].Eddy.tolist(), [2]*5)
+        np.testing.assert_allclose(ranked.iloc[:5].MaxProjectedExtent, 16)
+        np.testing.assert_allclose(ranked.iloc[:5].TiltDis, 15.6)
+        np.testing.assert_allclose(ranked.iloc[:5].AbsoluteDifference, .4)
+        self.assertEqual(ranked.Rank.tolist(), list(range(1,11)))
+        self.assertTrue(ranked.AbsoluteDifference.is_monotonic_decreasing)
+        self.assertEqual(progress[-1], (2,2,10))
+        # Input order cannot change the ranking.
+        pd.testing.assert_frame_equal(ranked,
+            scan_projected_extent_differences(profiles.sample(frac=1, random_state=3)))
+
+    def test_ranker_excludes_missing_shallow_and_zero_tilt_days(self):
+        p = fixture()
+        p = p.loc[(~p.Day.eq(10) | p.Depth.le(200)) & ~p.Day.eq(11)]
+        ranked = scan_projected_extent_differences(p)
+        self.assertNotIn(10, ranked.Day.values)
+        self.assertNotIn(11, ranked.Day.values)
+        p[['xc','yc']] = 0.
+        self.assertTrue(scan_projected_extent_differences(p).empty)
 
     def test_span_is_pairwise_not_surface_relative(self):
         p = pd.DataFrame({'Depth':[0,100,200], 'xc':[0,-3,4], 'yc':[0,0,0]})

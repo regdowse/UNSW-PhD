@@ -93,3 +93,46 @@ def lifetime(track, depth_int=10, max_depth=1000):
             row[name] = np.nan if fit is None else fit['TiltDis']
         rows.append(row)
     return pd.DataFrame(rows), dx, dy
+
+
+def scan_projected_extent_differences(profiles, *, depth_int=10, max_depth=1000,
+                                     sigma=1.0, half_window=2,
+                                     min_depth_range=200, min_points=5,
+                                     bearing_offset=20.0, eps=1e-10,
+                                     progress=None):
+    """Rank all valid observed eddy-days by the schematic's distance mismatch.
+
+    Project each reference day's centres onto its OWN fitted horizontal axis,
+    exactly as panel c does. Reuse interpolated increments once per track.
+    Missing/insufficient/zero-tilt fits are excluded; incomplete neighbour
+    windows are allowed when fit_snapshot can produce a valid estimate.
+    """
+    columns = ['Eddy', 'Day', 'MaxProjectedExtent', 'TiltDis', 'TiltDir',
+               'Difference', 'AbsoluteDifference', 'ReferenceDepthMax', 'FitDepthMax']
+    rows = []
+    groups = profiles.groupby('Eddy', sort=True)
+    total = groups.ngroups
+    for i, (eddy, track) in enumerate(groups, start=1):
+        dx, dy = increments(track, depth_int, max_depth)
+        for day, ref in track.groupby('Day', sort=True):
+            fit = fit_snapshot(dx, dy, day, sigma=sigma, half_window=half_window,
+                min_depth_range=min_depth_range, min_points=min_points,
+                bearing_offset=bearing_offset, eps=eps)
+            if fit is None or not np.isfinite([fit['TiltDis'], fit['TiltDir']]).all() or fit['TiltDis'] <= eps:
+                continue
+            ref = ref.loc[ref.Depth.abs().le(max_depth)].sort_values('Depth')
+            xy = ref[['xc', 'yc']].to_numpy()
+            axis = (fit['ends'][1, :2] - fit['ends'][0, :2]) / fit['TiltDis']
+            extent = float(np.ptp((xy - xy[0]) @ axis))
+            difference = extent - fit['TiltDis']
+            rows.append(dict(Eddy=int(eddy), Day=int(day), MaxProjectedExtent=extent,
+                TiltDis=fit['TiltDis'], TiltDir=fit['TiltDir'], Difference=difference,
+                AbsoluteDifference=abs(difference), ReferenceDepthMax=float(ref.Depth.abs().max()),
+                FitDepthMax=float(fit['ends'][1, 2])))
+        if progress is not None:
+            progress(i, total, len(rows))
+    ranked = pd.DataFrame(rows, columns=columns).sort_values(
+        ['AbsoluteDifference', 'Eddy', 'Day'], ascending=[False, True, True],
+        kind='stable').reset_index(drop=True)
+    ranked.insert(0, 'Rank', np.arange(1, len(ranked) + 1))
+    return ranked
