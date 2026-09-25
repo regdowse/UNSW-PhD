@@ -40,3 +40,16 @@ Start with `N_BOOT=300`, increasing it for final figures. Each notebook runs ind
 `MPLBACKEND=Agg python -m unittest discover -s seacofs_eddy_tilt_analysis/eddy_env_tilt_controls -p 'test_*.py' -v`
 
 Synthetic checks cover signed extrema, ellipse geometry, depth-weighted means, matched samples, duplicated keys, cache coverage, bin boundaries, observed lifecycle and clustered model recovery. Full scientific execution requires Katana data.
+
+## Simple paper figures
+
+Two additional independent notebooks leave the broader analyses above intact:
+
+- **paper_eddy_controls.ipynb** produces a grid of selected-depth panels for |Omega| and axis ratio, plus a two-panel overlay of the strongest selected depth relationships. Candidate targets default to 0, 100, 200, 300, 500, 700 and 850 m, resolved to exact existing levels. The entire candidate pool shares the same Eddy-Day sample and both valid properties. Ranking uses the mean absolute AE/CE Spearman correlation of per-eddy medians. Three depths per property are selected with at least 75 m separation; every rank and signed polarity correlation is printed and exported. Manual overrides use the printed actual depths. Depth choice is descriptive and data-selected, not a separate validation test.
+- **paper_environment_controls.ipynb** produces beta and log10 environmental PV-gradient magnitude versus tilt, on the same finite sample. It uses the same cache settings as the broader environmental notebook. Beta is df/dy, not beta/h; the figure presents unadjusted associations.
+
+The new figures show red/blue AE/CE eddy-day median curves with light IQR shading. The depth overlay uses line styles and omits shading for clarity. There are no fitted regression lines, p-value annotations or adjusted models on these figures. Counts/rankings stay in supporting tables. Curves remain day-weighted; ranking/correlation tables weight each eddy once via its median.
+
+The paper eddy notebook applies editable fit screens Rc <= 300 km, |Omega| <= 5e-5 s^-1 and AR <= 5, using the existing surface-processing limits as explicit screens for depth fits. Positive radius and rotation magnitude and a positive-definite ellipse matrix are required. These are not claimed as validated vertical-QC thresholds; the exclusion table records their effects. No radius/speed-scale extrema are plotted. Missing/sparse candidate depths are reported, and candidates must retain at least 100 eddies and half the shallowest-level day count per polarity before matching.
+
+Run either notebook on Katana. Outputs save to `paper_figures/<UTC run timestamp>/{eddy,environment}/` within this folder: vector PDFs, 300-dpi PNGs, bin tables/counts, settings and source metadata. Generated figures are git-ignored. Actual data are not available locally; synthetic validation does not identify the real strongest depths.
