@@ -74,7 +74,7 @@ def summarise(members, n_boot=500, seed=731):
 
 def plot(stats, max_depth_m=1000., min_eddies=2, sparse_eddies=20):
     import matplotlib.pyplot as plt
-    fig, axes = plt.subplots(2, 3, figsize=(12, 8), sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(2, 3, figsize=(13, 6), sharey=True, constrained_layout=True)
     for i, (metric, label) in enumerate([('mean_along', 'Along PV gradient'),
                                        ('mean_perp', 'Perpendicular (+CCW)')]):
         for j, regime in enumerate(REGIMES):
@@ -93,10 +93,13 @@ def plot(stats, max_depth_m=1000., min_eddies=2, sparse_eddies=20):
             ax.axvline(0, color='.4', lw=.7); ax.grid(alpha=.15)
             ax.set(xlabel=label+' displacement (km)', ylabel='Depth (m)' if j==0 else '',
                    title=regime.capitalize() if i==0 else '', ylim=(max_depth_m, 0))
-            if found: ax.legend()
-            else: ax.text(.5, .5, 'Insufficient contributors', ha='center', transform=ax.transAxes)
+            if found & (i==1) & (j==2): ax.legend()
+            # else: ax.text(.5, .5, 'Insufficient contributors', ha='center', transform=ax.transAxes)
         limit = max(1e-6, max(abs(v) for ax in axes[i] for v in ax.get_xlim()))
         for ax in axes[i]: ax.set_xlim(-limit, limit)
-    fig.suptitle('Mean constituent displacement relative to environmental PV gradient\n'
-                 + f'95% track-bootstrap CI; open circles <{sparse_eddies} eddies')
+    for ax,l in zip(axes.flatten(),['a)','b)','c)','d)','e)','f)']):
+        ax.text(-.1,1.09,l,transform=ax.transAxes,ha='left',va='top',
+                fontsize=12,fontweight='bold')
+    # fig.suptitle('Mean constituent displacement relative to environmental PV gradient\n'
+    #              + f'95% track-bootstrap CI; open circles <{sparse_eddies} eddies')
     return fig, axes

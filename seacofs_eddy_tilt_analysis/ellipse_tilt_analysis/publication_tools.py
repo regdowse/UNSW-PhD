@@ -125,7 +125,7 @@ def direction_data(all_shapes, *, depths=(0, 50, 100, 200, 300), min_ar=1.1,
 
 
 def _panel(ax, letter):
-    ax.text(-.17, 1.04, letter, transform=ax.transAxes, weight='bold', fontsize=11)
+    ax.text(-.17, 1.04, letter+')', transform=ax.transAxes, weight='bold', fontsize=11)
     ax.tick_params(length=3, width=.6)
     ax.grid(axis='y', color='.92', linewidth=.5)
     ax.set_axisbelow(True)

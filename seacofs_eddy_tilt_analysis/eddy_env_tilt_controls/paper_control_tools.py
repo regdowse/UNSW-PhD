@@ -14,11 +14,11 @@ from scipy.stats import spearmanr
 KEYS = ['Eddy', 'Day']
 COLORS = {'AE': '#b2182b', 'CE': '#2166ac'}
 METRICS = ('abs_Omega', 'AR')
-SCALE = {'abs_Omega': 1e5, 'AR': 1., 'beta': 1e11, 'log10_PV_grad_mag': 1.}
+SCALE = {'lat': 1., 'abs_Omega': 1e5, 'AR': 1., 'beta': 1., 'log10_PV_grad_mag': 1.}
 LABEL = {'abs_Omega': r'$|\Omega|$ ($10^{-5}$ s$^{-1}$)',
-         'AR': r'Axis ratio, $\alpha$',
-         'beta': r'$\beta$ ($10^{-11}$ m$^{-1}$ s$^{-1}$)',
-         'log10_PV_grad_mag': r'$\log_{10}(|\nabla q_{\mathrm{env}}|\,/\,1\,\mathrm{m}^{-2}\mathrm{s}^{-1})$'}
+         'AR': r'Axis ratio, $\alpha$', 'lat': r'Latitude (°N)',
+         'beta': r'$\beta$ (m$^{-1}$ s$^{-1}$)',
+         'log10_PV_grad_mag': r'$\log_{10}(|\nabla q|) \,(\mathrm{m}^{-2}\ \mathrm{s}^{-1})$'}
 LINESTYLES = ['-', '--', ':', '-.']
 
 
@@ -217,7 +217,7 @@ def overlay_figure(d,selected,bins=8,min_eddies=20):
 
 def environment_data(surface,pv):
     check_keys(pv)
-    d=identity(surface).merge(pv[KEYS+['beta','PV_grad_mag']],on=KEYS,how='left',validate='one_to_one')
+    d=identity(surface).merge(pv[KEYS+['lat','beta','PV_grad_mag']],on=KEYS,how='left',validate='one_to_one')
     d['log10_PV_grad_mag']=np.log10(d.PV_grad_mag.where(d.PV_grad_mag>0))
     d=d.replace([np.inf,-np.inf],np.nan)
     # Both panels use the same observations.
@@ -236,6 +236,44 @@ def environment_figure(d,bins=8,min_eddies=20):
     axs[0].set_ylabel('Tilt distance (km)');axs[0].legend(handles=polarity_handles(),frameon=False)
     return fig,pd.concat(tables,ignore_index=True)
 
+# def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True):
+#     style();fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained');tables=[]
+#     for i,(ax,metric) in enumerate(zip(axs,['lat','beta','log10_PV_grad_mag'])):
+#         t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies)
+#         curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
+#         if linear_fit and i<2:
+#             for cyc,color in [('AE','darkred'),('CE','navy')]:
+#                 q=t[t.Cyc.eq(cyc)].dropna(subset=['x','median'])
+#                 p=np.polyfit(q.x,q['median'],1)
+#                 ax.plot(q.x,np.polyval(p,q.x),'--',color=color,lw=1.5)
+#         ax.set_title(f'({chr(97+i)})',loc='left')
+#     axs[0].set_ylabel('Tilt distance (km)');axs[2].legend(handles=polarity_handles(),frameon=False)
+#     return fig,pd.concat(tables,ignore_index=True)
+def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True):
+    style();fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained');tables=[]
+    for i,(ax,metric) in enumerate(zip(axs,['lat','beta','log10_PV_grad_mag'])):
+        t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies)
+        curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
+        if linear_fit and i<2:
+            for cyc,color in [('AE','darkred'),('CE','navy')]:
+                q=t[t.Cyc.eq(cyc)].dropna(subset=['x','median'])
+                p=np.polyfit(q.x,q['median'],1)
+                yhat=np.polyval(p,q.x)
+                r2=1-np.sum((q['median']-yhat)**2)/np.sum((q['median']-q['median'].mean())**2)
+                def fmt(v):
+                    if v==0:return '0'
+                    e=int(np.floor(np.log10(abs(v))));a=v/10**e
+                    return fr'{a:.2f}\times10^{{{e}}}' if abs(e)>=3 else f'{v:.2f}'
+                ax.plot(q.x,np.polyval(p,q.x),'--',color=color,lw=1.5,
+                        label=fr'$y={fmt(p[0])}x{p[1]:+.2f}$, $R^2={r2:.2f}$')
+            ax.legend(frameon=False, loc='upper left')
+        # ax.set_title(f'({chr(97+i)})',loc='left')
+        for ax,l in zip(axs,['a)','b)','c)']):
+            ax.text(-.1,1.01,l,transform=ax.transAxes,ha='left',va='top',
+                    fontsize=11,fontweight='bold')
+    axs[0].set_ylabel('Tilt distance (km)')
+    # axs[2].legend(handles=polarity_handles(),frameon=False)
+    return fig,pd.concat(tables,ignore_index=True)
 
 def save_figure(fig,output,name):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
