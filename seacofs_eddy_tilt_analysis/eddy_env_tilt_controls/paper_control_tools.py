@@ -248,48 +248,67 @@ def environment_figure(d,bins=8,min_eddies=20,outcome='TiltDis'):
             ax.set_ylim(bottom=0)
     return fig,pd.concat(tables,ignore_index=True)
 
-# def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True):
-#     style();fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained');tables=[]
+
+# def environment_figure2(d,ins=8,min_eddies=20,linear_fit=True,outcome='TiltDis'):
+#     style(); fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained');tables=[]
 #     for i,(ax,metric) in enumerate(zip(axs,['lat','beta','log10_PV_grad_mag'])):
-#         t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies)
+#         t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies,outcome=outcome)
 #         curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
 #         if linear_fit and i<2:
 #             for cyc,color in [('AE','darkred'),('CE','navy')]:
 #                 q=t[t.Cyc.eq(cyc)].dropna(subset=['x','median'])
 #                 p=np.polyfit(q.x,q['median'],1)
-#                 ax.plot(q.x,np.polyval(p,q.x),'--',color=color,lw=1.5)
-#         ax.set_title(f'({chr(97+i)})',loc='left')
-#     axs[0].set_ylabel('Tilt distance (km)');axs[2].legend(handles=polarity_handles(),frameon=False)
-#     return fig,pd.concat(tables,ignore_index=True)
-def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True,outcome='TiltDis'):
-    style();fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained');tables=[]
+#                 yhat=np.polyval(p,q.x)
+#                 r2=1-np.sum((q['median']-yhat)**2)/np.sum((q['median']-q['median'].mean())**2)
+#                 def fmt(v):
+#                     if v==0:return '0'
+#                     e=int(np.floor(np.log10(abs(v))));a=v/10**e
+#                     return fr'{a:.2f}\times10^{{{e}}}' if abs(e)>=3 else f'{v:.2f}'
+#                 ax.plot(q.x,np.polyval(p,q.x),'--',color=color,lw=1.5,
+#                         label=fr'$y={fmt(p[0])}x{p[1]:+.2f}$, $R^2={r2:.2f}$')
+#             ax.legend(frameon=False, loc='upper left')
+#         # ax.set_title(f'({chr(97+i)})',loc='left')
+#         for ax,l in zip(axs,['a)','b)','c)']):
+#             ax.text(-.1,1.01,l,transform=ax.transAxes,ha='left',va='top',
+#                     fontsize=11,fontweight='bold')
+#     axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome == 'tilt_over_surface_Rc' else 'Tilt distance (km)')
+#     # axs[2].legend(handles=polarity_handles(),frameon=False)
+#     if outcome == 'tilt_over_surface_Rc':
+#         for ax in fig.axes:
+#             ax.autoscale(enable=True, axis='y')
+#             ax.set_ylim(bottom=0)
+#     return fig, axs, pd.concat(tables,ignore_index=True)
+def environment_figure2(d,axs=None,bins=8,min_eddies=20,linear_fit=True,outcome='TiltDis'):
+    style();tables=[]
+    if axs is None:
+        fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained')
+    else:
+        fig=axs[0].figure
+
     for i,(ax,metric) in enumerate(zip(axs,['lat','beta','log10_PV_grad_mag'])):
         t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies,outcome=outcome)
         curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
-        if linear_fit and i<2:
+
+        if linear_fit:# and i<2:
             for cyc,color in [('AE','darkred'),('CE','navy')]:
                 q=t[t.Cyc.eq(cyc)].dropna(subset=['x','median'])
-                p=np.polyfit(q.x,q['median'],1)
-                yhat=np.polyval(p,q.x)
+                p=np.polyfit(q.x,q['median'],1);yhat=np.polyval(p,q.x)
                 r2=1-np.sum((q['median']-yhat)**2)/np.sum((q['median']-q['median'].mean())**2)
                 def fmt(v):
                     if v==0:return '0'
                     e=int(np.floor(np.log10(abs(v))));a=v/10**e
                     return fr'{a:.2f}\times10^{{{e}}}' if abs(e)>=3 else f'{v:.2f}'
-                ax.plot(q.x,np.polyval(p,q.x),'--',color=color,lw=1.5,
+                ax.plot(q.x,yhat,'--',color=color,lw=1.5,
                         label=fr'$y={fmt(p[0])}x{p[1]:+.2f}$, $R^2={r2:.2f}$')
-            ax.legend(frameon=False, loc='upper left')
-        # ax.set_title(f'({chr(97+i)})',loc='left')
-        for ax,l in zip(axs,['a)','b)','c)']):
-            ax.text(-.1,1.01,l,transform=ax.transAxes,ha='left',va='top',
-                    fontsize=11,fontweight='bold')
-    axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome == 'tilt_over_surface_Rc' else 'Tilt distance (km)')
-    # axs[2].legend(handles=polarity_handles(),frameon=False)
-    if outcome == 'tilt_over_surface_Rc':
-        for ax in fig.axes:
-            ax.autoscale(enable=True, axis='y')
-            ax.set_ylim(bottom=0)
-    return fig,pd.concat(tables,ignore_index=True)
+            ax.legend(frameon=False,loc='upper left')
+
+    axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome=='tilt_over_surface_Rc' else 'Tilt distance (km)')
+
+    if outcome=='tilt_over_surface_Rc':
+        for ax in axs:
+            ax.autoscale(enable=True,axis='y');ax.set_ylim(bottom=0)
+
+    return fig,axs,pd.concat(tables,ignore_index=True)
 
 def save_figure(fig,output,name):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
