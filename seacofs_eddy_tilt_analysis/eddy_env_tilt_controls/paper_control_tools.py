@@ -142,9 +142,9 @@ def bin_edges(d, metric, bins=8):
     return edges
 
 
-def median_table(d, metric, edges, min_eddies=20):
+def median_table(d, metric, edges, min_eddies=20, outcome='TiltDis'):
     """Shared quantile edges, daily median/IQR; keep gaps for suppressed bins."""
-    d=d.replace([np.inf,-np.inf],np.nan).dropna(subset=[metric,'TiltDis']).copy()
+    d=d.replace([np.inf,-np.inf],np.nan).dropna(subset=[metric,outcome]).copy()
     d['_bin']=pd.cut(d[metric],edges,include_lowest=True,labels=False)
     rows=[]
     for cyc in COLORS:
@@ -152,9 +152,9 @@ def median_table(d, metric, edges, min_eddies=20):
             g=d.loc[d.Cyc.eq(cyc)&d._bin.eq(i)]
             enough = g.Eddy.nunique() >= min_eddies
             rows.append(dict(Cyc=cyc,bin=i,eddy_days=len(g),eddies=g.Eddy.nunique(),
-                             x=g[metric].median(),median=g.TiltDis.median() if enough else np.nan,
-                             q25=g.TiltDis.quantile(.25) if enough else np.nan,
-                             q75=g.TiltDis.quantile(.75) if enough else np.nan,
+                             x=g[metric].median(),median=g[outcome].median() if enough else np.nan,
+                             q25=g[outcome].quantile(.25) if enough else np.nan,
+                             q75=g[outcome].quantile(.75) if enough else np.nan,
                              displayed=enough))
     return pd.DataFrame(rows)
 
@@ -179,7 +179,7 @@ def polarity_handles():
     return [Line2D([0],[0],color=color,lw=1.8,label=cyc) for cyc,color in COLORS.items()]
 
 
-def selected_depth_figure(d,selected,bins=8,min_eddies=20):
+def selected_depth_figure(d,selected,bins=8,min_eddies=20,outcome='TiltDis'):
     style(); ncols=max(map(len,selected.values()))
     fig,axs=plt.subplots(2,ncols,figsize=(3.15*ncols,5.5),squeeze=False,sharey=True,sharex='row',layout='constrained')
     tables=[]
@@ -188,30 +188,38 @@ def selected_depth_figure(d,selected,bins=8,min_eddies=20):
         edges=bin_edges(d.loc[d.Depth.isin(selected[metric])],metric,bins)
         for col,z in enumerate(selected[metric]):
             ax=axs[row,col]; part=d.loc[d.Depth.eq(z)]
-            t=median_table(part,metric,edges,min_eddies)
+            t=median_table(part,metric,edges,min_eddies,outcome=outcome)
             tables.append(t.assign(metric=metric,depth_m=z))
             curve(ax,t,metric,shade=True)
             ax.set_title(f'({chr(97+row*ncols+col)}) {z:.0f} m',loc='left')
         for ax in axs[row,len(selected[metric]):]:ax.set_visible(False)
-        axs[row,0].set_ylabel('Tilt distance (km)')
+        axs[row,0].set_ylabel('Tilt distance / surface $R_c$' if outcome == 'tilt_over_surface_Rc' else 'Tilt distance (km)')
     axs[0,0].legend(handles=polarity_handles(),frameon=False)
+    if outcome == 'tilt_over_surface_Rc':
+        for ax in fig.axes:
+            ax.autoscale(enable=True, axis='y')
+            ax.set_ylim(bottom=0)
     return fig,pd.concat(tables,ignore_index=True)
 
 
-def overlay_figure(d,selected,bins=8,min_eddies=20):
+def overlay_figure(d,selected,bins=8,min_eddies=20,outcome='TiltDis'):
     style();fig,axs=plt.subplots(1,2,figsize=(8,3.45),sharey=True,layout='constrained')
     tables=[]
     for i,(ax,metric) in enumerate(zip(axs,METRICS)):
         edges=bin_edges(d.loc[d.Depth.isin(selected[metric])],metric,bins)
         handles=[]
         for j,z in enumerate(selected[metric]):
-            t=median_table(d.loc[d.Depth.eq(z)],metric,edges,min_eddies)
+            t=median_table(d.loc[d.Depth.eq(z)],metric,edges,min_eddies,outcome=outcome)
             tables.append(t.assign(metric=metric,depth_m=z))
             curve(ax,t,metric,shade=False,linestyle=LINESTYLES[j])
             handles.append(Line2D([0],[0],color='.3',ls=LINESTYLES[j],lw=1.5,label=f'{z:.0f} m'))
         ax.legend(handles=polarity_handles()+handles,frameon=False,ncol=2)
         ax.set_title(f'({chr(97+i)})',loc='left')
-    axs[0].set_ylabel('Tilt distance (km)')
+    axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome == 'tilt_over_surface_Rc' else 'Tilt distance (km)')
+    if outcome == 'tilt_over_surface_Rc':
+        for ax in fig.axes:
+            ax.autoscale(enable=True, axis='y')
+            ax.set_ylim(bottom=0)
     return fig,pd.concat(tables,ignore_index=True)
 
 
@@ -226,14 +234,18 @@ def environment_data(surface,pv):
     return d.loc[d.keep].copy(),audit
 
 
-def environment_figure(d,bins=8,min_eddies=20):
+def environment_figure(d,bins=8,min_eddies=20,outcome='TiltDis'):
     style();fig,axs=plt.subplots(1,2,figsize=(8,3.35),sharey=True,layout='constrained')
     tables=[]
     for i,(ax,metric) in enumerate(zip(axs,['beta','log10_PV_grad_mag'])):
-        t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies)
+        t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies,outcome=outcome)
         curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
         ax.set_title(f'({chr(97+i)})',loc='left')
-    axs[0].set_ylabel('Tilt distance (km)');axs[0].legend(handles=polarity_handles(),frameon=False)
+    axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome == 'tilt_over_surface_Rc' else 'Tilt distance (km)');axs[0].legend(handles=polarity_handles(),frameon=False)
+    if outcome == 'tilt_over_surface_Rc':
+        for ax in fig.axes:
+            ax.autoscale(enable=True, axis='y')
+            ax.set_ylim(bottom=0)
     return fig,pd.concat(tables,ignore_index=True)
 
 # def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True):
@@ -249,10 +261,10 @@ def environment_figure(d,bins=8,min_eddies=20):
 #         ax.set_title(f'({chr(97+i)})',loc='left')
 #     axs[0].set_ylabel('Tilt distance (km)');axs[2].legend(handles=polarity_handles(),frameon=False)
 #     return fig,pd.concat(tables,ignore_index=True)
-def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True):
+def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True,outcome='TiltDis'):
     style();fig,axs=plt.subplots(1,3,figsize=(9,3.35),sharey=True,layout='constrained');tables=[]
     for i,(ax,metric) in enumerate(zip(axs,['lat','beta','log10_PV_grad_mag'])):
-        t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies)
+        t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies,outcome=outcome)
         curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
         if linear_fit and i<2:
             for cyc,color in [('AE','darkred'),('CE','navy')]:
@@ -271,8 +283,12 @@ def environment_figure2(d,bins=8,min_eddies=20,linear_fit=True):
         for ax,l in zip(axs,['a)','b)','c)']):
             ax.text(-.1,1.01,l,transform=ax.transAxes,ha='left',va='top',
                     fontsize=11,fontweight='bold')
-    axs[0].set_ylabel('Tilt distance (km)')
+    axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome == 'tilt_over_surface_Rc' else 'Tilt distance (km)')
     # axs[2].legend(handles=polarity_handles(),frameon=False)
+    if outcome == 'tilt_over_surface_Rc':
+        for ax in fig.axes:
+            ax.autoscale(enable=True, axis='y')
+            ax.set_ylim(bottom=0)
     return fig,pd.concat(tables,ignore_index=True)
 
 def save_figure(fig,output,name):
@@ -288,3 +304,14 @@ def save_metadata(output,settings,inputs):
         sources.append(dict(path=str(p),exists=p.exists(),size=p.stat().st_size if p.exists() else None,
                             mtime=p.stat().st_mtime if p.exists() else None))
     (output/'settings.json').write_text(json.dumps(dict(settings=settings,sources=sources),indent=2,default=str)+'\n')
+
+
+def with_normalised_tilt(d, surface):
+    """Normalise each Eddy-Day by its surface Rc (both distances in km)."""
+    check_keys(surface)
+    radius = surface[KEYS+['Rc']].rename(columns={'Rc':'surface_Rc'})
+    out = d.drop(columns=['surface_Rc','tilt_over_surface_Rc'], errors='ignore').merge(
+        radius, on=KEYS, how='left', validate='many_to_one')
+    valid = np.isfinite(out.surface_Rc) & out.surface_Rc.gt(0)
+    out['tilt_over_surface_Rc'] = out.TiltDis / out.surface_Rc.where(valid)
+    return out
