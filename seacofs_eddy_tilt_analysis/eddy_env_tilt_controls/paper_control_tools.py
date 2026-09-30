@@ -202,6 +202,55 @@ def selected_depth_figure(d,selected,bins=8,min_eddies=20,outcome='TiltDis'):
     return fig,pd.concat(tables,ignore_index=True)
 
 
+def combined_selected_depth_figure(d, selected, bins=8, min_eddies=20):
+    """Plot absolute and per-day radius-normalised medians on independent y axes."""
+    style()
+    ncols = max(map(len, selected.values()))
+    fig, axs = plt.subplots(2, ncols, figsize=(3.5*ncols, 6), squeeze=False,
+                            sharey=True, sharex='row', layout='constrained')
+    tables, left_axes, right_axes = [], [], []
+    outcomes = ('TiltDis', 'tilt_over_surface_Rc')
+    for row, metric in enumerate(METRICS):
+        edges = bin_edges(d.loc[d.Depth.isin(selected[metric])], metric, bins)
+        for col, z in enumerate(selected[metric]):
+            ax = axs[row, col]
+            right = ax.twinx()
+            if right_axes:
+                right.sharey(right_axes[0])
+            left_axes.append(ax)
+            right_axes.append(right)
+            part = d.loc[d.Depth.eq(z)]
+            for target, outcome, linestyle in zip((ax, right), outcomes, ('-', '--')):
+                t = median_table(part, metric, edges, min_eddies, outcome=outcome)
+                tables.append(t.assign(metric=metric, depth_m=z, outcome=outcome))
+                curve(target, t, metric, shade=False, linestyle=linestyle)
+                if outcome == 'tilt_over_surface_Rc':
+                    for line in target.lines:
+                        line.set_markerfacecolor('white')
+            right.grid(False)
+            right.set_xlabel('')
+            right.spines['right'].set_visible(True)
+            right.tick_params(axis='y', labelright=col == len(selected[metric])-1)
+            ax.set_title(f'({chr(97+row*ncols+col)}) {z:.0f} m', loc='left')
+            if col == 0:
+                ax.set_ylabel('Tilt distance (km)')
+            if col == len(selected[metric])-1:
+                right.set_ylabel(r'Normalised tilt distance, TD / surface $R_c$')
+        for ax in axs[row, len(selected[metric]):]:
+            ax.set_visible(False)
+    # Shared limits within each outcome; neither axis is a conversion of the other.
+    for axes in (left_axes, right_axes):
+        axes[0].autoscale(enable=True, axis='y')
+        axes[0].set_ylim(bottom=0)
+    handles = polarity_handles() + [
+        Line2D([0], [0], color='.25', ls='-', marker='o', ms=3,
+               label='Tilt distance (left axis)'),
+        Line2D([0], [0], color='.25', ls='--', marker='o', ms=3,
+               markerfacecolor='white', label='TD / surface Rc (right axis)')]
+    fig.legend(handles=handles, loc='outside upper center', ncol=4, frameon=False)
+    return fig, pd.concat(tables, ignore_index=True)
+
+
 def overlay_figure(d,selected,bins=8,min_eddies=20,outcome='TiltDis'):
     style();fig,axs=plt.subplots(1,2,figsize=(8,3.45),sharey=True,layout='constrained')
     tables=[]
