@@ -155,7 +155,7 @@ def plot_direction(data):
             ax.fill_between(h.angle, h.low, h.high, color=colour, alpha=.2, lw=0)
             ax.axhline(100/18, ls='--', color='.4', lw=.8)
             n = data['coverage'].query("Cyc == @cyc and sample == 'surface'").eddies.iloc[0]
-            ax.text(.96, .94, f'{cyc} · n = {n:,}', ha='right', va='top', transform=ax.transAxes, color=colour)
+            # ax.text(.96, .94, f'{cyc} · n = {n:,}', ha='right', va='top', transform=ax.transAxes, color=colour)
             ax.set(xlim=(0,90), ylim=(0,histmax), xticks=[0,30,60,90],
                    xlabel='Tilt–major-axis angle (°)', ylabel='Probability (%)')# per 5° bin (%)')
             # Column titles intentionally hidden.
@@ -169,10 +169,10 @@ def plot_direction(data):
             ax.tick_params(axis='x', labelsize=6.5)
             ax.axhline(0, color='.4', ls='--', lw=.8)
             # Column titles intentionally hidden.
-            for xi, r in zip(x, g.itertuples()):
-                if np.isfinite(r.estimate):
-                    ax.annotate(f'{r.eddies:,}', (xi,r.high), xytext=(0,5), textcoords='offset points',
-                                ha='center', fontsize=6, color='.35')
+            # for xi, r in zip(x, g.itertuples()):
+                # if np.isfinite(r.estimate):
+                    # ax.annotate(f'{r.eddies:,}', (xi,r.high), xytext=(0,5), textcoords='offset points',
+                    #             ha='center', fontsize=6, color='.35')
             d = data['depth'].loc[data['depth'].Cyc.eq(cyc)]
             ax = axes[row, 2]
             _line_interval(ax, d.depth.to_numpy(), d, colour)
@@ -181,9 +181,9 @@ def plot_direction(data):
             ax.axhline(0, color='.4', ls='--', lw=.8)
             n = data['coverage'].query("Cyc == @cyc and sample == 'all-depth matched'").eddies.iloc[0]
             label_y = .12 if d.estimate.mean() > (ymin+ymax)/2 else .94
-            ax.text(.96,label_y,f'Matched n = {n:,}', transform=ax.transAxes,
-                    va='top', ha='right', fontsize=7,
-                    bbox=dict(facecolor='white', edgecolor='none', alpha=.85, pad=1))
+            # ax.text(.96,label_y,f'Matched n = {n:,}', transform=ax.transAxes,
+            #         va='top', ha='right', fontsize=7,
+            #         bbox=dict(facecolor='white', edgecolor='none', alpha=.85, pad=1))
             # Column titles intentionally hidden.
         for letter, ax in zip(string.ascii_lowercase, axes.flat):
             _panel(ax, letter)

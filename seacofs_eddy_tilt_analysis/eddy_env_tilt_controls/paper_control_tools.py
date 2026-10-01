@@ -16,7 +16,7 @@ COLORS = {'AE': '#b2182b', 'CE': '#2166ac'}
 METRICS = ('abs_Omega', 'AR')
 SCALE = {'lat': 1., 'abs_Omega': 1e5, 'AR': 1., 'beta': 1., 'log10_PV_grad_mag': 1.}
 LABEL = {'abs_Omega': r'$|\Omega|$ ($10^{-5}$ s$^{-1}$)',
-         'AR': r'Axis ratio, $\alpha$', 'lat': r'Latitude (°N)',
+         'AR': r'Axis ratio', 'lat': r'Latitude (°N)',
          'beta': r'$\beta$ (m$^{-1}$ s$^{-1}$)',
          'log10_PV_grad_mag': r'$\log_{10}(|\nabla q|) \,(\mathrm{m}^{-2}\ \mathrm{s}^{-1})$'}
 LINESTYLES = ['-', '--', ':', '-.']
@@ -169,7 +169,7 @@ def curve(ax, table, metric, shade=True, linestyle='-'):
     for cyc in COLORS:
         g=table.loc[table.Cyc.eq(cyc)]
         x=g.x.to_numpy()*SCALE[metric]
-        ax.plot(x,g['median'],color=COLORS[cyc],ls=linestyle,lw=1.7,marker='o',ms=2.7)
+        ax.plot(x,g['median'],color=COLORS[cyc],ls=linestyle,lw=1.7)#,ms=2.7)
         if shade: ax.fill_between(x,g.q25,g.q75,color=COLORS[cyc],alpha=.10,lw=0)
     ax.set_xlabel(LABEL[metric]); ax.set_ylim(bottom=0)
     ax.grid(axis='y',alpha=.12,lw=.5)
@@ -223,10 +223,12 @@ def combined_selected_depth_figure(d, selected, bins=8, min_eddies=20):
             for target, outcome, linestyle in zip((ax, right), outcomes, ('-', '--')):
                 t = median_table(part, metric, edges, min_eddies, outcome=outcome)
                 tables.append(t.assign(metric=metric, depth_m=z, outcome=outcome))
-                curve(target, t, metric, shade=False, linestyle=linestyle)
-                if outcome == 'tilt_over_surface_Rc':
-                    for line in target.lines:
-                        line.set_markerfacecolor('white')
+                curve(target, t, metric, shade=linestyle=='-', linestyle=linestyle)
+                # if outcome == 'tilt_over_surface_Rc':
+                #     for line in target.lines:
+                #         line.set_markerfacecolor('white')
+            right.set_yticks(np.arange(0.0, .5, .1))
+            right.set_ylim(0.0,.4)
             right.grid(False)
             right.set_xlabel('')
             right.spines['right'].set_visible(True)
@@ -235,7 +237,7 @@ def combined_selected_depth_figure(d, selected, bins=8, min_eddies=20):
             if col == 0:
                 ax.set_ylabel('Tilt distance (km)')
             if col == len(selected[metric])-1:
-                right.set_ylabel(r'Normalised tilt distance, TD / surface $R_c$')
+                right.set_ylabel(r'Tilt distance / $R_c$')
         for ax in axs[row, len(selected[metric]):]:
             ax.set_visible(False)
     # Shared limits within each outcome; neither axis is a conversion of the other.
@@ -243,12 +245,12 @@ def combined_selected_depth_figure(d, selected, bins=8, min_eddies=20):
         axes[0].autoscale(enable=True, axis='y')
         axes[0].set_ylim(bottom=0)
     handles = polarity_handles() + [
-        Line2D([0], [0], color='.25', ls='-', marker='o', ms=3,
+        Line2D([0], [0], color='.25', ls='-', ms=3,
                label='Tilt distance (left axis)'),
-        Line2D([0], [0], color='.25', ls='--', marker='o', ms=3,
+        Line2D([0], [0], color='.25', ls='--', ms=3,
                markerfacecolor='white', label='TD / surface Rc (right axis)')]
-    fig.legend(handles=handles, loc='outside upper center', ncol=4, frameon=False)
-    return fig, pd.concat(tables, ignore_index=True)
+    # fig.legend(handles=handles, loc='outside upper center', ncol=4, frameon=False)
+    return fig, axs, pd.concat(tables, ignore_index=True)
 
 
 def overlay_figure(d,selected,bins=8,min_eddies=20,outcome='TiltDis'):
