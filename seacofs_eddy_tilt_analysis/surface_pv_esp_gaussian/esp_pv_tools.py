@@ -233,6 +233,7 @@ def plot_gradient_examples(
     grid,
     *,
     vertical=None,
+    vert_lim=1e3,
     min_pad_km=40.0,
     pad_rc=1.4,
     max_local_arrows=120,
@@ -298,7 +299,7 @@ def plot_gradient_examples(
         local_quiver = ax.quiver(
             arrows.x[valid], arrows.y[valid],
             arrows.environment_east[valid], arrows.environment_north[valid],
-            color="red", alpha=0.68, angles="xy", scale_units="inches",
+            color="red" if row.Cyc=='AE' else 'cyan', alpha=0.68, angles="xy", scale_units="inches",
             scale=quiver_scale, width=0.004, zorder=7,
         )
         ax.quiver(
@@ -309,7 +310,7 @@ def plot_gradient_examples(
         ax.scatter(row.xc, row.yc, c="magenta", s=24, zorder=11)
         if vertical is not None:
             spine = vertical[
-                vertical.Eddy.eq(row.Eddy) & vertical.Day.eq(row.Day)
+                vertical.Eddy.eq(row.Eddy) & vertical.Day.eq(row.Day) & (vertical.Depth<vert_lim)
             ].sort_values("Depth")
             ax.plot(spine.xc, spine.yc, color="limegreen", lw=2.0, zorder=9)
         local_mean = float(row.PV_grad_mean_local_mag)
