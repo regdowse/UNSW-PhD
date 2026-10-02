@@ -43,7 +43,8 @@ Run `00_build_esp_gaussian_cache.ipynb` first on Katana, then notebooks 01–07:
 5. Seamount encounter examples through time.
 6. Tilt relationships and final method assessment.
 7. Seamount-like and continental-slope candidate pools, followed by a
-   configurable matched-scale two-panel paper figure.
+   configurable two-panel paper figure with panel-scaled local vectors and
+   fixed-length mean-gradient direction arrows.
 
 The cache contains only the primary `esp_gaussian_1` method and the directly
 comparable `uniform_1` control. Larger `FRAC` values are deliberately excluded
