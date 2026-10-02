@@ -241,6 +241,12 @@ def plot_gradient_examples(
     local_arrow_length_inches=0.38,
     net_arrow_fraction=0.38,
     figsize=None,
+    legend=True,
+    constrained_layout=True,
+    xq=.02,
+    yq=1.02,
+    title=True,
+    quiv_clr='limegreen'
 ):
     """Plot locally scaled cell vectors and fixed-length net directions."""
     import matplotlib.pyplot as plt
@@ -281,10 +287,22 @@ def plot_gradient_examples(
     depth_norm = Normalize(vmin=float(np.nanmin(depths)), vmax=float(np.nanmax(depths)))
 
     n = len(rows)
-    figsize = figsize or (5.8 * n, 5.3)
-    fig, axes = plt.subplots(1, n, figsize=figsize, squeeze=False,
-                             constrained_layout=True)
-    axes = axes[0]
+    # figsize = figsize or (5.8 * n, 5.3)
+    # fig, axes = plt.subplots(1, n, figsize=figsize, squeeze=False,
+    #                          constrained_layout=True)
+    ncols = min(n, 5)
+    nrows = int(np.ceil(n / ncols))
+    
+    figsize = figsize or (5.8 * ncols, 5.3 * nrows)
+    
+    fig, axes = plt.subplots(
+        nrows, ncols,
+        figsize=figsize,
+        squeeze=False,
+        constrained_layout=constrained_layout
+    )
+
+    axes = axes.flatten()
     bathy_artist = None
     local_references = []
     for ax, (row, local, pad, bathy, local_reference) in zip(axes, prepared):
@@ -295,7 +313,7 @@ def plot_gradient_examples(
         ax.contour(grid.X_grid, grid.Y_grid, bathy, colors="0.35",
                    levels=8, linewidths=0.45, alpha=0.55)
         import seacofs_tilt_tools as tilt
-        tilt.plot_ellipse(ax, row, grid, frac=1, color="red", lw=2.0, zorder=8)
+        tilt.plot_ellipse(ax, row, grid, frac=1, color="red" if row.Cyc == "AE" else "dodgerblue", lw=2.0, zorder=8)
         step = max(1, int(np.ceil(len(local) / max_local_arrows)))
         arrows = local.iloc[::step]
         valid = np.isfinite(arrows.environment_east) & np.isfinite(arrows.environment_north)
@@ -303,13 +321,13 @@ def plot_gradient_examples(
         local_quiver = ax.quiver(
             arrows.x[valid], arrows.y[valid],
             arrows.environment_east[valid], arrows.environment_north[valid],
-            color="red" if row.Cyc == "AE" else "cyan",
+            color=quiv_clr,
             alpha=0.68, angles="xy", scale_units="inches",
             scale=local_scale, width=0.004, zorder=7,
         )
         ax.quiverkey(
-            local_quiver, 0.02, 1.06, local_reference,
-            rf"local: ${local_reference:.1e}$",
+            local_quiver, xq, yq, local_reference,
+            rf"${local_reference:.1e}$ m$^{{-2}}$ s$^{{-1}}$",
             coordinates="axes", labelpos="E",
         )
         local_references.append(local_reference)
@@ -322,25 +340,29 @@ def plot_gradient_examples(
                 xy=(row.xc + fixed_length * net_east / net,
                     row.yc + fixed_length * net_north / net),
                 xytext=(row.xc, row.yc),
-                arrowprops=dict(arrowstyle="-|>", color="magenta", lw=3),
+                arrowprops=dict(arrowstyle="-|>", color="limegreen", lw=3),
                 zorder=10,
             )
-        ax.scatter(row.xc, row.yc, c="magenta", s=24, zorder=11)
+        ax.scatter(row.xc, row.yc, c="limegreen", s=24, zorder=11)
         if vertical is not None:
             spine = vertical[
                 vertical.Eddy.eq(row.Eddy) & vertical.Day.eq(row.Day) & (vertical.Depth<vert_lim)
             ].sort_values("Depth")
-            ax.plot(spine.xc, spine.yc, color="limegreen", lw=2.0, zorder=9)
+            ax.plot(spine.xc, spine.yc, color="red" if row.Cyc == "AE" else "dodgerblue", lw=2.0, zorder=9)
         local_mean = float(row.PV_grad_mean_local_mag)
         ax.set(
             xlim=(row.xc-pad, row.xc+pad), ylim=(row.yc-pad, row.yc+pad),
             aspect="equal", xlabel="x (km)", ylabel="y (km)",
-            title=(f"{row.Cyc}{int(row.Eddy)}, day {int(row.Day)}\n"
-                   f"net/local = {net/local_mean:.2f}" if local_mean > 0
-                   else f"{row.Cyc}{int(row.Eddy)}, day {int(row.Day)}"),
         )
-        ax.plot([], [], color="magenta", lw=3,
+        if title:
+            ax.set_title=(f"{row.Cyc}{int(row.Eddy)}, day {int(row.Day)}\n"
+                   f"net/local = {net/local_mean:.2f}" if local_mean > 0
+                   else f"{row.Cyc}{int(row.Eddy)}, day {int(row.Day)}")
+        ax.plot([], [], color="limegreen", lw=3,
                 label=rf"mean $|\nabla q|={net:.2e}$ m$^{{-2}}$ s$^{{-1}}$")
-        ax.legend(loc="lower right", frameon=True, fontsize=9)
-    fig.colorbar(bathy_artist, ax=axes.tolist(), label="Water depth (km)", shrink=0.82)
+        ax.set_axisbelow(True)
+        ax.grid(True)
+        if legend:
+            ax.legend(loc="lower right", frameon=True, fontsize=9)
+    fig.colorbar(bathy_artist, ax=axes.tolist(), label="Bathymetry (km)", shrink=0.82)
     return fig, axes, np.asarray(local_references)
