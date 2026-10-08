@@ -131,8 +131,9 @@ def inner_indices(case, radius):
     return np.flatnonzero(np.linalg.norm(xy - c, axis=1) <= radius)
 
 
-def fit_case(backend, case, uv, radius, rc_limit=100000.):
-    """Call ORIGINAL estimators, adding diagnostics only (no scientific fixes).
+def fit_case(backend, case, uv, radius, rc_limit=100000., *,
+             diagnostic_outer=False, solo_local=False, centre_guess=10000., search_half_width=60000.):
+    """Original estimators by default; explicit opt-in local variants for notebook 01.
 
     The original outer fit does not return optimiser status and may return its
     initial values on failure. Pass an explicit data-derived seed and flag an
@@ -148,7 +149,13 @@ def fit_case(backend, case, uv, radius, rc_limit=100000.):
             index = inner_indices(case, radius)
             if case["name"] == "SOLO":
                 # Pass full transect: SOLO itself finds closest approach then masks.
-                x0, y0, _, q, om = backend.solo(xy[:, 0], uv[:, 0], uv[:, 1], core_thresh=radius)
+                if solo_local:
+                    from local_estimators import solo_local_initialisation
+                    x0, y0, _, q, om = solo_local_initialisation(
+                        xy[:, 0], uv[:, 0], uv[:, 1], core_thresh=radius,
+                        centre_guess=centre_guess, search_half_width=search_half_width)
+                else:
+                    x0, y0, _, q, om = backend.solo(xy[:, 0], uv[:, 0], uv[:, 1], core_thresh=radius)
                 result["n_core"] = int(np.sum(abs(xy[:, 0] - x0) <= radius))
                 yc = y0 + xy[0, 1]
                 xc = x0
@@ -194,20 +201,29 @@ def fit_case(backend, case, uv, radius, rc_limit=100000.):
                 result["status"] = "insufficient_outer"
                 return result
             rc0 = max(float(rho[keep][np.argmax(abs(vstar[keep]))] * np.sqrt(2)), 1e-6)
-            rc, psi, om_final = backend.out_core_param_fit(
-                xy[:, 0], xy[:, 1], uv[:, 0], uv[:, 1], xc, yc, q,
-                Omega0=om, Rc0=rc0, Rc_max=rc_limit, plot=False)
-            result.update(xc_m=xc, yc_m=yc, Rc_m=rc, Omega=om_final,
-                          inner_Omega=om, Rc_seed_m=rc0, psi0=psi)
-            if not np.all(np.isfinite([rc, psi, om_final])) or rc <= 0:
-                result["status"] = "nonfinite_outer"
-                return result
-            if np.isclose(rc, rc0, rtol=1e-12, atol=0) and np.isclose(om_final, om, rtol=1e-12, atol=0):
-                result["status"] = "outer_seed_return"
-                return result
-            if rc > rc_limit:
-                result["status"] = "outer_radius_limit"
-                return result
+            result.update(xc_m=xc, yc_m=yc, inner_Omega=om, Rc_seed_m=rc0)
+            if diagnostic_outer:
+                from local_estimators import outer_fit_diagnostic
+                outer = outer_fit_diagnostic(xy[:,0],xy[:,1],uv[:,0],uv[:,1],xc,yc,q,
+                    Omega0=om,Rc0=rc0,Rc_max=rc_limit)
+                result.update(outer)
+                if outer['status'] != 'ok':
+                    return result
+                rc, psi, om_final = outer['Rc_m'], outer['psi0'], outer['Omega']
+            else:
+                rc, psi, om_final = backend.out_core_param_fit(
+                    xy[:, 0], xy[:, 1], uv[:, 0], uv[:, 1], xc, yc, q,
+                    Omega0=om, Rc0=rc0, Rc_max=rc_limit, plot=False)
+                result.update(Rc_m=rc, Omega=om_final, psi0=psi)
+                if not np.all(np.isfinite([rc, psi, om_final])) or rc <= 0:
+                    result['status'] = 'nonfinite_outer'
+                    return result
+                if np.isclose(rc, rc0, rtol=1e-12, atol=0) and np.isclose(om_final, om, rtol=1e-12, atol=0):
+                    result['status'] = 'outer_seed_return'
+                    return result
+                if rc > rc_limit:
+                    result['status'] = 'outer_radius_limit'
+                    return result
             if np.sign(om_final) != np.sign(case["omega"]):
                 result["status"] = "wrong_rotation_sign"
                 return result
@@ -223,7 +239,9 @@ def fit_case(backend, case, uv, radius, rc_limit=100000.):
                           alpha_error_pct=100 * (alpha / case["alpha"] - 1) if case["name"] != "SOLO" else np.nan,
                           angle_error_deg=axial_error(angle, case["angle"]) if case["name"] != "SOLO" else np.nan)
         except Exception as exc:
-            result.update(status="exception", exception=f"{type(exc).__name__}: {exc}")
+            from local_estimators import FitFailure
+            result.update(status=str(exc) if isinstance(exc, FitFailure) else "exception",
+                          exception=f"{type(exc).__name__}: {exc}")
         finally:
             result["warnings"] = " | ".join(sorted({str(w.message) for w in caught}))
     return result
@@ -231,7 +249,8 @@ def fit_case(backend, case, uv, radius, rc_limit=100000.):
 
 def run_experiment(backend, cases, *, experiment, levels, repeats, seed,
                    baseline_radius=30000., fixed_noise=.05,
-                   correlation_fraction=.15, rc_limit=100000.):
+                   correlation_fraction=.15, rc_limit=100000.,
+                   diagnostic_outer=False, solo_local=False, centre_guess=10000., search_half_width=60000.):
     """Paired realisations across levels; separate seeds for noise/window studies.
 
     levels: noise/speed_ref for 'noise', radius/Rc for 'window'. Zero-noise
@@ -255,8 +274,10 @@ def run_experiment(backend, cases, *, experiment, levels, repeats, seed,
                         continue
                     radius = baseline_radius if experiment == "noise" else float(level) * case["rc"]
                     sigma = fraction * case["speed_ref"]
-                    row = fit_case(backend, case, case["uv"] + sigma * error, radius, rc_limit)
-                    row.update(method=name, experiment=experiment, noise_kind=kind if fraction else "none",
+                    row = fit_case(backend, case, case["uv"] + sigma * error, radius, rc_limit,
+                        diagnostic_outer=diagnostic_outer, solo_local=solo_local,
+                        centre_guess=centre_guess, search_half_width=search_half_width)
+                    row.update(method="SOLO local" if solo_local and name == "SOLO" else name, experiment=experiment, noise_kind=kind if fraction else "none",
                                repeat=repeat, level=float(level), noise_fraction=fraction,
                                noise_sigma_ms=sigma, core_radius_m=radius,
                                core_radius_ratio=radius / case["rc"],
@@ -288,7 +309,7 @@ def plot_results(results):
     import matplotlib.pyplot as plt
     summary = summarise(results)
     fig, axes = plt.subplots(2, 3, figsize=(13, 7), constrained_layout=True)
-    colours = dict(SOLO="tab:blue", DOPPIO="tab:orange", LATTE="tab:green")
+    colours = {"SOLO":"tab:blue", "SOLO local":"tab:purple", "DOPPIO":"tab:orange", "LATTE":"tab:green"}
     noise = results.experiment.iloc[0] == "noise"
     for (method, kind), group in summary.groupby(["method", "noise_kind"]):
         if kind == "none":
@@ -301,7 +322,7 @@ def plot_results(results):
         style = "-" if kind == "independent" else "--"
         label = f"{method}, {kind}"
         for ax, metric in zip(axes.flat, METRICS):
-            if method == "SOLO" and metric in ("alpha_error_pct", "angle_error_deg"):
+            if method.startswith("SOLO") and metric in ("alpha_error_pct", "angle_error_deg"):
                 continue
             ax.plot(x, group[f"{metric}_median"], style, color=colours[method], label=label)
             ax.fill_between(x, group[f"{metric}_p05"], group[f"{metric}_p95"], color=colours[method], alpha=.10)

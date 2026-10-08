@@ -1,80 +1,82 @@
 # ESP manuscript revision: notebook 01
 
-Open `01_noise_and_sampling.ipynb` on Katana and run the cells in order.
-Set `ESP_ROOT` to `/home/z5297792/ESP_zonodo` (the default). No production
-SEACOFS data or tilt caches are needed. Requires NumPy, pandas, SciPy,
-Matplotlib and a Jupyter Python kernel.
+Open `01_noise_and_sampling.ipynb` on Katana, **restart the kernel**, and run
+in order. `ESP_ROOT` defaults to `/home/z5297792/ESP_zonodo`. This directory
+is never edited. Dependencies: NumPy, pandas, SciPy, Matplotlib and Jupyter.
+No SEACOFS production data are needed.
 
-The notebook imports `solo`, `doppio`, `latte` and `out_core_param_fit` from
-the exact external `functions.py`. It never edits that checkout. Shared
-experiment/diagnostic code is in `validation_helpers.py`; no corrected
-replacement ESP estimators are used in this version.
+## Controls and outputs
 
-## Scope
+- `SAVE_OUTPUTS=False` (default): display tables/figures without creating a result
+  directory or writing CSV/figure/provenance files. Jupyter can still save its
+  own notebook outputs; this switch does not disable notebook autosaving.
+- `SAVE_OUTPUTS=True`: write a fresh timestamped run below
+  `results/01_noise_and_sampling/` (ignored by Git).
+- `QUICK_RUN=True`: 20 repetitions; `False`: 100. Zero-noise controls run once.
+- `SOLO_CENTRE_GUESS_M=10000`, `SOLO_SEARCH_HALF_WIDTH_M=60000`: explicit
+  approximate along-track position and fixed search interval for the local
+  SOLO variant. They are not derived from synthetic truth and stay fixed while
+  varying the inner fitting window.
 
-1. Noise sensitivity: fixed synthetic Gaussian vortices and sampling, independent
-   versus Gaussian spatially correlated velocity errors, 0/2/5/10/20% noise.
-2. Inner-window sensitivity: fixed 5% noise and outer sampling, varying the
-   inner window relative to the known synthetic Rc.
+Coordinates/radii are metres, velocity m/s, rotation/vorticity s^-1. The noise
+reference is the peak absolute *normalised* tangential speed
+`abs(Omega)*Rc/sqrt(2*e)`. Noise SD applies separately to u and v. Spatial
+covariance is `sigma² exp(-distance²/(2 L²))` within each component; u/v error
+fields are independent. Scales are stress-test choices, not instrument estimates.
 
-SOLO uses a circular vortex; DOPPIO/LATTE use the same elliptical vortex.
-These are representative configurations, **not** exact reproductions of the
-paper's tables, nor a matched-observation ranking of the three methods.
-The noise-free baseline is a self-consistency check, not real-world validation.
-No background flow, time evolution, platform fusion or depth/tilt analysis is
-included. Default noise and correlation scales are stress-test choices, not
-instrument-error estimates.
+## Experiments and local variants
 
-## Running and outputs
+1. Fixed synthetic sampling with independent versus correlated errors at
+   0/2/5/10/20% noise.
+2. Inner-window sensitivity at 5% noise with a fixed outer observation domain.
 
-`QUICK_RUN=True` uses 20 realisations per condition for a first inspection;
-`False` (default) uses 100. Noise-free controls are evaluated only once.
-Errors at different levels share random realisations to make comparisons
-paired. The window experiment uses a separate random stream. Geometry is
-fixed across all repetitions. Window settings are exploratory sensitivity
-tests; selected settings would need an independent validation ensemble.
+Original inner estimators are loaded from the exact external `functions.py`.
+DOPPIO and LATTE retain those functions. `local_estimators.py` provides:
 
-All coordinates and radii passed to ESP are in **metres**, velocities in m/s,
-and Omega/vorticity in s^-1. The SEACOFS workflow's kilometre convention is
-not used here. The noise reference is the peak absolute **normalised**
-tangential speed, `abs(Omega)*Rc/sqrt(2*e)`, not the maximum physical speed
-over an elliptical contour. Each component has the stated noise SD.
+- `solo_local_initialisation`: find a supported local sign change nearest the
+  supplied approximate centre; fit an odd cubic locally within a fixed search
+  interval; refit inside the inner window with bounded crossing and scaled
+  coordinates. Same SOLO parameter equations. This changes the initial fitting
+  domain, constraints and numerical scaling, not only the initial guess. No
+  true eddy parameters are passed to this estimator. Its performance is
+  conditional on the supplied approximate location/search interval.
+- `outer_fit_diagnostic`: same Gaussian objective, sign filter, peak-based seed,
+  optimiser bounds and original post-fit 100 km radius limit, but explicit
+  optimisation/radius/insufficient-data/nonfinite statuses instead of silently
+  returning seeds. Attempted estimates survive radius-limit rejection.
 
-Outputs go to a new timestamped `results/01_noise_and_sampling/...` directory:
-raw attempts, summaries, failure counts, settings/backend provenance, and PNG/PDF
-figures. Outputs are ignored by Git. Both stages are refitted for every attempt.
-Outer input locations stay fixed; the backend's rotation-sign filtering can
-still change the retained outer observations. Their count is saved.
+All methods use that local diagnostic outer fit in the updated notebook.
+A baseline check compares it to the original outer function. The original and
+local SOLO variants receive identical random observations, paired by experiment,
+noise type, level and repetition. Different methods have different geometry and
+sample counts; this is not a controlled algorithm ranking. The original executed
+notebook remains in `01_original_backend_results.ipynb`; its helper references
+are historical and outputs should be read as a saved baseline, not regenerated
+with changed code. The exact previous implementation is available in Git.
 
-The original backend may silently return initial values when its outer fit
-fails or exceeds `Rc_max`. The wrapper passes the same peak-based initial
-guess explicitly and flags an unchanged parameter pair as `outer_seed_return`.
-This is a conservative heuristic, **not** a guaranteed optimiser-status API;
-an unchanged genuine optimum can be flagged. The default 100 km `Rc_max`
-is retained and recorded. Original inner optimiser success flags are not
-exposed by these APIs; 'valid' means passes the listed numerical/physical
-diagnostics, not certified convergence or scientific accuracy. Warnings are
-retained in the raw results. Negative-determinant/non-positive-definite Q,
-wrong rotation sign, insufficient observations and nonfinite results are flagged.
-No accuracy cutoff is used to remove large but finite parameter errors.
+Figures show median and central 90% simulation spread among valid fits and
+valid-fit fraction over all attempts. Shading is not a confidence interval.
+No accuracy cutoff removes large finite errors. SOLO has no shape/orientation
+score. Orientation is axial (180-degree symmetry). Independent errors at
+multiple levels share draws; window experiments use a separate random stream.
+Settings selected from these sensitivity experiments need independent validation.
 
-Figures show medians and the 5th--95th percentiles **among valid fits**, alongside
-valid-fit percentages using all attempts. Shading is simulation spread, not a
-confidence interval. SOLO's imposed shape has no shape/orientation score.
-Orientation is axial (180-degree symmetry); angular errors concern the chosen
-noncircular synthetic truth and do not establish identifiability near circularity.
+`validation_helpers.py` still supports the original outer function for checks;
+its seed-return heuristic applies only in that compatibility mode. Original
+inner APIs do not expose all convergence flags. 'Valid' means passing numerical
+and physical diagnostics, not certified convergence or accuracy. Warnings and
+failure reasons are retained. The full backend hash, local helper hashes,
+settings and package versions accompany saved runs.
 
-## Checks
+## Verification
 
-From this directory, in a scientific Python environment:
+From this directory in a scientific Python environment:
 
 ```bash
-python -m unittest -v test_validation_helpers
+python -m unittest discover -p 'test_*.py' -v
 ```
 
-These checks cover geometry, units, curl/divergence, axial angles, noise
-covariance, shared cross-transect observations, invalid fits, fallback handling
-and summary denominators. They do not substitute for running the notebook
-against the installed Katana backend. Inspect the baseline and failure tables
-before drawing conclusions. Keep existing backend issues visible; proposed
-estimator changes belong in separately named local functions and comparisons.
+Checks cover geometry/units, curl/divergence, covariance, angle wrapping,
+failed-fit denominators, local crossing handling, explicit outer statuses,
+and identical noise for original/local SOLO. Local reference-backend execution
+is separate from scientific validation with the installed Katana backend.
