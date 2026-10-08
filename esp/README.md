@@ -1,4 +1,4 @@
-# ESP manuscript revision: notebook 01
+# ESP manuscript revision notebooks
 
 Open `01_noise_and_sampling.ipynb` on Katana, **restart the kernel**, and run
 in order. `ESP_ROOT` defaults to `/home/z5297792/ESP_zonodo`. This directory
@@ -80,3 +80,31 @@ Checks cover geometry/units, curl/divergence, covariance, angle wrapping,
 failed-fit denominators, local crossing handling, explicit outer statuses,
 and identical noise for original/local SOLO. Local reference-backend execution
 is separate from scientific validation with the installed Katana backend.
+
+## Notebook 02: background flow and radial-profile departures
+
+Open `02_background_and_model_departure.ipynb`. It reuses notebook 1's fixed
+sampling, local SOLO option, original DOPPIO/LATTE inner estimators, and explicit
+outer-fit diagnostics. No existing backend or notebook-1 code is changed.
+
+Three one-factor-at-a-time, noise-free tests: signed uniform currents in two
+directions; signed simple shear in two orientations; and a heavier-tailed radial
+profile family approaching the Gaussian. Defaults comprise 96 deterministic
+conditions, not a Monte Carlo ensemble. There is no background correction.
+
+`SAVE_OUTPUTS=False` displays only; `True` saves three figures, condition tables,
+a baseline table and provenance under `results/02_background_and_model_departure/`.
+The current and shear scales, fixed windows and SOLO initial guess are editable
+in the first code cell. Radius-limit failures preserve attempted fitted radii.
+
+Parameter errors target the underlying eddy component. Vector RMSE on a separate
+fixed evaluation grid is reported against both the eddy and the total flow. The
+profile family preserves centre vorticity and peak normalised-speed radius, not
+peak speed. Compare peak-contour equal-area radius rather than inventing a true
+Gaussian Rc for a non-Gaussian vortex. This tests radial misspecification only;
+non-elliptical asymmetry, radial flow and temporal evolution are not included.
+
+`departure_helpers.py` contains generation, scoring and plotting. Its five tests
+check the Gaussian limit, peak radius and centre gradient, nondivergence, shear
+curl and orientation, zero-background controls, and exclusion of fitting locations
+from the evaluation grid. Run them with `python -m unittest test_departure_helpers -v`.
