@@ -119,3 +119,63 @@ Centre/geometry scores remain available after an outer-fit rejection, whereas
 refined vorticity, radius and velocity scores require the accepted outer fit.
 Notebook 02 plots use the appropriate flag for each metric. Existing notebook 01
 ensemble summaries continue to use full-fit validity, as before.
+
+
+## Notebook 03: ADCP–satellite platform influence
+
+Open `03_platform_weighting.ipynb`, restart the kernel and run in order. It reads
+`ESP_ROOT/data/sadcp_data.mat` and `satellite_data.nc`; paths, the ADCP window,
+37 m target depth, fitting radii, two satellite weights and `SAVE_OUTPUTS` are
+at the top. Requires netCDF4 (or h5py for the supplied NetCDF4 file) in addition
+to the usual scientific packages. No original backend files are edited.
+
+Compare ADCP-only, satellite-only, original equal-per-observation combined, and
+selected weighted combined fits. Defaults are satellite inner weight 0 and
+outer weight 1: ADCP determines inner geometry, then both platforms have equal
+mean-error terms in the outer fit. The outer fit refines rotation amplitude as
+well as radius, so final vorticity can still respond to satellite influence.
+Sweep each weight separately over 0, 0.1, 0.3, 1 and 3, holding the other fixed.
+
+Each weighted stage minimises ADCP mean squared residual plus lambda times
+satellite mean squared residual. Inner residuals are linear-core velocity
+vectors; outer residuals are normalised tangential Gaussian-profile errors.
+Counts are stage-specific and outer counts follow the original sign filter.
+Equal point weights correspond to lambda = N_satellite / N_ADCP, not lambda=1.
+The weights specify influence, not observation-error variances. All available
+points inside the selection domains are retained without thinning, but this
+does not correct within-platform clustering or account for covariance.
+
+The three original fits use their own original adaptive selections. Weighted
+fits freeze the original combined core/outer observation sets, isolating weight
+sensitivity from moving selection boundaries. The original outer sign filter
+still depends on the fitted inner geometry; retained counts are reported.
+`platform_weighting.py` supplies the local weighted affine solution of the
+same five-parameter LATTE inner model, and an explicit-status weighted outer
+fit. Checks compare both local formulations with the imported backend before
+interpreting results. External original inner functions remain in use for the
+three reference fits. Reference-data checks reproduce the released example.
+
+This is one original 4.5-day ADCP-window comparison, not a time series. Preserve
+native satellite -> daily 06 UTC -> ADCP mean-time interpolation. Actual native
+satellite timestamps are recorded. The inner selection default is 35 km from
+the original code, while the manuscript describes 30 km; reconcile this in the
+revision. The outer selection remains 100 km; the configurable numerical Rc
+limit remains 1,000 km. No radius-limit comparison is run.
+
+Tables/figures show parameters, stage-specific sample support, common-set
+per-platform residuals, and one-factor weight sweeps. Residuals overlap training
+data and are descriptive, not independent validation. Surface geostrophic and
+37 m total velocities remain physically different; temporal evolution, depth
+shear and ageostrophic flow are not corrected. Uncertainties/effective sample
+sizes are not estimated, and no weight is selected automatically as best.
+
+`SAVE_OUTPUTS=True` writes a new timestamped directory under
+`results/03_platform_weighting/`: parameter/residual/support/observation and
+membership CSVs, three figures, and provenance including data/backend/local
+hashes, settings, checks, fixed masks and evaluation IDs. False displays only.
+The notebook is committed with cleared outputs for execution on Katana.
+
+Nine focused tests check exact inner recovery, objective normalisation,
+replication invariance, zero-weight exclusion, equal-point outer equivalence,
+degenerate geometry, interpolation boundaries and explicit outer failures.
+Run `python -m unittest test_platform_weighting -v` or the full suite above.
