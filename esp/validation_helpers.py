@@ -141,7 +141,7 @@ def fit_case(backend, case, uv, radius, rc_limit=100000., *,
     This is a diagnostic heuristic, not a replacement optimiser status API.
     """
     xy = case["xy"]
-    result = dict(status="unattempted", valid=False, warnings="", n_outer=len(xy),
+    result = dict(status="unattempted", valid=False, inner_valid=False, warnings="", n_outer=len(xy),
                   n_core=0, n_outer_retained=0)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -185,6 +185,16 @@ def fit_case(backend, case, uv, radius, rc_limit=100000., *,
             if om == 0:
                 result["status"] = "zero_rotation"
                 return result
+            # Preserve the completed inner fit even if the subsequent outer fit fails.
+            alpha, angle = geometry(q)
+            distance = np.linalg.norm(np.array([xc, yc]) - case['centre'])
+            result.update(inner_valid=True, xc_m=xc, yc_m=yc, inner_Omega=om,
+                          inner_vorticity=om * np.trace(q),
+                          centre_error_km=distance / 1000,
+                          centre_error_pct=100 * distance / case['rc'],
+                          alpha=alpha, angle_deg=angle,
+                          alpha_error_pct=100 * (alpha / case['alpha'] - 1) if case['name'] != 'SOLO' else np.nan,
+                          angle_error_deg=axial_error(angle, case['angle']) if case['name'] != 'SOLO' else np.nan)
             # Match the backend's tangential projection, geometry normalisation,
             # rotation-sign filter and peak-based Rc initialisation.
             r = xy - [xc, yc]

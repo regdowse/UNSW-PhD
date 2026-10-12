@@ -104,8 +104,9 @@ def plot_test(results):
             group=group.sort_values('departure' if profile else 'strength')
             x=group['departure' if profile else 'strength']
             for ax,(metric,title) in zip(axes[row],metrics):
-                # Invalid attempts remain at their x values as gaps, not connected across.
-                y=group[metric].where(group.valid) if metric in group else np.full(len(group),np.nan)
+                # Centre/geometry survive an outer failure; outer-dependent metrics do not.
+                mask = group.inner_valid if metric in ('centre_error_km', 'alpha_error_pct', 'angle_error_deg') else group.valid
+                y=group[metric].where(mask) if metric in group else np.full(len(group),np.nan)
                 ax.plot(x,y,'o-',ms=4,color=colours[method],label=method)
                 ax.set_title(title); ax.grid(alpha=.2)
                 ax.set_xlabel('Profile departure 1/p (0 = Gaussian)' if profile else
@@ -114,5 +115,5 @@ def plot_test(results):
             axes[row,0].set_ylabel(f'Orientation {orientation:g}°')
     axes[0,-1].legend(fontsize=8)
     failures=int((~results.valid).sum())
-    fig.suptitle(f"{results.test.iloc[0].capitalize()}: {failures}/{len(results)} fits failed diagnostics (see table); noise-free",fontsize=11)
+    fig.suptitle(f"{results.test.iloc[0].capitalize()}: {failures}/{len(results)} full fits failed diagnostics; valid inner centres retained (see table); noise-free",fontsize=11)
     return fig

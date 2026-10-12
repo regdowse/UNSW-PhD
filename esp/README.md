@@ -108,3 +108,14 @@ non-elliptical asymmetry, radial flow and temporal evolution are not included.
 check the Gaussian limit, peak radius and centre gradient, nondivergence, shear
 curl and orientation, zero-background controls, and exclusion of fitting locations
 from the evaluation grid. Run them with `python -m unittest test_departure_helpers -v`.
+
+### Stage-specific diagnostics (notebook 02)
+
+The user-selected `RC_LIMIT_M=1_000_000` m is retained. No comparison of radius
+limits is run. `inner_valid` records a completed finite, positive-definite,
+unit-determinant inner fit; `valid` records full-fit acceptance. Neither flag
+is an accuracy criterion or a complete optimiser-convergence certificate.
+Centre/geometry scores remain available after an outer-fit rejection, whereas
+refined vorticity, radius and velocity scores require the accepted outer fit.
+Notebook 02 plots use the appropriate flag for each metric. Existing notebook 01
+ensemble summaries continue to use full-fit validity, as before.
