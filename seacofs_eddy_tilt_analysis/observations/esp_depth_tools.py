@@ -1,8 +1,9 @@
 """Matched ADCP depth applications of the ESP SOLO and LATTE methods.
 
-Inner estimators come from the user's ESP backend. The Gaussian outer fit uses
-the same objective/sign filter, but reports failed optimisation instead of
-silently returning its initial guess. Positions/radii are metres internally.
+Inner estimators default to the user's ESP backend. An explicit SOLO option
+uses the scaled local crossing initialisation from the ESP revision experiments.
+The Gaussian outer fit uses the backend objective/sign filter, but reports failed
+optimisation instead of silently returning its seed. Positions/radii are metres.
 """
 from pathlib import Path
 import hashlib
@@ -80,6 +81,55 @@ def _spread(x, y):
     return float(s[1] / s[0]) if len(s) > 1 and s[0] > 0 else 0.
 
 
+def _solo_local(l, vt, vn, centre_guess, search_half_width, core_thresh):
+    """SOLO equations with a scaled, bounded crossing fit for short transects.
+
+    Same local-initialisation variant used in UNSW-PhD/esp/local_estimators.py.
+    The zero crossing must be observed and lie inside the search window.
+    """
+    l, vt, vn = [np.asarray(a, float) for a in (l, vt, vn)]
+    order = np.argsort(l)
+    l, vt, vn = [a[order] for a in (l, vt, vn)]
+    mask = abs(l-centre_guess) <= search_half_width
+    x, y = l[mask], vn[mask]
+    if len(x) < 4:
+        raise ValueError("insufficient_search")
+    crossings = np.flatnonzero((y[:-1]*y[1:] <= 0) & (y[:-1] != y[1:]))
+    if not len(crossings):
+        raise ValueError("no_supported_solo_crossing")
+    roots = x[crossings] - y[crossings]*np.diff(x)[crossings]/np.diff(y)[crossings]
+    guess = roots[np.argmin(abs(roots-centre_guess))]
+    scale = search_half_width
+
+    def fit(mask, guess):
+        if mask.sum() < 4 or np.unique(l[mask]).size < 4:
+            raise ValueError("insufficient_core")
+        xx, yy = (l[mask]-centre_guess)/scale, vn[mask]
+        lower, upper = max(xx.min(), -1.), min(xx.max(), 1.)
+        if upper <= lower:
+            raise ValueError("no_search_overlap")
+        z0 = np.clip((guess-centre_guess)/scale, lower+1e-10, upper-1e-10)
+        dz = xx-z0
+        c, d = np.linalg.lstsq(np.c_[dz, dz**3], yy, rcond=None)[0]
+        def model(z, root, c, d):
+            delta = z-root
+            return c*delta+d*delta**3
+        p, _ = curve_fit(model, xx, yy, p0=[z0,c,d],
+                         bounds=([lower,-np.inf,-np.inf],[upper,np.inf,np.inf]), maxfev=10000)
+        if min(p[0]-lower, upper-p[0]) <= 1e-7:
+            raise ValueError("solo_crossing_at_bound")
+        return centre_guess+scale*p[0], p[1]/scale
+
+    initial, _ = fit(mask, guess)
+    core = abs(l-initial) <= core_thresh
+    l0, c = fit(core, initial)
+    if not np.isfinite(c) or abs(c) < np.finfo(float).eps:
+        raise ValueError("solo_zero_gradient")
+    delta = (l[core]-l0)/scale
+    a, _ = np.linalg.lstsq(np.c_[np.ones(core.sum()), delta**2], vt[core], rcond=None)[0]
+    return l0, a/c, 2*c, np.eye(2), c
+
+
 def _outer(backend, x, y, u, v, centre, q, omega, radius_limit, min_points):
     rho = _rho(x, y, centre, q)
     r = np.column_stack([x - centre[0], y - centre[1]])
@@ -123,7 +173,7 @@ def _outer(backend, x, y, u, v, centre, q, omega, radius_limit, min_points):
 def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000.,
                search_half_width=60000., max_centre_step=35000., radius_limit=100000.,
                min_core_points=8, min_outer_points=12, expected_sign=1,
-               require_peak_bracket=True, depth_levels=None):
+               require_peak_bracket=True, depth_levels=None, solo_initialisation="backend"):
     """Follow accepted inner centres downwards; failed depths do not update the seed.
 
     Both methods start at the specified geographic origin (x=y=0). SOLO uses a
@@ -134,6 +184,8 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
     method = method.upper()
     if method not in ("LATTE", "SOLO"):
         raise ValueError("method must be LATTE or SOLO")
+    if solo_initialisation not in ("backend", "local"):
+        raise ValueError("solo_initialisation must be backend or local")
     if min(core_radius, outer_radius, search_half_width, max_centre_step, radius_limit) <= 0:
         raise ValueError("All radii and search distances must be positive.")
     if expected_sign not in (-1, 1):
@@ -198,9 +250,14 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                 order = np.argsort(along[search])
                 with warnings.catch_warnings(record=True) as caught:
                     warnings.simplefilter("always", OptimizeWarning)
-                    l0, r0, w, q, om = backend.solo(
-                        along[search][order], vt[search][order], vn[search][order],
-                        core_thresh=core_radius)
+                    if solo_initialisation == "local":
+                        l0, r0, w, q, om = _solo_local(
+                            along[search][order], vt[search][order], vn[search][order],
+                            seed, search_half_width, core_radius)
+                    else:
+                        l0, r0, w, q, om = backend.solo(
+                            along[search][order], vt[search][order], vn[search][order],
+                            core_thresh=core_radius)
                 rec["warnings"] = "; ".join(str(a.message) for a in caught)
                 if not np.isfinite([l0, r0, w, om]).all():
                     raise ValueError("nonfinite_inner")
@@ -397,13 +454,13 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
 
 def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     valid = results.loc[results.valid]
-    if valid.empty:
+    if not results.inner_valid.any():
         return _no_fit(f"{results.method.iloc[0]} · 3D reconstruction")
     fig = plt.figure(figsize=(9, 7), layout="constrained")
     ax = fig.add_subplot(111, projection="3d")
     norm = Normalize(results.depth_m.min(), results.depth_m.max())
     cmap = plt.colormaps["viridis"]
-    selected = valid.iloc[np.unique(np.linspace(0, len(valid)-1, min(9, len(valid))).astype(int))]
+    selected = valid.iloc[np.unique(np.linspace(0, len(valid)-1, min(9, len(valid))).astype(int))] if len(valid) else valid
     axis = np.linspace(-half_width_km, half_width_km, 11)
     xx, yy = np.meshgrid(axis*1000, axis*1000)
     for _, row in selected.iterrows():
@@ -415,14 +472,99 @@ def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
         inside = _rho(xx.ravel(), yy.ravel(), (row.xc_m, row.yc_m), _q(row)).reshape(xx.shape) <= min(outer_extent(row), half_width_km*1000)
         ax.quiver(xx[inside]/1000, yy[inside]/1000, np.full(inside.sum(), row.depth_m),
                   12*u[inside], 12*v[inside], np.zeros(inside.sum()), color=color, alpha=.45, arrow_length_ratio=.3)
-    ax.plot(results.xc_m.where(results.valid)/1000, results.yc_m.where(results.valid)/1000, results.depth_m, "k.-", label="Fitted centreline")
+    ax.plot(results.xc_m.where(results.inner_valid)/1000, results.yc_m.where(results.inner_valid)/1000, results.depth_m, "k.-", label="Inner-fit centreline")
     ax.set(xlim=(-half_width_km,half_width_km), ylim=(-half_width_km,half_width_km),
            zlim=(results.depth_m.max(), results.depth_m.min()), xlabel="East (km)", ylabel="North (km)", zlabel="Depth (m)")
     ax.set_box_aspect((1,1,1.1))
     ax.view_init(elev=24, azim=-55)
-    ax.set_title(f"{results.method.iloc[0]} · reconstructed flow and core contours\nVertical scale exaggerated; arrows: 12 km per 1 m/s")
+    detail = "No accepted Gaussian contours; inner centreline only" if valid.empty else "Contours only at accepted Gaussian fits; arrows: 12 km per 1 m/s"
+    ax.set_title(f"{results.method.iloc[0]} · depth structure (vertical scale exaggerated)\n{detail}", fontsize=11)
     ax.legend()
     fig.colorbar(plt.cm.ScalarMappable(norm=norm,cmap=cmap), ax=ax, shrink=.55, label="Depth (m)", pad=.1)
+    return fig
+
+
+def load_study(info_path, eddy):
+    """Read the single source of transect times/centres from the info.md table."""
+    text = Path(info_path).read_text()
+    marker = "Data path: `"
+    if marker not in text:
+        raise ValueError("info.md needs a Data path line")
+    data_path = Path(text.split(marker, 1)[1].split("`", 1)[0])
+    header = "| ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |"
+    if header not in text:
+        raise ValueError("Transect table header not found in info.md")
+    rows = []
+    for line in text.split(header, 1)[1].splitlines():
+        if not line.strip():
+            if rows:
+                break
+            continue
+        if not line.startswith("|"):
+            break
+        cells = [v.strip() for v in line.strip().strip("|").split("|")]
+        if set("".join(cells)) <= {"-", ":", " "}:
+            continue
+        if len(cells) != 6:
+            raise ValueError("Each transect row must have six fields")
+        ident, name, start, end, lon, lat = cells
+        if pd.Timestamp(start).tzinfo is None or pd.Timestamp(end).tzinfo is None:
+            raise ValueError("Transect times must include UTC timezone")
+        if pd.Timestamp(end) <= pd.Timestamp(start):
+            raise ValueError("Invalid transect interval")
+        rows.append(dict(id=ident, eddy=name, start=start, end=end,
+                         lon=float(lon), lat=float(lat)))
+    all_rows = pd.DataFrame(rows)
+    if all_rows.empty or all_rows.id.duplicated().any():
+        raise ValueError("Transect IDs must be unique")
+    catalog = all_rows.loc[all_rows.eddy.str.lower().eq(eddy.lower())].set_index("id")
+    if catalog.empty:
+        raise ValueError(f"No transects for {eddy}")
+    return data_path, catalog
+
+
+def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None):
+    """Independent depth fits per crossing: never carry a centre between times."""
+    runs, summary, tables = {}, [], []
+    for ident, spec in catalog.iterrows():
+        data, coverage, audit = load_observations(data_path, spec.start, spec.end,
+                                                 (spec.lon, spec.lat), min_attendance)
+        results, samples = fit_depths(data, backend, "SOLO", depth_levels=coverage.index,
+                                     **fit_settings)
+        results["transect_id"] = ident
+        results["xc_lon"] = spec.lon + results.xc_m/(111000*np.cos(np.deg2rad(spec.lat)))
+        results["yc_lat"] = spec.lat + results.yc_m/111000
+        results["start_utc"], results["end_utc"] = audit["start_utc"], audit["end_utc"]
+        runs[ident] = dict(data=data, coverage=coverage, audit=audit, results=results, samples=samples)
+        good = results.inner_valid
+        full = results.valid
+        summary.append(dict(transect=ident, times=data.time.nunique(), bins=len(results),
+                            inner_fits=int(good.sum()), gaussian_fits=int(full.sum()),
+                            inner_min_m=results.loc[good, "depth_m"].min(),
+                            inner_max_m=results.loc[good, "depth_m"].max(),
+                            gaussian_max_m=results.loc[full, "depth_m"].max(),
+                            surface_status=results.iloc[0].status))
+        tables.append(results)
+    return runs, pd.DataFrame(summary).set_index("transect"), pd.concat(tables, ignore_index=True)
+
+
+def plot_transect_comparison(runs, eddy):
+    """Show depth structure per crossing relative to its own shallowest inner fit."""
+    fig, axes = plt.subplots(1, 3, figsize=(13, 5), sharey=True, layout="constrained")
+    for ident, run in runs.items():
+        r = run["results"]
+        ref = r.reference_depth_m.iloc[0] if "reference_depth_m" in r else np.nan
+        axes[0].plot(r.offset_east_km, r.depth_m, ".-", ms=3, label=f"{ident} (ref {ref:g} m)")
+        axes[1].plot(r.offset_north_km, r.depth_m, ".-", ms=3)
+        axes[2].plot(r.Rc_m.where(r.valid)/1000, r.depth_m, ".-", ms=3)
+    axes[0].set(ylabel="Depth (m)", xlabel="East centre offset (km)")
+    axes[1].set_xlabel("North centre offset (km)")
+    axes[2].set_xlabel("Accepted Gaussian Rc (km)")
+    axes[0].invert_yaxis()
+    axes[0].legend(fontsize=8)
+    for ax in axes:
+        ax.grid(alpha=.2)
+    fig.suptitle(f"{eddy} · independent SOLO profiles for each crossing\nOffsets reference each crossing's shallowest accepted centre; no averaging across times")
     return fig
 
 
