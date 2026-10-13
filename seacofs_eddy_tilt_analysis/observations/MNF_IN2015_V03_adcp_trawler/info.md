@@ -8,23 +8,27 @@ Data path: `/srv/scratch/z5297792/tilt_observation_data/MNF_IN2015_V03_adcp_traw
 
 ## Data and time coverage
 
-- Requested export: 2015-06-04 00:00 UTC to 2015-06-12 00:00 UTC.
-- CSV inspected on 2026-10-13: 83,332 rows; actual timestamps
-  2015-06-04 00:01:22 UTC to 2015-06-11 21:21:43 UTC.
-- Instrument/file: `in2015_v03_os75nb.nc`; 50 depth bins, 30.4-814.4 m,
-  at 16 m spacing. Coverage varies by time and depth. The shallowest bin is
-  not the sea surface and the deepest observation does not establish the eddy bottom.
+- Expanded export inspected on 2026-10-13: 112,412 rows; timestamps
+  2015-06-04 00:01:22 UTC to 2015-06-17 00:57:38 UTC.
+- OS75 (`in2015_v03_os75nb.nc`): 83,332 rows; 50 depth bins from 30.4
+  to 814.4 m at 16 m spacing. OS150 (`in2015_v03_os150nb.nc`): 29,080
+  rows; 40 depth bins from 18.5 to 330.5 m at 8 m spacing. The available
+  bins within an individual crossing can span less than the instrument range.
+  The shallowest bin is not the sea surface and the deepest observation does
+  not establish the eddy bottom.
 - Columns used: `Start (UTC)`, `Mean Lon`, `Mean Lat`, `Depth`, `U (m/sec)`,
   `V (m/sec)`. Preserve SI units and UTC. The audit reports missing `Avg QC`
   and zero bin attendance; no quality status is inferred from blank fields.
-- Eddy-level envelopes supplied by the user: Murphy, 5 June 02:00-17:30 UTC;
-  Freddy, 8 June 22:45 to 10 June 03:15 UTC. These envelopes are not single
-  straight transects and must not be pooled into one SOLO fit.
+- The original eddy envelopes supplied by the user are Murphy, 5 June
+  02:00-17:30 UTC, and Freddy visit 1, 8 June 22:45 to 10 June 03:15 UTC.
+  The expanded export now also covers Freddy on 12 and 16 June. Each window
+  below is fitted separately; the broader envelopes are not straight transects.
 
 ## Transects (single source for both notebooks)
 
-Windows retain the user's supplied times, checked against the midtimes and
-sampling durations in Roughan et al. (2017), Table 4 (PDF page 14, journal p.2507).
+The original windows retain the user's supplied times. F7-F9 follow the
+midtimes and sampling durations in Roughan et al. (2017), Table 4 (PDF page 14,
+journal p.2507).
 Coordinates below are the published MOCA centre estimates and serve only as
 editable initial guesses / coordinate origins, not as constraints or validation
 truth. Each crossing starts independently at its own origin.
@@ -39,10 +43,18 @@ truth. Each crossing starts independently at its own origin.
 | F4 | Freddy | 2015-06-09T13:45:00Z | 2015-06-09T14:45:00Z | 153.2487 | -32.6099 |
 | F5 | Freddy | 2015-06-09T21:00:00Z | 2015-06-09T22:30:00Z | 153.2435 | -32.6550 |
 | F6 | Freddy | 2015-06-10T02:15:00Z | 2015-06-10T03:15:00Z | 153.2461 | -32.6425 |
+| F7 | Freddy | 2015-06-12T15:30:00Z | 2015-06-12T17:00:00Z | 153.4448 | -32.8224 |
+| F8 | Freddy | 2015-06-16T15:30:00Z | 2015-06-16T16:30:00Z | 153.9855 | -33.2769 |
+| F9 | Freddy | 2015-06-16T23:00:00Z | 2015-06-17T00:00:00Z | 153.8311 | -33.2702 |
 
-Table 4 also lists Freddy on 12 June at 16:15 UTC (1.5 h window, hence
-15:30-17:00 UTC), plus two crossings on 16 June. These are outside this export
-and are intentionally excluded. The first Freddy window crosses midnight.
+F7 is the 12 June continuation of Freddy visit 1; F8 and F9 are visit 2
+on 16 June. All three are now present in the export and use the OS150
+instrument. The first and last Freddy windows cross midnight. Table 4
+midtimes/durations define these windows; the new CSV has 18, 12 and 12
+observation times within F7, F8 and F9 respectively. Within the windows,
+available depth levels span 34.5-250.5 m (F7), 18.5-290.5 m (F8), and
+18.5-290.5 m (F9). Keep the visits distinct when interpreting centre
+movement or vertical structure.
 
 ## Method and interpretation
 

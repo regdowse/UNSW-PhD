@@ -484,16 +484,56 @@ def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     return fig
 
 
+# def load_study(info_path, eddy):
+#     """Read the single source of transect times/centres from the info.md table."""
+#     text = Path(info_path).read_text()
+#     marker = "Data path: `"
+#     if marker not in text:
+#         raise ValueError("info.md needs a Data path line")
+#     data_path = Path(text.split(marker, 1)[1].split("`", 1)[0])
+#     header = "| ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |"
+#     if header not in text:
+#         raise ValueError("Transect table header not found in info.md")
+#     rows = []
+#     for line in text.split(header, 1)[1].splitlines():
+#         if not line.strip():
+#             if rows:
+#                 break
+#             continue
+#         if not line.startswith("|"):
+#             break
+#         cells = [v.strip() for v in line.strip().strip("|").split("|")]
+#         if set("".join(cells)) <= {"-", ":", " "}:
+#             continue
+#         if len(cells) != 6:
+#             raise ValueError("Each transect row must have six fields")
+#         ident, name, start, end, lon, lat = cells
+#         if pd.Timestamp(start).tzinfo is None or pd.Timestamp(end).tzinfo is None:
+#             raise ValueError("Transect times must include UTC timezone")
+#         if pd.Timestamp(end) <= pd.Timestamp(start):
+#             raise ValueError("Invalid transect interval")
+#         rows.append(dict(id=ident, eddy=name, start=start, end=end,
+#                          lon=float(lon), lat=float(lat)))
+#     all_rows = pd.DataFrame(rows)
+#     if all_rows.empty or all_rows.id.duplicated().any():
+#         raise ValueError("Transect IDs must be unique")
+#     catalog = all_rows.loc[all_rows.eddy.str.lower().eq(eddy.lower())].set_index("id")
+#     if catalog.empty:
+#         raise ValueError(f"No transects for {eddy}")
+#     return data_path, catalog
 def load_study(info_path, eddy):
-    """Read the single source of transect times/centres from the info.md table."""
+    """Load transect metadata and the full, unfiltered ADCP dataset."""
     text = Path(info_path).read_text()
     marker = "Data path: `"
     if marker not in text:
         raise ValueError("info.md needs a Data path line")
+
     data_path = Path(text.split(marker, 1)[1].split("`", 1)[0])
+
     header = "| ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |"
     if header not in text:
         raise ValueError("Transect table header not found in info.md")
+
     rows = []
     for line in text.split(header, 1)[1].splitlines():
         if not line.strip():
@@ -502,26 +542,52 @@ def load_study(info_path, eddy):
             continue
         if not line.startswith("|"):
             break
+
         cells = [v.strip() for v in line.strip().strip("|").split("|")]
         if set("".join(cells)) <= {"-", ":", " "}:
             continue
         if len(cells) != 6:
             raise ValueError("Each transect row must have six fields")
+
         ident, name, start, end, lon, lat = cells
+
         if pd.Timestamp(start).tzinfo is None or pd.Timestamp(end).tzinfo is None:
             raise ValueError("Transect times must include UTC timezone")
         if pd.Timestamp(end) <= pd.Timestamp(start):
             raise ValueError("Invalid transect interval")
-        rows.append(dict(id=ident, eddy=name, start=start, end=end,
-                         lon=float(lon), lat=float(lat)))
+
+        rows.append(dict(
+            id=ident, eddy=name, start=start, end=end,
+            lon=float(lon), lat=float(lat)
+        ))
+
     all_rows = pd.DataFrame(rows)
+
     if all_rows.empty or all_rows.id.duplicated().any():
         raise ValueError("Transect IDs must be unique")
-    catalog = all_rows.loc[all_rows.eddy.str.lower().eq(eddy.lower())].set_index("id")
+
+    catalog = all_rows.loc[
+        all_rows.eddy.str.lower().eq(eddy.lower())
+    ].set_index("id")
+
     if catalog.empty:
         raise ValueError(f"No transects for {eddy}")
-    return data_path, catalog
 
+    # Load full ADCP dataset without filtering by transect times
+    adcp = pd.read_csv(data_path)
+    adcp = adcp.rename(columns={
+        'U Ship (m/sec)': 'u',
+        'V Ship (m/sec)': 'v',
+        'Mean Lon': 'lon',
+        'Mean Lat': 'lat'
+    })
+    if eddy == 'Freddy':
+        adcp = adcp[(adcp.lat > -32.9)&(adcp.lat < -32.3)&(adcp.lon > 152.8)&(adcp.lon < 153.5)].copy()
+    elif eddy == 'Murphy':
+        adcp = adcp[(adcp.lat > -29.8)&(adcp.lat < -27.6)&(adcp.lon > 153.5)&(adcp.lon < 156.0)].copy()
+    
+    return data_path, catalog, adcp
+    
 
 def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None):
     """Independent depth fits per crossing: never carry a centre between times."""
