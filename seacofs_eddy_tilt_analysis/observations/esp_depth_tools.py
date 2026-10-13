@@ -575,11 +575,14 @@ def load_study(info_path, eddy):
 
     # Load full ADCP dataset without filtering by transect times
     adcp = pd.read_csv(data_path)
+    adcp.drop(columns=['Survey', 'Datafile', 'Project', 'MARLIN', 'MARLIN UUID', 'Averaging Period (sec)',
+                   'U Ship (m/sec)', 'V Ship (m/sec)', 'Bottom Depth', 'Avg QC'], inplace=True)
     adcp = adcp.rename(columns={
-        'U Ship (m/sec)': 'u',
-        'V Ship (m/sec)': 'v',
+        'U (m/sec)': 'u',
+        'V (m/sec)': 'v',
         'Mean Lon': 'lon',
-        'Mean Lat': 'lat'
+        'Mean Lat': 'lat',
+        'Start (UTC)': 'time'
     })
     if eddy == 'Freddy':
         adcp = adcp[(adcp.lat > -32.9)&(adcp.lat < -32.3)&(adcp.lon > 152.8)&(adcp.lon < 153.5)].copy()
