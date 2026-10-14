@@ -228,3 +228,41 @@ drifters, inner-only reporting, time boundaries, lagged-Q selection and radial
 support. Local reference-data execution reproduced the released illustrated
 centre and radius within 0.1 m; this does not certify scientific accuracy or a
 changed Katana backend. Run `python -m unittest test_drifter_weighting -v`.
+
+
+## Notebook 05: drifter window sensitivity
+
+Open `05_drifter_window_sensitivity.ipynb`, restart and run all cells. It reports
+**days with an inner-core result out of common comparison days**, parameter time
+series, and matched-date differences from the current 48-hour window. Total
+window durations default to 12, 24, 48, 72 and 96 hours (48 means +/-24 hours).
+`SAVE_OUTPUTS=False` displays only. True writes three CSVs, one figure and
+provenance under `results/05_drifter_window_sensitivity/`.
+
+Compare drifter only, original equal-per-observation combined, and combined
+platform-normalised weighting with fixed satellite multiplier 0.1. No weight
+sweep or outer fit. Original drifter-only fitting uses all temporal-window
+observations; combined fitting uses the original 35 km two-pass spatial selection
+with lagged Q. Cross-configuration differences therefore include spatial-selection
+effects. Within each configuration, only temporal window length changes.
+
+Use the same daily 06 UTC dates for every case, trimming the largest half-window
+at both ends of the available drifter archive. Defaults yield 96 dates from
+22 October 2023 to 25 January 2024. This is an interior-period comparison, not
+coverage of the trimmed archive endpoints. Each combined trajectory starts
+at the same supplied approximate centre and identity Q, then uses its own
+previous fit. It is not a replay of the earlier original full-period trajectory.
+
+Stop a run at its first rejected inner fit, without restart or borrowing another
+track's centre. Subsequent rows are explicitly not attempted, rather than
+additional failed fits. There is no longest-track or percentage metric. Counts
+require finite valid elliptical geometry, full design rank and expected rotation
+sign; combined runs retain the original 100 km between-pass refinement limit.
+No accuracy or new inter-day-jump cutoff is imposed. Counts do not certify eddy
+identity or parameter accuracy; large finite excursions remain visible.
+
+`drifter_windows.py` reuses the original backend and notebook-4 data preparation.
+Five focused tests verify common dates/total-duration semantics, stopping without
+restart, full count denominators, matched-date differences, missing references
+and rank rejection. Run `python -m unittest test_drifter_windows -v`. Existing
+backend/helper files and saved notebook outputs are not modified.
