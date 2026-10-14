@@ -109,12 +109,16 @@ def load_observations(adcp_path, satellite_path, *, start, end, depth=37.,
     return observations,provenance
 
 
-def platform_weights(platforms, satellite_weight):
-    """Per-point objective weights 1/NA, lambda/NS; counts are stage-specific."""
+def platform_weights(platforms, satellite_weight, *, reference_platform='ADCP'):
+    """Per-point objective weights 1/N_reference, lambda/N_satellite.
+
+    ADCP remains the default; notebook 04 explicitly passes Drifter.
+    Counts are stage-specific, not effective independent sample sizes.
+    """
     if not np.isfinite(satellite_weight) or satellite_weight<0:raise ValueError('Weights must be finite and nonnegative.')
     labels=np.asarray(platforms);w=np.zeros(len(labels))
-    if not np.isin(labels,['ADCP','Satellite']).all():raise ValueError('Unknown platform label.')
-    for name,mass in [('ADCP',1.),('Satellite',satellite_weight)]:
+    if not np.isin(labels,[reference_platform,'Satellite']).all():raise ValueError('Unknown platform label.')
+    for name,mass in [(reference_platform,1.),('Satellite',satellite_weight)]:
         m=labels==name
         if m.any():w[m]=mass/m.sum()
     return w
@@ -130,14 +134,14 @@ def checked_inner(xc,yc,q,omega):
     return dict(xc=float(xc),yc=float(yc),Q=q,Omega=float(omega))
 
 
-def weighted_inner(data, satellite_weight):
+def weighted_inner(data, satellite_weight, *, reference_platform='ADCP'):
     """Exact weighted affine fit of the SAME divergence-free linear-core model.
 
     u=a+g11*x+g12*y; v=b+g21*x-g11*y. Solve five linear coefficients,
     then recover centre and Omega,Q. Coordinates are centred/scaled to km only
     internally. No free background is added: the affine intercept encodes centre.
     """
-    w=platform_weights(data.platform,satellite_weight);active=w>0
+    w=platform_weights(data.platform,satellite_weight,reference_platform=reference_platform);active=w>0
     d=data.loc[active];w=w[active]
     if len(d)<3:raise FitError('insufficient_inner')
     origin=d[['x','y']].mean().to_numpy();xy=(d[['x','y']].to_numpy()-origin)/1000.
@@ -178,10 +182,10 @@ def outer_samples(data,inner):
     return data.loc[keep].copy(),r2[keep],vt[keep]
 
 
-def weighted_outer(data,inner,satellite_weight,rc_limit,per_observation=False):
+def weighted_outer(data,inner,satellite_weight,rc_limit,per_observation=False, *, reference_platform='ADCP'):
     """Original Gaussian profile with explicit local platform weights/statuses."""
     kept,r2,vt=outer_samples(data,inner)
-    w=np.ones(len(kept)) if per_observation else platform_weights(kept.platform,satellite_weight)
+    w=np.ones(len(kept)) if per_observation else platform_weights(kept.platform,satellite_weight,reference_platform=reference_platform)
     active=w>0;kept=kept.loc[active];r2,vt,w=r2[active],vt[active],w[active]
     result=dict(status='insufficient_outer',kept=kept,Rc=np.nan,Omega=np.nan,psi0=np.nan)
     if len(kept)<3 or np.unique(r2).size<3:return result

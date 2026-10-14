@@ -179,3 +179,52 @@ Nine focused tests check exact inner recovery, objective normalisation,
 replication invariance, zero-weight exclusion, equal-point outer equivalence,
 degenerate geometry, interpolation boundaries and explicit outer failures.
 Run `python -m unittest test_platform_weighting -v` or the full suite above.
+
+
+## Notebook 04: drifter–satellite complementary sampling
+
+Open `04_drifter_satellite_weighting.ipynb`, restart the kernel and run all cells.
+Defaults select 29 October 2023 at 06 UTC, the day illustrated at index 10 in
+`LATTE_app2_multiplatform_data.ipynb`. Read `ESP_ROOT/data/drifter_data.nc` and
+`satellite_data.nc`, using netCDF4. Paths, date, inclusive +/-24-hour window,
+fitting radii, satellite weights and `SAVE_OUTPUTS` are at the top.
+
+The notebook replays the original combined daily trajectory through that day
+because selection depends on the previous day's centre/ellipse. Both inner
+passes retain the previous day's Q, matching the original code. A satellite-only
+trajectory follows that same rule independently. For a controlled inner
+comparison, the drifter-only reference uses the selected 06 UTC window and the
+fixed combined-core drifter subset, rather than the original standalone drifter
+series's 12 UTC windows and unrestricted spatial selection. At the default day,
+18 drifter observations are available and 9 enter that fixed inner subset.
+
+Compare drifter-only inner, satellite-only full, original combined and weighted
+combined fits. Defaults exclude satellite from the inner fit and give equal
+platform mean-error terms outside. Sweep each satellite weight over 0, 0.1, 0.3
+and 1 with the other fixed. Weighted selections remain fixed; the outer sign
+filter remains geometry-dependent. The outer-zero scenario is diagnostic only:
+a finite radius does not establish outer support. Unsupported fitted speed peaks
+are marked in the radius plots. No automatic selection of an optimal weight.
+
+The sampling map and radial distributions use the original combined ellipse
+for both platforms. The fixed-core comparison and full Gaussian comparison
+have separate residual tables; both overlap fitting data and are descriptive.
+Sample counts, active objective mass, time/depth support and number of distinct
+drifters are reported per fit/stage. Depths are nominal (drifter 15 m, satellite
+surface). Error variances, covariance and effective sample size are not inferred;
+ageostrophic flow, vertical shear and temporal evolution remain limitations.
+
+`drifter_weighting.py` supplies original-example loading/selection, comparison
+and plots. It reuses the notebook-3 inner/outer solvers with an explicit
+`reference_platform='Drifter'`; the default remains ADCP so notebook 3's behaviour
+is unchanged. All original inner reference fits call the external backend;
+weighted variants remain local. Formulation checks run against that backend.
+
+`SAVE_OUTPUTS=True` writes fresh CSV tables, membership, three figures and
+provenance under `results/04_drifter_satellite_weighting/`. False writes no result
+files. Notebook outputs are cleared for the first Katana run. Eight focused tests
+cover reference-label equivalence, fixed masks, outer/inner separation, missing
+drifters, inner-only reporting, time boundaries, lagged-Q selection and radial
+support. Local reference-data execution reproduced the released illustrated
+centre and radius within 0.1 m; this does not certify scientific accuracy or a
+changed Katana backend. Run `python -m unittest test_drifter_weighting -v`.
