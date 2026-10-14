@@ -1,9 +1,14 @@
 # IN2015_V03: Murphy and Freddy
 
 Apply SOLO to each supplied crossing independently in `murphy_solo.ipynb` and
-`freddy_solo.ipynb`. `murphy_latte.ipynb` starts from the selected Murphy SOLO
-surface-bin inner centre, then fits all ADCP observations in the Murphy regional
-subset at each depth; it does not restrict LATTE to the SOLO crossing windows.
+`freddy_solo.ipynb`. `murphy_latte.ipynb` and `freddy_latte.ipynb` each start
+from a selected SOLO crossing's shallowest accepted inner centre, then fit all
+ADCP observations in the corresponding regional subset at each depth; LATTE is
+not restricted to the SOLO crossing windows. Freddy LATTE separates the early
+(F1-F7) and later (F8-F9) geographic footprints, but applies no time filter
+within the chosen footprint. Its early footprint contains both OS75 and OS150
+depth grids from different dates, so a centreline can mix temporal and vertical
+changes.
 The common implementation lives in `../esp_depth_tools.py`. Notebook exports
 go to an `outputs/` directory beside the CSV on scratch.
 
