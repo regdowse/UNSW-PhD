@@ -25,16 +25,29 @@ def load_backend(path):
     return backend, {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def load_observations(path, start, end, origin, min_attendance=None):
-    """Keep original depth bins; no time averaging, spatial interpolation or QC inference."""
+def load_observations(path, start, end, origin, min_attendance=None, bounds=None):
+    """Keep original depth bins; optional UTC/region selection, no interpolation or QC inference.
+
+    Pass start=end=None to use every observation in the supplied spatial region.
+    bounds is (west, east, south, north) in degrees.
+    """
     raw = pd.read_csv(path)
     raw["time"] = pd.to_datetime(raw["Start (UTC)"], utc=True)
-    selected = raw.loc[raw.time.between(pd.Timestamp(start), pd.Timestamp(end))].copy()
+    if (start is None) != (end is None):
+        raise ValueError("start and end must both be set or both be None")
+    selected = (raw if start is None else
+                raw.loc[raw.time.between(pd.Timestamp(start), pd.Timestamp(end))]).copy()
     rename = {"Mean Lon": "lon", "Mean Lat": "lat", "Depth": "depth",
               "U (m/sec)": "u", "V (m/sec)": "v"}
     selected = selected.rename(columns=rename)
     for c in rename.values():
         selected[c] = pd.to_numeric(selected[c], errors="coerce")
+    if bounds is not None:
+        west, east, south, north = bounds
+        if not (west < east and south < north):
+            raise ValueError("bounds must be (west, east, south, north)")
+        selected = selected.loc[selected.lon.between(west, east) &
+                                selected.lat.between(south, north)].copy()
     selected["attendance"] = pd.to_numeric(selected["Bin Attendance %"], errors="coerce")
     finite = np.isfinite(selected[["lon", "lat", "depth", "u", "v"]]).all(axis=1)
     keep = finite.copy()
@@ -56,7 +69,8 @@ def load_observations(path, start, end, origin, min_attendance=None):
              "end_utc": str(data.time.max()), "depth_range_m": [data.depth.min(), data.depth.max()],
              "missing_avg_qc": int(selected["Avg QC"].isna().sum()),
              "zero_attendance_rows": int(selected.attendance.eq(0).sum()),
-             "min_attendance": min_attendance, "origin_lon_lat": origin}
+             "min_attendance": min_attendance, "origin_lon_lat": origin,
+             "bounds_lon_lat": bounds}
     return data, coverage, audit
 
 
@@ -424,13 +438,43 @@ def _no_fit(title, message="No accepted Gaussian reconstruction.\nInspect the de
     return fig
 
 
+# def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_km=120, speed_max=1.5):
+#     """Nearest measured levels to requests; never substitute a deeper valid fit."""
+#     actual = sorted(set(results.depth_m.iloc[np.argmin(abs(results.depth_m-z))] for z in depths))
+#     fig, axs = plt.subplots(1, len(actual), figsize=(4*len(actual), 4.5), squeeze=False, layout="constrained")
+#     axis = np.linspace(-half_width_km, half_width_km, 90)
+#     xx, yy = np.meshgrid(axis*1000, axis*1000)
+#     image = None
+#     for ax, z in zip(axs.ravel(), actual):
+#         row = results.loc[results.depth_m.eq(z)].iloc[0]
+#         d = samples[z]
+#         if row.valid:
+#             u, v = backend.model_uv_at_xy(xx, yy, row.xc_m, row.yc_m, _q(row), row.Omega, row.Rc_m)
+#             image = ax.pcolormesh(axis, axis, np.hypot(u, v), vmin=0, vmax=speed_max, cmap="Blues", shading="auto")
+#             ax.quiver(xx[::9,::9]/1000, yy[::9,::9]/1000, u[::9,::9], v[::9,::9], scale=12, color="grey", alpha=.6)
+#             ring = _contour(row)
+#             ax.plot(*ring.T, "r--", lw=1)
+#         else:
+#             ax.text(.02, .02, row.status.replace("_", " "), transform=ax.transAxes, fontsize=8, wrap=True)
+#         ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=12, color="black", width=.005)
+#         if row.inner_valid:
+#             ax.scatter(row.xc_m/1000, row.yc_m/1000, marker="x", color="red")
+#         ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km), aspect="equal", xlabel="East (km)", ylabel="North (km)", title=f"{z:g} m")
+#     if image is not None:
+#         fig.colorbar(image, ax=list(axs.ravel()), label="Reconstructed speed (m/s)", shrink=.8)
+#     fig.suptitle(f"{results.method.iloc[0]} · black: observed · grey: reconstructed · red: centre/core contour")
+#     return fig
 def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_km=120, speed_max=1.5):
     """Nearest measured levels to requests; never substitute a deeper valid fit."""
     actual = sorted(set(results.depth_m.iloc[np.argmin(abs(results.depth_m-z))] for z in depths))
-    fig, axs = plt.subplots(1, len(actual), figsize=(4*len(actual), 4.5), squeeze=False, layout="constrained")
+    ncols = 4
+    nrows = int(np.ceil(len(actual) / ncols))
+    fig, axs = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows),
+                            squeeze=False, layout="constrained")
     axis = np.linspace(-half_width_km, half_width_km, 90)
     xx, yy = np.meshgrid(axis*1000, axis*1000)
     image = None
+
     for ax, z in zip(axs.ravel(), actual):
         row = results.loc[results.depth_m.eq(z)].iloc[0]
         d = samples[z]
@@ -445,12 +489,16 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
         ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=12, color="black", width=.005)
         if row.inner_valid:
             ax.scatter(row.xc_m/1000, row.yc_m/1000, marker="x", color="red")
-        ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km), aspect="equal", xlabel="East (km)", ylabel="North (km)", title=f"{z:g} m")
+        ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km),
+               aspect="equal", xlabel="East (km)", ylabel="North (km)", title=f"{z:g} m")
+
+    for ax in axs.ravel()[len(actual):]:
+        ax.set_axis_off()
+
     if image is not None:
         fig.colorbar(image, ax=list(axs.ravel()), label="Reconstructed speed (m/s)", shrink=.8)
     fig.suptitle(f"{results.method.iloc[0]} · black: observed · grey: reconstructed · red: centre/core contour")
     return fig
-
 
 def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     valid = results.loc[results.valid]

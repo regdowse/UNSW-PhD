@@ -1,8 +1,11 @@
 # IN2015_V03: Murphy and Freddy
 
-Apply SOLO to each supplied crossing independently, with one notebook per eddy:
-`murphy_solo.ipynb` and `freddy_solo.ipynb`. The common implementation lives in
-`../esp_depth_tools.py`. LATTE is deferred.
+Apply SOLO to each supplied crossing independently in `murphy_solo.ipynb` and
+`freddy_solo.ipynb`. `murphy_latte.ipynb` starts from the selected Murphy SOLO
+surface-bin inner centre, then fits all ADCP observations in the Murphy regional
+subset at each depth; it does not restrict LATTE to the SOLO crossing windows.
+The common implementation lives in `../esp_depth_tools.py`. Notebook exports
+go to an `outputs/` directory beside the CSV on scratch.
 
 Data path: `/srv/scratch/z5297792/tilt_observation_data/MNF_IN2015_V03_adcp_trawler/MNF_IN2015_V03_adcp_trawler.csv`
 
