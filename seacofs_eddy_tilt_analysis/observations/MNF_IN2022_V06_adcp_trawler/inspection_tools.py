@@ -266,4 +266,4 @@ def plot_oceancurrent_overlay(ocean, data, map_time, *, window_hours=24,
     ax.grid(alpha=0.2)
     plt.show()
     print(f'{len(selected):,} ADCP rows in [{start}, {end}); {map_label}')
-    return selected
+    return ax, selected
