@@ -8,6 +8,9 @@ coordinate calculations are duplicated.
 """
 from pathlib import Path
 from io import StringIO
+import shutil
+import tempfile
+from urllib.request import urlopen
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -86,9 +89,115 @@ def load_oceancurrent(paths):
     return result
 
 
+def select_oceancurrent(ocean, map_time, *, method='linear', tolerance_hours=12,
+                        max_gap_hours=48):
+    """Return a map and provenance label at a UTC time, without extrapolation.
+
+    Linear interpolation requires bracketing maps no more than max_gap_hours
+    apart. Exact timestamps use the original map. Nearest selection is bounded
+    by tolerance_hours. All three fields use the same temporal weights.
+    """
+    if method not in ('linear', 'nearest'):
+        raise ValueError("method must be 'linear' or 'nearest'.")
+    if tolerance_hours < 0 or max_gap_hours <= 0:
+        raise ValueError('Tolerance must be nonnegative and maximum gap positive.')
+    requested = pd.Timestamp(map_time)
+    requested = requested.tz_localize('UTC') if requested.tzinfo is None else requested.tz_convert('UTC')
+    if pd.isna(requested):
+        raise ValueError('Provide a valid map time.')
+    ocean = ocean.sortby('TIME')
+    times = pd.DatetimeIndex(ocean.TIME.values).tz_localize('UTC')
+    if not len(times) or times.hasnans or times.has_duplicates:
+        raise ValueError('OceanCurrent times must be nonempty, valid and unique.')
+    index = abs(times - requested).argmin()
+    actual = times[index]
+    if actual == requested or method == 'nearest':
+        if abs(actual - requested) > pd.Timedelta(hours=tolerance_hours):
+            raise ValueError(f'No GSLA map within {tolerance_hours} h of {requested}. '
+                             f'Nearest downloaded map: {actual}. Download the required day.')
+        return ocean.isel(TIME=index), f'map {actual:%Y-%m-%d %H:%M} UTC'
+    right = times.searchsorted(requested)
+    if right == 0 or right == len(times):
+        raise ValueError(f'Cannot interpolate {requested}: available maps span '
+                         f'{times[0]} to {times[-1]}. Download maps bracketing the requested time.')
+    before, after = times[right - 1], times[right]
+    if after - before > pd.Timedelta(hours=max_gap_hours):
+        raise ValueError(f'Maps bracketing {requested} are {after - before} apart; '
+                         f'max_gap_hours={max_gap_hours}. Download the missing daily maps.')
+    weight = float((requested - before) / (after - before))
+    field = ((1 - weight) * ocean.isel(TIME=right - 1, drop=True)
+             + weight * ocean.isel(TIME=right, drop=True))
+    field = field.assign_coords(TIME=requested.tz_localize(None).to_datetime64())
+    return field, (f'linear interpolation {requested:%Y-%m-%d %H:%M} UTC '
+                   f'from {before:%Y-%m-%d %H:%M} / {after:%Y-%m-%d %H:%M} UTC')
+
+
+def download_oceancurrent(map_folder, time, *, method='linear', timeout=60):
+    """Cache the exact daily map or the two days needed for interpolation.
+
+    Source: AODN THREDDS IMOS/OceanCurrent/GSLA/DM. Existing files are reused.
+    Downloads are validated before being atomically moved into the cache.
+    """
+    requested = pd.Timestamp(time)
+    requested = requested.tz_localize('UTC') if requested.tzinfo is None else requested.tz_convert('UTC')
+    if pd.isna(requested) or method not in ('linear', 'nearest'):
+        raise ValueError("Provide a valid UTC time and method='linear' or 'nearest'.")
+    day = requested.floor('D')
+    days = [day]
+    if method == 'linear' and requested != day:
+        days.append(day + pd.Timedelta(days=1))
+    elif method == 'nearest' and requested - day > pd.Timedelta(hours=12):
+        days = [day + pd.Timedelta(days=1)]
+    folder = Path(map_folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for date in days:
+        name = f'IMOS_OceanCurrent_HV_{date:%Y%m%d}T000000Z_GSLA_FV02_DM03.nc'
+        path = folder / name
+        if not path.is_file():
+            url = ('https://thredds.aodn.org.au/thredds/fileServer/'
+                   f'IMOS/OceanCurrent/GSLA/DM/{date:%Y}/{name}')
+            print(f'Downloading OceanCurrent {date:%Y-%m-%d} ...')
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(dir=folder, suffix='.nc', delete=False) as target:
+                    temporary = Path(target.name)
+                    with urlopen(url, timeout=timeout) as response:
+                        shutil.copyfileobj(response, target)
+                check = load_oceancurrent([temporary])
+                if check.sizes['TIME'] != 1 or pd.Timestamp(check.TIME.values[0]) != date.tz_localize(None):
+                    raise ValueError('Downloaded file does not contain the expected daily map.')
+                temporary.replace(path)
+            except Exception as exc:
+                raise RuntimeError(f'Could not download OceanCurrent {date:%Y-%m-%d} from {url}: {exc}') from exc
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+        paths.append(path)
+    return paths
+
+
+def inspect_time(data, map_folder, time, *, window_hours=24, method='linear',
+                 max_gap_hours=48, tolerance_hours=12, quiv_width=None, quiv_scale=None, **plot_options):
+    """Automatically download/cache daily maps and plot a centred ADCP window.
+
+    Naive times are interpreted as UTC. Returns every ADCP row in the window.
+    Only the one or two maps needed at the requested time are loaded.
+    """
+    if not np.isfinite(window_hours) or window_hours <= 0:
+        raise ValueError('window_hours must be finite and positive.')
+    paths = download_oceancurrent(map_folder, time, method=method)
+    ocean = load_oceancurrent(paths)
+    return plot_oceancurrent_overlay(
+        ocean, data, time, window_hours=window_hours, method=method,
+        max_gap_hours=max_gap_hours, tolerance_hours=tolerance_hours, 
+        quiv_width=quiv_width, quiv_scale=quiv_scale, **plot_options)
+
+
 def plot_oceancurrent_overlay(ocean, data, map_time, *, window_hours=24,
                               tolerance_hours=12, bounds=(152, 157, -30, -25),
-                              vector_stride=2, sla_limit=0.5):
+                              vector_stride=2, sla_limit=0.5, method='nearest',
+                              max_gap_hours=48, quiv_width=None, quiv_scale=None):
     """Plot GSLA/total geostrophic velocity and return all ADCP rows in the window.
 
     Selection is [requested time - half width, requested time + half width).
@@ -103,13 +212,10 @@ def plot_oceancurrent_overlay(ocean, data, map_time, *, window_hours=24,
         raise ValueError('Invalid (west, east, south, north) bounds.')
     requested = pd.Timestamp(map_time)
     requested = requested.tz_localize('UTC') if requested.tzinfo is None else requested.tz_convert('UTC')
-    times = pd.DatetimeIndex(ocean.TIME.values).tz_localize('UTC')
-    index = abs(times - requested).argmin()
-    actual = times[index]
-    if abs(actual - requested) > pd.Timedelta(hours=tolerance_hours):
-        raise ValueError(f'No GSLA map within {tolerance_hours} h of {requested}. '
-                         f'Nearest downloaded map: {actual}. Download the required day.')
-    field = ocean.isel(TIME=index).sortby('LONGITUDE').sortby('LATITUDE')
+    field, map_label = select_oceancurrent(
+        ocean, requested, method=method, tolerance_hours=tolerance_hours,
+        max_gap_hours=max_gap_hours)
+    field = field.sortby('LONGITUDE').sortby('LATITUDE')
     field = field.sel(LONGITUDE=slice(west, east), LATITUDE=slice(south, north))
     if field.sizes['LONGITUDE'] < 2 or field.sizes['LATITUDE'] < 2:
         raise ValueError('Map bounds contain fewer than two grid points per axis.')
@@ -138,25 +244,26 @@ def plot_oceancurrent_overlay(ocean, data, map_time, *, window_hours=24,
     arrows = ax.quiver(lon[step], lat[step], (u / cosine)[step], v[step],
                        angles='xy', scale_units='xy', scale=1 / 0.35,
                        color='black', width=0.003)
-    ax.quiverkey(arrows, 0.80, 1.025, 1 / np.cos(np.deg2rad((south + north) / 2)),
+    ax.quiverkey(arrows, 0.80, 0.975, 1 / np.cos(np.deg2rad((south + north) / 2)),
                  '1 m/s eastward', labelpos='W', coordinates='axes')
     ax.scatter(full.lon, full.lat, s=3, color='0.65', alpha=0.5, label='Full ADCP track')
     if len(track):
         norm = plt.Normalize(mdates.date2num(start), mdates.date2num(end))
         points = ax.scatter(track.lon, track.lat, c=mdates.date2num(track.time),
-                            cmap='plasma', norm=norm, s=14, edgecolors='white',
+                            cmap='plasma', norm=norm, s=14, #edgecolors='white',
                             linewidths=0.2, label='Selected ADCP positions', zorder=4)
+        ax.quiver(track.lon, track.lat, track.u, track.v, zorder=4, scale=quiv_scale, width=quiv_width)
         bar = fig.colorbar(points, ax=ax, pad=0.10, label='ADCP time (UTC)')
         bar.formatter = mdates.DateFormatter('%d Jul %H:%M')
         bar.update_ticks()
     else:
         ax.text(0.02, 0.02, 'No ADCP data in the selected time window', transform=ax.transAxes)
     ax.set(xlim=(west, east), ylim=(south, north), xlabel='Longitude (°E)',
-           ylabel='Latitude (°N)', title=(f'SLA + total geostrophic velocity: {actual:%Y-%m-%d %H:%M} UTC\n'
+           ylabel='Latitude (°N)', title=(f'SLA + total geostrophic velocity: {map_label}\n'
            f'Requested: {requested:%Y-%m-%d %H:%M} UTC; ADCP {start:%d Jul %H:%M}–{end:%d Jul %H:%M} UTC'))
     ax.set_aspect(1 / np.cos(np.deg2rad((south + north) / 2)))
     ax.legend(loc='lower right')
     ax.grid(alpha=0.2)
     plt.show()
-    print(f'{len(selected):,} ADCP rows in [{start}, {end}); map: {actual}')
+    print(f'{len(selected):,} ADCP rows in [{start}, {end}); {map_label}')
     return selected
