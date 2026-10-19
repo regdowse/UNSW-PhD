@@ -55,6 +55,21 @@ truth. Each crossing starts independently at its own origin.
 | F8 | Freddy | 2015-06-16T15:30:00Z | 2015-06-16T16:30:00Z | 153.9855 | -33.2769 |
 | F9 | Freddy | 2015-06-16T23:00:00Z | 2015-06-17T00:00:00Z | 153.8311 | -33.2702 |
 
+Original
+<!-- | ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |
+| --- | --- | --- | --- | --- | --- |
+| M1 | Murphy | 2015-06-05T02:00:00Z | 2015-06-05T05:00:00Z | 154.8351 | -28.6168 |
+| M2 | Murphy | 2015-06-05T14:30:00Z | 2015-06-05T17:30:00Z | 154.6091 | -28.6726 |
+| F1 | Freddy | 2015-06-08T22:45:00Z | 2015-06-09T01:45:00Z | 153.2057 | -32.5763 |
+| F2 | Freddy | 2015-06-09T03:00:00Z | 2015-06-09T04:30:00Z | 153.1891 | -32.5825 |
+| F3 | Freddy | 2015-06-09T05:50:00Z | 2015-06-09T07:20:00Z | 153.2188 | -32.5691 |
+| F4 | Freddy | 2015-06-09T13:45:00Z | 2015-06-09T14:45:00Z | 153.2487 | -32.6099 |
+| F5 | Freddy | 2015-06-09T21:00:00Z | 2015-06-09T22:30:00Z | 153.2435 | -32.6550 |
+| F6 | Freddy | 2015-06-10T02:15:00Z | 2015-06-10T03:15:00Z | 153.2461 | -32.6425 |
+| F7 | Freddy | 2015-06-12T15:30:00Z | 2015-06-12T17:00:00Z | 153.4448 | -32.8224 |
+| F8 | Freddy | 2015-06-16T15:30:00Z | 2015-06-16T16:30:00Z | 153.9855 | -33.2769 |
+| F9 | Freddy | 2015-06-16T23:00:00Z | 2015-06-17T00:00:00Z | 153.8311 | -33.2702 | -->
+
 F7 is the 12 June continuation of Freddy visit 1; F8 and F9 are visit 2
 on 16 June. All three are now present in the export and use the OS150
 instrument. The first and last Freddy windows cross midnight. Table 4

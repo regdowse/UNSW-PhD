@@ -438,33 +438,8 @@ def _no_fit(title, message="No accepted Gaussian reconstruction.\nInspect the de
     return fig
 
 
-# def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_km=120, speed_max=1.5):
-#     """Nearest measured levels to requests; never substitute a deeper valid fit."""
-#     actual = sorted(set(results.depth_m.iloc[np.argmin(abs(results.depth_m-z))] for z in depths))
-#     fig, axs = plt.subplots(1, len(actual), figsize=(4*len(actual), 4.5), squeeze=False, layout="constrained")
-#     axis = np.linspace(-half_width_km, half_width_km, 90)
-#     xx, yy = np.meshgrid(axis*1000, axis*1000)
-#     image = None
-#     for ax, z in zip(axs.ravel(), actual):
-#         row = results.loc[results.depth_m.eq(z)].iloc[0]
-#         d = samples[z]
-#         if row.valid:
-#             u, v = backend.model_uv_at_xy(xx, yy, row.xc_m, row.yc_m, _q(row), row.Omega, row.Rc_m)
-#             image = ax.pcolormesh(axis, axis, np.hypot(u, v), vmin=0, vmax=speed_max, cmap="Blues", shading="auto")
-#             ax.quiver(xx[::9,::9]/1000, yy[::9,::9]/1000, u[::9,::9], v[::9,::9], scale=12, color="grey", alpha=.6)
-#             ring = _contour(row)
-#             ax.plot(*ring.T, "r--", lw=1)
-#         else:
-#             ax.text(.02, .02, row.status.replace("_", " "), transform=ax.transAxes, fontsize=8, wrap=True)
-#         ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=12, color="black", width=.005)
-#         if row.inner_valid:
-#             ax.scatter(row.xc_m/1000, row.yc_m/1000, marker="x", color="red")
-#         ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km), aspect="equal", xlabel="East (km)", ylabel="North (km)", title=f"{z:g} m")
-#     if image is not None:
-#         fig.colorbar(image, ax=list(axs.ravel()), label="Reconstructed speed (m/s)", shrink=.8)
-#     fig.suptitle(f"{results.method.iloc[0]} · black: observed · grey: reconstructed · red: centre/core contour")
-#     return fig
-def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_km=120, speed_max=1.5):
+def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_km=120,
+              speed_max=1.0, quiv_width=.002, quiv_scale=None):
     """Nearest measured levels to requests; never substitute a deeper valid fit."""
     actual = sorted(set(results.depth_m.iloc[np.argmin(abs(results.depth_m-z))] for z in depths))
     ncols = 4
@@ -486,7 +461,8 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
             ax.plot(*ring.T, "r--", lw=1)
         else:
             ax.text(.02, .02, row.status.replace("_", " "), transform=ax.transAxes, fontsize=8, wrap=True)
-        ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=12, color="black", width=.005)
+        ## inner mask ...
+        ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=quiv_scale, color="black", width=quiv_width)
         if row.inner_valid:
             ax.scatter(row.xc_m/1000, row.yc_m/1000, marker="x", color="red")
         ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km),
@@ -496,7 +472,7 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
         ax.set_axis_off()
 
     if image is not None:
-        fig.colorbar(image, ax=list(axs.ravel()), label="Reconstructed speed (m/s)", shrink=.8)
+        fig.colorbar(image, ax=list(axs.ravel()), label=r"Reconstructed speed (m s$^{-1}$)", shrink=.8)
     fig.suptitle(f"{results.method.iloc[0]} · black: observed · grey: reconstructed · red: centre/core contour")
     return fig
 
