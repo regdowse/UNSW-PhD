@@ -591,6 +591,15 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
     if row.inner_valid:
         ax.scatter(row.xc_lon, row.yc_lat, marker="x", s=80, color="red",
                    label="SOLO centre", zorder=7)
+    if row.valid:  # Draw only an accepted Gaussian contour
+        ring = _contour(row)  # East/north coordinates in km
+        origin_lat = row.yc_lat - row.yc_m / 111_000
+        ring_lon = row.xc_lon + (ring[:, 0] * 1000 - row.xc_m) / (
+            111_000 * np.cos(np.deg2rad(origin_lat))
+        )
+        ring_lat = row.yc_lat + (ring[:, 1] * 1000 - row.yc_m) / 111_000
+        ax.plot(ring_lon, ring_lat, "r--", lw=1, zorder=7,
+                label="SOLO maximum-speed contour")
     ax.set(xlim=(mid_lon-lon_half, mid_lon+lon_half),
            ylim=(mid_lat-lat_half, mid_lat+lat_half),
            xlabel="Longitude (°E)", ylabel="Latitude (°N)",
@@ -600,7 +609,7 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
     ax.set_aspect(1/np.cos(np.deg2rad(mid_lat)))
     ax.legend(loc="best", fontsize=8)
     ax.grid(alpha=.2)
-    return fig
+    return fig, ax
 
 def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     valid = results.loc[results.valid]
