@@ -489,8 +489,8 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
 
 
 def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
-                                half_width_km=120, speed_max=1.0):
-    """Shallowest SOLO samples over daily OceanCurrent velocity at the middle ADCP time.
+                                half_width_km=120, speed_max=1.0, target_depth=None):
+    """Shallowest ESP fit samples over daily OceanCurrent velocity at the middle ADCP time.
 
     Missing daily DM03 files are cached beside the ADCP CSV. The colours show
     samples used by the inner fit and additional sign-retained outer-fit samples.
@@ -560,7 +560,12 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
         u = (1-weight)*u + weight*u_next
         v = (1-weight)*v + weight*v_next
 
-    surface_depth = results.depth_m.min()
+    # surface_depth = results.depth_m.min()
+    surface_depth = (
+        results.depth_m.min()
+        if target_depth is None
+        else results.depth_m.iloc[(results.depth_m - target_depth).abs().argmin()]
+    )
     surface = samples[surface_depth].sort_values("time")
     mid_lon, mid_lat = float(surface.lon.median()), float(surface.lat.median())
     lat_half = half_width_km / 111
@@ -588,9 +593,10 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
     ax.scatter(surface.lon[inner], surface.lat[inner], s=32, color="magenta",
                label="Inner-fit samples", zorder=6)
     row = results.loc[results.depth_m.eq(surface_depth)].iloc[0]
+    method = str(row.method)
     if row.inner_valid:
         ax.scatter(row.xc_lon, row.yc_lat, marker="x", s=80, color="red",
-                   label="SOLO centre", zorder=7)
+                   label=f"{method} centre", zorder=7)
     if row.valid:  # Draw only an accepted Gaussian contour
         ring = _contour(row)  # East/north coordinates in km
         origin_lat = row.yc_lat - row.yc_m / 111_000
@@ -599,13 +605,13 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
         )
         ring_lat = row.yc_lat + (ring[:, 1] * 1000 - row.yc_m) / 111_000
         ax.plot(ring_lon, ring_lat, "r--", lw=1, zorder=7,
-                label="SOLO maximum-speed contour")
+                label=f"{method} maximum-speed contour")
     ax.set(xlim=(mid_lon-lon_half, mid_lon+lon_half),
            ylim=(mid_lat-lat_half, mid_lat+lat_half),
            xlabel="Longitude (°E)", ylabel="Latitude (°N)",
            title=(f"{transect_id} · {surface_depth:g} m ADCP over OceanCurrent\n"
                   f"Satellite interpolated to {middle:%Y-%m-%d %H:%M} UTC; "
-                  f"SOLO: {row.status}"))
+                  f"{method}: {row.status}"))
     ax.set_aspect(1/np.cos(np.deg2rad(mid_lat)))
     ax.legend(loc="best", fontsize=8)
     ax.grid(alpha=.2)
