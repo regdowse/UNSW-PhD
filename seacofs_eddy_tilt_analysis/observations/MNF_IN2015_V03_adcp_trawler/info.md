@@ -9,6 +9,12 @@ not restricted to the SOLO crossing windows. Freddy LATTE separates the early
 within the chosen footprint. Its early footprint contains both OS75 and OS150
 depth grids from different dates, so a centreline can mix temporal and vertical
 changes.
+Both LATTE notebooks also have a separate buffered-transect analysis after the
+regional export. It takes each crossing time from this table, adds editable hours
+before and after, and fits all ADCP samples in that expanded window without a
+straight-track or geographic mask. Each crossing starts from its own shallowest
+accepted SOLO inner centre. The buffered fits have separate scratch exports;
+rerun the SOLO export after editing this table so those centres stay aligned.
 The common implementation lives in `../esp_depth_tools.py`. Notebook exports
 go to an `outputs/` directory beside the CSV on scratch.
 

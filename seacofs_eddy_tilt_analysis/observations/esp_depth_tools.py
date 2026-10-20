@@ -776,8 +776,67 @@ def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None
     return runs, pd.DataFrame(summary).set_index("transect"), pd.concat(tables, ignore_index=True)
 
 
+def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_settings,
+                                 before_hours=1.0, after_hours=1.0,
+                                 buffer_overrides=None, min_attendance=None):
+    """Fit LATTE independently around each SOLO crossing, including time buffers.
+
+    Each crossing starts at its own shallowest accepted SOLO inner centre. All
+    finite ADCP observations in the expanded time window are used, without a
+    spatial or straight-line restriction. Buffers are (hours before, hours after).
+    """
+    overrides = {} if buffer_overrides is None else dict(buffer_overrides)
+    unknown = set(overrides) - set(catalog.index)
+    if unknown:
+        raise ValueError(f"Unknown buffer override transects: {sorted(unknown)}")
+    required = {"transect_id", "depth_m", "inner_valid", "xc_lon", "yc_lat"}
+    if not required.issubset(solo_results.columns):
+        raise ValueError(f"Missing SOLO result columns: {required - set(solo_results.columns)}")
+
+    runs, summary, tables = {}, [], []
+    for ident, crossing in catalog.iterrows():
+        before, after = overrides.get(ident, (before_hours, after_hours))
+        if not np.isfinite([before, after]).all() or min(before, after) < 0:
+            raise ValueError(f"{ident}: buffers must be finite, nonnegative hours")
+        accepted = solo_results.loc[solo_results.transect_id.eq(ident) &
+                                    solo_results.inner_valid.astype(str).str.lower().eq("true")]
+        accepted = accepted.sort_values("depth_m")
+        if accepted.empty:
+            raise ValueError(f"{ident}: no accepted SOLO inner centre; rerun SOLO first")
+        seed = accepted.iloc[0]
+        origin = (float(seed.xc_lon), float(seed.yc_lat))
+        start = pd.Timestamp(crossing.start) - pd.Timedelta(hours=float(before))
+        end = pd.Timestamp(crossing.end) + pd.Timedelta(hours=float(after))
+        data, coverage, audit = load_observations(data_path, start, end, origin,
+                                                  min_attendance=min_attendance)
+        results, samples = fit_depths(data, backend, "LATTE", depth_levels=coverage.index,
+                                      **fit_settings)
+        results["transect_id"] = ident
+        results["xc_lon"] = origin[0] + results.xc_m/(111000*np.cos(np.deg2rad(origin[1])))
+        results["yc_lat"] = origin[1] + results.yc_m/111000
+        results["window_start_utc"] = str(start)
+        results["window_end_utc"] = str(end)
+        results["buffer_before_hours"] = float(before)
+        results["buffer_after_hours"] = float(after)
+        audit.update(window_start_utc=str(start), window_end_utc=str(end),
+                     buffer_before_hours=float(before), buffer_after_hours=float(after),
+                     solo_seed_depth_m=float(seed.depth_m), solo_seed_lon_lat=origin)
+        runs[ident] = dict(data=data, coverage=coverage, audit=audit,
+                           results=results, samples=samples, solo_seed=seed)
+        good, full = results.inner_valid, results.valid
+        summary.append(dict(transect=ident, before_h=before, after_h=after,
+                            start_utc=start, end_utc=end, times=data.time.nunique(),
+                            bins=len(results), inner_fits=int(good.sum()),
+                            gaussian_fits=int(full.sum()),
+                            surface_status=results.iloc[0].status,
+                            solo_seed_depth_m=seed.depth_m))
+        tables.append(results)
+    return runs, pd.DataFrame(summary).set_index("transect"), pd.concat(tables, ignore_index=True)
+
+
 def plot_transect_comparison(runs, eddy):
     """Show depth structure per crossing relative to its own shallowest inner fit."""
+    method = next(iter(runs.values()))["results"].method.iloc[0]
     fig, axes = plt.subplots(1, 3, figsize=(13, 5), sharey=True, layout="constrained")
     for ident, run in runs.items():
         r = run["results"]
@@ -792,7 +851,7 @@ def plot_transect_comparison(runs, eddy):
     axes[0].legend(fontsize=8)
     for ax in axes:
         ax.grid(alpha=.2)
-    fig.suptitle(f"{eddy} · independent SOLO profiles for each crossing\nOffsets reference each crossing's shallowest accepted centre; no averaging across times")
+    fig.suptitle(f"{eddy} · independent {method} profiles for each crossing\nOffsets reference each crossing's shallowest accepted centre; no averaging across times")
     return fig
 
 
