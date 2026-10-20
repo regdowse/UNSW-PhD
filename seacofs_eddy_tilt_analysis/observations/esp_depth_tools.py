@@ -153,7 +153,7 @@ def _outer(backend, x, y, u, v, centre, q, omega, radius_limit, min_points):
     rho, qr, vt = rho[use], qr[use], vt[use]
     record = {"n_outer_retained": int(use.sum())}
     if len(rho) < min_points or np.unique(rho).size < 3:
-        return record, "insufficient_outer"
+        return record, "insufficient_outer", use
     target = vt * rho / qr
     seed = max(float(rho[np.argmax(abs(target))] * np.sqrt(2)), 1e-6)
 
@@ -171,17 +171,17 @@ def _outer(backend, x, y, u, v, centre, q, omega, radius_limit, min_points):
                       rho_min_m=rho.min(), rho_max_m=rho.max(),
                       peak_bracketed=bool(rho.min() < rc / np.sqrt(2) < rho.max()))
         if not np.isfinite(p).all() or rc <= 0:
-            return record, "nonfinite_outer"
+            return record, "nonfinite_outer", use
         if rc > radius_limit:
-            return record, "outer_radius_limit"
+            return record, "outer_radius_limit", use
         if om * omega <= 0:
-            return record, "outer_rotation_reversal"
+            return record, "outer_rotation_reversal", use
         pred = gaussian(rho**2, om, rc)
         record["outer_rmse_m_s"] = float(np.sqrt(np.mean((target - pred)**2)))
-        return record, "ok"
+        return record, "ok", use
     except (ValueError, RuntimeError, FloatingPointError) as exc:
         record["outer_warning"] = str(exc)
-        return record, "outer_optimisation_failed"
+        return record, "outer_optimisation_failed", use
 
 
 def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000.,
@@ -228,6 +228,7 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
         sample = d.copy()
         sample["inner"] = False
         sample["outer"] = False
+        sample["outer_fit"] = False
         samples[depth] = sample
         try:
             if len(d) < min_core_points:
@@ -236,6 +237,7 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                 c, q = centre.copy(), q_previous.copy()
                 for _ in range(2):
                     core = _rho(x, y, c, q) <= core_radius
+                    sample["inner"] = core
                     rec["n_core"] = int(core.sum())
                     if core.sum() < min_core_points:
                         raise ValueError("insufficient_core")
@@ -282,6 +284,7 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                 offset = surface[["x", "y"]].to_numpy().mean(axis=0) @ normal
                 c = l0 * tangent + (offset + r0) * normal
                 core = search & (abs(along - l0) <= core_radius)
+                sample["inner"] = core
                 rec["n_core"] = int(core.sum())
                 rec["core_spread_ratio"] = _spread(x[core], y[core]) if core.sum() > 1 else 0.
                 if core.sum() < min_core_points:
@@ -306,9 +309,12 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                        centre_step_m=step)
             centre, q_previous = c.copy(), q.copy()
             outer = _rho(x, y, c, q) <= outer_radius
-            sample.loc[:, "inner"], sample.loc[:, "outer"] = core, outer
-            out, status = _outer(backend, x[outer], y[outer], u[outer], v[outer],
-                                 c, q, om, radius_limit, min_outer_points)
+            sample["outer"] = outer
+            out, status, outer_use = _outer(backend, x[outer], y[outer], u[outer], v[outer],
+                                            c, q, om, radius_limit, min_outer_points)
+            outer_fit = np.zeros(len(d), dtype=bool)
+            outer_fit[np.flatnonzero(outer)] = outer_use
+            sample["outer_fit"] = outer_fit
             rec.update(out)
             rec["status"] = status
             if status == "ok" and require_peak_bracket and not rec["peak_bracketed"]:
@@ -348,11 +354,11 @@ def report(results):
     print("The ADCP sampling limit is not an estimate of the eddy bottom. R² is in-sample.")
 
 
-def plot_sampling(data, coverage, half_width_km=120):
+def plot_sampling(data, coverage, half_width_km=120, quiv_scale=12):
     fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout="constrained")
     d = data.loc[data.depth.eq(data.depth.min())]
     hours = (d.time - d.time.min()).dt.total_seconds() / 3600
-    q = axes[0].quiver(d.x/1000, d.y/1000, d.u, d.v, hours, cmap="viridis", scale=12)
+    q = axes[0].quiver(d.x/1000, d.y/1000, d.u, d.v, hours, cmap="viridis", scale=quiv_scale)
     axes[0].scatter(0, 0, marker="x", color="red", label="Initial centre")
     axes[0].set(xlabel="East (km)", ylabel="North (km)", title=f"Observed velocities at {d.depth.iloc[0]:g} m", aspect="equal")
     axes[0].legend(fontsize=8)
@@ -461,8 +467,12 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
             ax.plot(*ring.T, "r--", lw=1)
         else:
             ax.text(.02, .02, row.status.replace("_", " "), transform=ax.transAxes, fontsize=8, wrap=True)
-        ## inner mask ...
-        ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=quiv_scale, color="black", width=quiv_width)
+        ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=quiv_scale, color="black", width=quiv_width, zorder=7)
+        inner = d["inner"].to_numpy(bool)
+        outer_fit = d["outer_fit"].to_numpy(bool) if "outer_fit" in d else d["outer"].to_numpy(bool)
+        outer_only = outer_fit & ~inner
+        ax.scatter(d.x[outer_only]/1000, d.y[outer_only]/1000, s=18, color="green", alpha=.85, zorder=5)
+        ax.scatter(d.x[inner]/1000, d.y[inner]/1000, s=18, color="magenta", alpha=.85, zorder=6)
         if row.inner_valid:
             ax.scatter(row.xc_m/1000, row.yc_m/1000, marker="x", color="red")
         ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km),
@@ -473,7 +483,123 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
 
     if image is not None:
         fig.colorbar(image, ax=list(axs.ravel()), label=r"Reconstructed speed (m s$^{-1}$)", shrink=.8)
-    fig.suptitle(f"{results.method.iloc[0]} · black: observed · grey: reconstructed · red: centre/core contour")
+    fig.suptitle(f"{results.method.iloc[0]} · magenta: inner fit · green: additional outer-fit points · "
+                 "black: observed flow · grey: reconstructed flow · red: centre/core contour")
+    return fig
+
+
+def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
+                                half_width_km=120, speed_max=1.0):
+    """Shallowest SOLO samples over daily OceanCurrent velocity at the middle ADCP time.
+
+    Missing daily DM03 files are cached beside the ADCP CSV. The colours show
+    samples used by the inner fit and additional sign-retained outer-fit samples.
+    """
+    from datetime import datetime, timezone
+    from urllib.request import urlopen
+    import shutil
+    import tempfile
+    from netCDF4 import Dataset, num2date
+
+    times = pd.DatetimeIndex(data.time.dropna().unique()).sort_values()
+    if len(times) == 0:
+        raise ValueError("Transect has no valid ADCP timestamps.")
+    middle = pd.Timestamp(times[len(times)//2]).tz_convert("UTC")
+    day = middle.floor("D")
+    days = [day] if middle == day else [day, day + pd.Timedelta(days=1)]
+    folder = Path(map_folder)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    def daily_map(date):
+        name = f"IMOS_OceanCurrent_HV_{date:%Y%m%d}T000000Z_GSLA_FV02_DM03.nc"
+        path = folder / name
+        if not path.exists():
+            url = ("https://thredds.aodn.org.au/thredds/fileServer/"
+                   f"IMOS/OceanCurrent/GSLA/DM/{date:%Y}/{name}")
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(dir=folder, suffix=".nc", delete=False) as target:
+                    temporary = Path(target.name)
+                    with urlopen(url, timeout=60) as response:
+                        shutil.copyfileobj(response, target)
+                # Inspect before caching, so a failed response is never mistaken for a map.
+                with Dataset(temporary) as ds:
+                    if not all(key in ds.variables for key in ("TIME", "LATITUDE", "LONGITUDE", "UCUR", "VCUR")):
+                        raise ValueError(f"Incomplete OceanCurrent download: {url}")
+                temporary.replace(path)
+                print(f"Cached OceanCurrent map: {path.name}")
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+        with Dataset(path) as ds:
+            time = ds.variables["TIME"]
+            if len(time) != 1:
+                raise ValueError(f"Expected one daily map in {path}")
+            stamp = num2date(time[0], time.units, getattr(time, "calendar", "standard"))
+            actual = pd.Timestamp(datetime(stamp.year, stamp.month, stamp.day,
+                                           stamp.hour, stamp.minute, stamp.second,
+                                           tzinfo=timezone.utc))
+            if actual != date:
+                raise ValueError(f"OceanCurrent time {actual} does not match {path.name}")
+            lon = np.asarray(ds.variables["LONGITUDE"][:], dtype=float)
+            lat = np.asarray(ds.variables["LATITUDE"][:], dtype=float)
+            def field(name):
+                values = ds.variables[name][0, :, :]
+                return np.asarray(np.ma.filled(values, np.nan), dtype=float)
+            return lon, lat, field("UCUR"), field("VCUR")
+
+    maps = [daily_map(date) for date in days]
+    # The user's 3 June subset and later full-domain daily files can have
+    # different grids. Bracketing files must share a grid for linear interpolation.
+    lon, lat, u, v = maps[0]
+    if len(maps) == 2:
+        lon_next, lat_next, u_next, v_next = maps[1]
+        if not (np.array_equal(lon, lon_next) and np.array_equal(lat, lat_next)):
+            raise ValueError("Bracketing OceanCurrent maps use different grids.")
+        weight = (middle - day) / pd.Timedelta(days=1)
+        u = (1-weight)*u + weight*u_next
+        v = (1-weight)*v + weight*v_next
+
+    surface_depth = results.depth_m.min()
+    surface = samples[surface_depth].sort_values("time")
+    mid_lon, mid_lat = float(surface.lon.median()), float(surface.lat.median())
+    lat_half = half_width_km / 111
+    lon_half = lat_half / np.cos(np.deg2rad(mid_lat))
+    ix = (lon >= mid_lon-lon_half) & (lon <= mid_lon+lon_half)
+    iy = (lat >= mid_lat-lat_half) & (lat <= mid_lat+lat_half)
+    if ix.sum() < 2 or iy.sum() < 2:
+        raise ValueError("Satellite grid does not cover the selected transect map.")
+    lon, lat = lon[ix], lat[iy]
+    u, v = u[np.ix_(iy, ix)], v[np.ix_(iy, ix)]
+    xx, yy = np.meshgrid(lon, lat)
+
+    fig, ax = plt.subplots(figsize=(8, 6), layout="constrained")
+    speed = ax.pcolormesh(xx, yy, np.hypot(u, v), cmap="Blues", vmin=0,
+                          vmax=speed_max, shading="auto")
+    fig.colorbar(speed, ax=ax, label="OceanCurrent surface geostrophic speed (m/s)")
+    ax.quiver(xx, yy, u/np.cos(np.deg2rad(yy)), v, angles="xy",
+              scale_units="xy", scale=1/0.25, color="0.35", alpha=.7)
+    ax.plot(surface.lon, surface.lat, color="black", lw=1, label="ADCP transect", zorder=4)
+    inner = surface["inner"].to_numpy(bool)
+    outer_fit = surface["outer_fit"].to_numpy(bool) if "outer_fit" in surface else surface["outer"].to_numpy(bool)
+    outer_only = outer_fit & ~inner
+    ax.scatter(surface.lon[outer_only], surface.lat[outer_only], s=32, color="green",
+               label="Additional outer-fit samples", zorder=5)
+    ax.scatter(surface.lon[inner], surface.lat[inner], s=32, color="magenta",
+               label="Inner-fit samples", zorder=6)
+    row = results.loc[results.depth_m.eq(surface_depth)].iloc[0]
+    if row.inner_valid:
+        ax.scatter(row.xc_lon, row.yc_lat, marker="x", s=80, color="red",
+                   label="SOLO centre", zorder=7)
+    ax.set(xlim=(mid_lon-lon_half, mid_lon+lon_half),
+           ylim=(mid_lat-lat_half, mid_lat+lat_half),
+           xlabel="Longitude (°E)", ylabel="Latitude (°N)",
+           title=(f"{transect_id} · {surface_depth:g} m ADCP over OceanCurrent\n"
+                  f"Satellite interpolated to {middle:%Y-%m-%d %H:%M} UTC; "
+                  f"SOLO: {row.status}"))
+    ax.set_aspect(1/np.cos(np.deg2rad(mid_lat)))
+    ax.legend(loc="best", fontsize=8)
+    ax.grid(alpha=.2)
     return fig
 
 def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
