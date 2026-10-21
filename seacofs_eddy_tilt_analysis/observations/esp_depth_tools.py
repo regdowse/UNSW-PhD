@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from scipy.optimize import curve_fit, OptimizeWarning
 
+STD_FIGSIZE = 2.5
 
 def load_backend(path):
     path = Path(path).expanduser().resolve()
@@ -354,14 +355,74 @@ def report(results):
     print("The ADCP sampling limit is not an estimate of the eddy bottom. R² is in-sample.")
 
 
+def plot_buffered_track(data, crossing, seed, transect_id):
+    """Show the buffered ADCP track, original SOLO window and starting centre."""
+    track = data.sort_values("time").drop_duplicates("time")
+    original = track.time.between(pd.Timestamp(crossing.start), pd.Timestamp(crossing.end))
+    fig, ax = plt.subplots(figsize=(1.5*STD_FIGSIZE, 1.5*STD_FIGSIZE), layout="constrained")
+    ax.plot(track.lon, track.lat, color="0.6", lw=1.5, label="Buffered ADCP window")
+    ax.plot(track.loc[original, "lon"], track.loc[original, "lat"],
+            color="magenta", lw=2.5, label="Original SOLO crossing")
+    ax.scatter(seed.xc_lon, seed.yc_lat, marker="x", s=80, color="red", label="SOLO starting centre")
+    ax.set(xlabel="Longitude (°E)", ylabel="Latitude (°N)",
+           title=f"{transect_id}: original crossing and added ADCP track")
+    ax.set_aspect(1/np.cos(np.deg2rad(track.lat.median())))
+    ax.legend(fontsize=8)
+    return fig
+
+
+def plot_regional_track(data, transects, solo, bounds, *, title,
+                        shown_depth=None, transect_ids=None, colours=None,
+                        figsize=(9, 6), surface_tracks=False,
+                        velocity_label="All regional ADCP", track_width=1.4,
+                        centre_size=70, centre_width=2, legend_kwargs=None):
+    """Map regional ADCP velocities, SOLO crossing tracks and shallowest valid centres.
+
+    ``shown_depth`` must be an observed bin; defaults to the shallowest bin.
+    ``surface_tracks`` restricts crossing tracks to that bin when True.
+    Returns the figure without displaying it.
+    """
+    shown_depth = data.depth.min() if shown_depth is None else shown_depth
+    transect_ids = transects.index if transect_ids is None else transect_ids
+    if colours is None:
+        colours = plt.cm.tab10(np.linspace(0, 1, len(transect_ids)))
+    if legend_kwargs is None:
+        legend_kwargs = dict(fontsize=7, bbox_to_anchor=(1.02, 1), loc="upper left")
+    surface = data.loc[data.depth.eq(shown_depth)].sort_values("time")
+    fig, ax = plt.subplots(figsize=figsize, constrained_layout=True)
+    shown = surface.iloc[::max(1, len(surface)//120)]
+    ax.quiver(shown.lon, shown.lat, shown.u, shown.v, color="0.65", width=.0025,
+              scale=17, label=f"{velocity_label}, {shown_depth:g} m (sampled arrows)")
+    track_data = surface if surface_tracks else data
+    for colour, ident in zip(colours, transect_ids):
+        crossing = transects.loc[ident]
+        track = track_data.loc[track_data.time.between(pd.Timestamp(crossing.start), pd.Timestamp(crossing.end))]
+        track = track.sort_values("time").drop_duplicates("time")
+        ax.plot(track.lon, track.lat, color=colour, lw=track_width, label=f"{ident} track")
+        fitted = solo.loc[solo.transect_id.eq(ident) & solo.inner_valid].sort_values("depth_m")
+        if not fitted.empty:
+            first = fitted.iloc[0]
+            ax.scatter(first.xc_lon, first.yc_lat, marker="x", s=centre_size, lw=centre_width,
+                       color=colour, zorder=5, label=f"{ident} SOLO centre ({first.depth_m:g} m)")
+    ax.add_patch(plt.Rectangle((bounds[0], bounds[2]),
+                           bounds[1]-bounds[0],
+                           bounds[3]-bounds[2],
+                           fill=False, edgecolor="firebrick", lw=1.2))
+    ax.set(xlabel="Longitude (°E)", ylabel="Latitude (°N)",
+           title=title)
+    ax.set_aspect(1/np.cos(np.deg2rad(surface.lat.mean())))
+    ax.legend(**legend_kwargs)
+    return fig
+
+
 def plot_sampling(data, coverage, half_width_km=120, quiv_scale=12):
-    fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout="constrained")
+    fig, axes = plt.subplots(1, 3, figsize=(3*STD_FIGSIZE, STD_FIGSIZE), layout="constrained")
     d = data.loc[data.depth.eq(data.depth.min())]
     hours = (d.time - d.time.min()).dt.total_seconds() / 3600
     q = axes[0].quiver(d.x/1000, d.y/1000, d.u, d.v, hours, cmap="viridis", scale=quiv_scale)
     axes[0].scatter(0, 0, marker="x", color="red", label="Initial centre")
     axes[0].set(xlabel="East (km)", ylabel="North (km)", title=f"Observed velocities at {d.depth.iloc[0]:g} m", aspect="equal")
-    axes[0].legend(fontsize=8)
+    axes[0].legend()#fontsize=8)
     fig.colorbar(q, ax=axes[0], label="Hours since transect start")
     axes[1].plot(coverage.n_selected, coverage.index, label="Selected")
     axes[1].plot(coverage.n_used, coverage.index, label="After filters")
@@ -377,20 +438,20 @@ def plot_sampling(data, coverage, half_width_km=120, quiv_scale=12):
 
 
 def plot_diagnostics(results):
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharey=True, layout="constrained")
+    fig, axes = plt.subplots(1, 3, figsize=(3*STD_FIGSIZE, STD_FIGSIZE), sharey=True, layout="constrained")
     z = results.depth_m
     axes[0].plot(results.n_obs, z, label="All")
     axes[0].plot(results.n_core, z, label="Last core selection")
     axes[0].set(xlabel="Observation count", ylabel="Depth (m)")
-    axes[0].legend(fontsize=8)
+    axes[0].legend()#fontsize=8)
     axes[1].semilogx(results.core_spread_ratio.where(results.core_spread_ratio > 0), z, ".-")
     axes[1].axvline(.05, color="grey", ls="--", label="Narrow-track flag")
     axes[1].set_xlabel("Across/along spatial spread")
-    axes[1].legend(fontsize=8)
+    axes[1].legend()#fontsize=8)
     axes[2].plot(results.inner_R2, z, ".-", label="Attempted inner fit")
     axes[2].plot(results.vector_R2, z, ".-", label="Accepted full fit")
     axes[2].set_xlabel("Vector R²")
-    axes[2].legend(fontsize=8)
+    axes[2].legend()#fontsize=8)
     axes[0].invert_yaxis()
     fig.suptitle(f"{results.method.iloc[0]} · high R² alone does not establish valid ellipse geometry")
     return fig
@@ -400,7 +461,7 @@ def plot_profiles(results):
     if not results.inner_valid.any():
         return _no_fit(f"{results.method.iloc[0]} · depth profiles",
                        "No accepted inner-core fits.\nInspect the sampling and ellipse diagnostics above.")
-    fig, axes = plt.subplots(1, 5, figsize=(15, 5), sharey=True, layout="constrained")
+    fig, axes = plt.subplots(1, 5, figsize=(5*STD_FIGSIZE, STD_FIGSIZE), sharey=True, layout="constrained")
     z = results.depth_m
     axes[0].plot(results.offset_east_km, z, ".-", label="East")
     axes[0].plot(results.offset_north_km, z, ".-", label="North")
@@ -437,7 +498,7 @@ def _contour(row):
 
 
 def _no_fit(title, message="No accepted Gaussian reconstruction.\nInspect the depth-fit diagnostics and sampling."):
-    fig, ax = plt.subplots(figsize=(8, 3), layout="constrained")
+    fig, ax = plt.subplots(figsize=(STD_FIGSIZE, STD_FIGSIZE), layout="constrained")
     ax.text(.5, .5, message, ha="center", va="center", transform=ax.transAxes)
     ax.set_title(title)
     ax.set_axis_off()
@@ -578,7 +639,7 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
     u, v = u[np.ix_(iy, ix)], v[np.ix_(iy, ix)]
     xx, yy = np.meshgrid(lon, lat)
 
-    fig, ax = plt.subplots(figsize=(8, 6), layout="constrained")
+    fig, ax = plt.subplots(figsize=(2*STD_FIGSIZE, 2*STD_FIGSIZE), layout="constrained")
     speed = ax.pcolormesh(xx, yy, np.hypot(u, v), cmap="Blues", vmin=0,
                           vmax=speed_max, shading="auto")
     fig.colorbar(speed, ax=ax, label="OceanCurrent surface geostrophic speed (m/s)")
@@ -613,7 +674,7 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
                   f"Satellite interpolated to {middle:%Y-%m-%d %H:%M} UTC; "
                   f"{method}: {row.status}"))
     ax.set_aspect(1/np.cos(np.deg2rad(mid_lat)))
-    ax.legend(loc="best", fontsize=8)
+    ax.legend(loc="best")#, fontsize=8)
     ax.grid(alpha=.2)
     return fig, ax
 
@@ -621,7 +682,7 @@ def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     valid = results.loc[results.valid]
     if not results.inner_valid.any():
         return _no_fit(f"{results.method.iloc[0]} · 3D reconstruction")
-    fig = plt.figure(figsize=(9, 7), layout="constrained")
+    fig = plt.figure(figsize=(2*STD_FIGSIZE, 2*STD_FIGSIZE), layout="constrained")
     ax = fig.add_subplot(111, projection="3d")
     norm = Normalize(results.depth_m.min(), results.depth_m.max())
     cmap = plt.colormaps["viridis"]
@@ -649,113 +710,41 @@ def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     return fig
 
 
-# def load_study(info_path, eddy):
-#     """Read the single source of transect times/centres from the info.md table."""
-#     text = Path(info_path).read_text()
-#     marker = "Data path: `"
-#     if marker not in text:
-#         raise ValueError("info.md needs a Data path line")
-#     data_path = Path(text.split(marker, 1)[1].split("`", 1)[0])
-#     header = "| ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |"
-#     if header not in text:
-#         raise ValueError("Transect table header not found in info.md")
-#     rows = []
-#     for line in text.split(header, 1)[1].splitlines():
-#         if not line.strip():
-#             if rows:
-#                 break
-#             continue
-#         if not line.startswith("|"):
-#             break
-#         cells = [v.strip() for v in line.strip().strip("|").split("|")]
-#         if set("".join(cells)) <= {"-", ":", " "}:
-#             continue
-#         if len(cells) != 6:
-#             raise ValueError("Each transect row must have six fields")
-#         ident, name, start, end, lon, lat = cells
-#         if pd.Timestamp(start).tzinfo is None or pd.Timestamp(end).tzinfo is None:
-#             raise ValueError("Transect times must include UTC timezone")
-#         if pd.Timestamp(end) <= pd.Timestamp(start):
-#             raise ValueError("Invalid transect interval")
-#         rows.append(dict(id=ident, eddy=name, start=start, end=end,
-#                          lon=float(lon), lat=float(lat)))
-#     all_rows = pd.DataFrame(rows)
-#     if all_rows.empty or all_rows.id.duplicated().any():
-#         raise ValueError("Transect IDs must be unique")
-#     catalog = all_rows.loc[all_rows.eddy.str.lower().eq(eddy.lower())].set_index("id")
-#     if catalog.empty:
-#         raise ValueError(f"No transects for {eddy}")
-#     return data_path, catalog
-def load_study(info_path, eddy):
-    """Load transect metadata and the full, unfiltered ADCP dataset."""
-    text = Path(info_path).read_text()
-    marker = "Data path: `"
-    if marker not in text:
-        raise ValueError("info.md needs a Data path line")
+def load_study(config_path, eddy, overview_bounds=None, load_adcp=True):
+    """Read active ADCP crossing definitions from JSON, never from study notes."""
+    import json
 
-    data_path = Path(text.split(marker, 1)[1].split("`", 1)[0])
-
-    header = "| ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |"
-    if header not in text:
-        raise ValueError("Transect table header not found in info.md")
-
-    rows = []
-    for line in text.split(header, 1)[1].splitlines():
-        if not line.strip():
-            if rows:
-                break
-            continue
-        if not line.startswith("|"):
-            break
-
-        cells = [v.strip() for v in line.strip().strip("|").split("|")]
-        if set("".join(cells)) <= {"-", ":", " "}:
-            continue
-        if len(cells) != 6:
-            raise ValueError("Each transect row must have six fields")
-
-        ident, name, start, end, lon, lat = cells
-
-        if pd.Timestamp(start).tzinfo is None or pd.Timestamp(end).tzinfo is None:
-            raise ValueError("Transect times must include UTC timezone")
-        if pd.Timestamp(end) <= pd.Timestamp(start):
-            raise ValueError("Invalid transect interval")
-
-        rows.append(dict(
-            id=ident, eddy=name, start=start, end=end,
-            lon=float(lon), lat=float(lat)
-        ))
-
-    all_rows = pd.DataFrame(rows)
-
-    if all_rows.empty or all_rows.id.duplicated().any():
-        raise ValueError("Transect IDs must be unique")
-
-    catalog = all_rows.loc[
-        all_rows.eddy.str.lower().eq(eddy.lower())
-    ].set_index("id")
-
+    config = json.loads(Path(config_path).read_text())
+    data_path = Path(config["data_path"])
+    rows = config["transects"]
+    if not rows:
+        raise ValueError("Transect config is empty")
+    catalog = pd.DataFrame(rows)
+    required = {"id", "eddy", "start", "end", "lon", "lat"}
+    if not required.issubset(catalog.columns) or catalog.id.duplicated().any():
+        raise ValueError("Transects need unique IDs and eddy/start/end/lon/lat fields")
+    for row in catalog.itertuples():
+        start, end = pd.Timestamp(row.start), pd.Timestamp(row.end)
+        if start.tzinfo is None or end.tzinfo is None or start.utcoffset().total_seconds() != 0 or end.utcoffset().total_seconds() != 0 or end <= start:
+            raise ValueError(f"{row.id}: crossing must have increasing UTC start/end")
+        if not np.isfinite([row.lon, row.lat]).all() or not (-180 <= row.lon <= 180 and -90 <= row.lat <= 90):
+            raise ValueError(f"{row.id}: invalid coordinate origin")
+    catalog = catalog.loc[catalog.eddy.str.lower().eq(eddy.lower())].set_index("id")
     if catalog.empty:
         raise ValueError(f"No transects for {eddy}")
+    if not load_adcp:
+        return data_path, catalog, None
 
-    # Load full ADCP dataset without filtering by transect times
-    adcp = pd.read_csv(data_path)
-    adcp.drop(columns=['Survey', 'Datafile', 'Project', 'MARLIN', 'MARLIN UUID', 'Averaging Period (sec)',
-                   'U Ship (m/sec)', 'V Ship (m/sec)', 'Bottom Depth', 'Avg QC'], inplace=True)
-    adcp = adcp.rename(columns={
-        'U (m/sec)': 'u',
-        'V (m/sec)': 'v',
-        'Mean Lon': 'lon',
-        'Mean Lat': 'lat',
-        'Start (UTC)': 'time'
-    })
-    if eddy == 'Freddy':
-        adcp = adcp[(adcp.lat > -32.9)&(adcp.lat < -32.3)&(adcp.lon > 152.8)&(adcp.lon < 153.5)].copy()
-    elif eddy == 'Murphy':
-        adcp = adcp[(adcp.lat > -29.8)&(adcp.lat < -27.6)&(adcp.lon > 153.5)&(adcp.lon < 156.0)].copy()
-    
+    adcp = pd.read_csv(data_path).rename(columns={
+        "U (m/sec)": "u", "V (m/sec)": "v", "Mean Lon": "lon",
+        "Mean Lat": "lat", "Start (UTC)": "time"})
+    if overview_bounds is not None:
+        west, east, south, north = overview_bounds
+        if not (west < east and south < north):
+            raise ValueError("overview_bounds must be west, east, south, north")
+        adcp = adcp.loc[adcp.lon.between(west, east) & adcp.lat.between(south, north)].copy()
     return data_path, catalog, adcp
-    
+
 
 def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None):
     """Independent depth fits per crossing: never carry a centre between times."""
@@ -784,7 +773,8 @@ def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None
 
 def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_settings,
                                  before_hours=1.0, after_hours=1.0,
-                                 buffer_overrides=None, min_attendance=None):
+                                 buffer_overrides=None, min_attendance=None,
+                                 fit_overrides=None):
     """Fit LATTE independently around each SOLO crossing, including time buffers.
 
     Each crossing starts at its own shallowest accepted SOLO inner centre. All
@@ -792,6 +782,10 @@ def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_
     spatial or straight-line restriction. Buffers are (hours before, hours after).
     """
     overrides = {} if buffer_overrides is None else dict(buffer_overrides)
+    fit_overrides = {} if fit_overrides is None else dict(fit_overrides)
+    unknown_fit = set(fit_overrides) - set(catalog.index)
+    if unknown_fit:
+        raise ValueError(f"Unknown fit override transects: {sorted(unknown_fit)}")
     unknown = set(overrides) - set(catalog.index)
     if unknown:
         raise ValueError(f"Unknown buffer override transects: {sorted(unknown)}")
@@ -815,8 +809,14 @@ def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_
         end = pd.Timestamp(crossing.end) + pd.Timedelta(hours=float(after))
         data, coverage, audit = load_observations(data_path, start, end, origin,
                                                   min_attendance=min_attendance)
+        fit = dict(fit_settings)
+        extra = fit_overrides.get(ident, {})
+        unknown_keys = set(extra) - set(fit)
+        if unknown_keys:
+            raise ValueError(f"{ident}: unknown fit override settings: {sorted(unknown_keys)}")
+        fit.update(extra)
         results, samples = fit_depths(data, backend, "LATTE", depth_levels=coverage.index,
-                                      **fit_settings)
+                                      **fit)
         results["transect_id"] = ident
         results["xc_lon"] = origin[0] + results.xc_m/(111000*np.cos(np.deg2rad(origin[1])))
         results["yc_lat"] = origin[1] + results.yc_m/111000
@@ -826,9 +826,10 @@ def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_
         results["buffer_after_hours"] = float(after)
         audit.update(window_start_utc=str(start), window_end_utc=str(end),
                      buffer_before_hours=float(before), buffer_after_hours=float(after),
-                     solo_seed_depth_m=float(seed.depth_m), solo_seed_lon_lat=origin)
+                     solo_seed_depth_m=float(seed.depth_m), solo_seed_lon_lat=origin,
+                     fit_settings=fit)
         runs[ident] = dict(data=data, coverage=coverage, audit=audit,
-                           results=results, samples=samples, solo_seed=seed)
+                           results=results, samples=samples, solo_seed=seed, fit_settings=fit)
         good, full = results.inner_valid, results.valid
         summary.append(dict(transect=ident, before_h=before, after_h=after,
                             start_utc=start, end_utc=end, times=data.time.nunique(),
@@ -843,7 +844,7 @@ def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_
 def plot_transect_comparison(runs, eddy):
     """Show depth structure per crossing relative to its own shallowest inner fit."""
     method = next(iter(runs.values()))["results"].method.iloc[0]
-    fig, axes = plt.subplots(1, 3, figsize=(13, 5), sharey=True, layout="constrained")
+    fig, axes = plt.subplots(1, 3, figsize=(3*STD_FIGSIZE, STD_FIGSIZE), sharey=True, layout="constrained")
     for ident, run in runs.items():
         r = run["results"]
         ref = r.reference_depth_m.iloc[0] if "reference_depth_m" in r else np.nan
@@ -854,10 +855,44 @@ def plot_transect_comparison(runs, eddy):
     axes[1].set_xlabel("North centre offset (km)")
     axes[2].set_xlabel("Accepted Gaussian Rc (km)")
     axes[0].invert_yaxis()
-    axes[0].legend(fontsize=8)
+    axes[0].legend()#fontsize=8)
     for ax in axes:
         ax.grid(alpha=.2)
     fig.suptitle(f"{eddy} · independent {method} profiles for each crossing\nOffsets reference each crossing's shallowest accepted centre; no averaging across times")
+    return fig
+
+
+def plot_buffered_latte_comparison(runs, eddy):
+    """Compare independent LATTE depth profiles; never average across visits."""
+    if not runs:
+        raise ValueError("No buffered LATTE runs")
+    fig, axes = plt.subplots(2, 4, figsize=(4*STD_FIGSIZE, 2*STD_FIGSIZE), sharey=True, layout="constrained")
+    specs = [
+        ("offset_east_km", "East offset (km)", "inner_valid", 1),
+        ("offset_north_km", "North offset (km)", "inner_valid", 1),
+        ("displacement_km", "Centre displacement (km)", "inner_valid", 1),
+        ("Rc_m", "Gaussian Rc (km)", "valid", 1/1000),
+        ("alpha", "Axis ratio", "inner_valid", 1),
+        ("angle_deg", "Major-axis angle (° from east)", "inner_valid", 1),
+        ("inner_w", "Inner vorticity (10⁻⁵ s⁻¹)", "inner_valid", 1e5),
+        ("vector_R2", "Gaussian vector R²", "valid", 1),
+    ]
+    colours = plt.cm.tab10(np.linspace(0, 1, max(len(runs), 2)))
+    for colour, (ident, run) in zip(colours, runs.items()):
+        r = run["results"]
+        style = "--" if ident.startswith("F") and int(ident[1:]) >= 8 else "-"
+        for ax, (column, label, mask, factor) in zip(axes.flat, specs):
+            value = r[column].where(r[mask]) * factor
+            ax.plot(value, r.depth_m, marker=".", markersize=3, lw=1,
+                    linestyle=style, color=colour, label=ident)
+            ax.set_xlabel(label)
+            ax.grid(alpha=.2)
+    axes[0, 0].set_ylabel("Depth (m)")
+    axes[1, 0].set_ylabel("Depth (m)")
+    axes[0, 0].invert_yaxis()
+    fig.legend(*axes[0, 0].get_legend_handles_labels(), loc="outside right upper", title="Crossing")
+    fig.suptitle(f"{eddy} buffered LATTE · independent crossings · gaps are rejected fits\n"
+                 "Offsets reference each crossing's shallowest accepted centre; dashed lines mark Freddy visit 2")
     return fig
 
 
@@ -881,13 +916,13 @@ def plot_sections(results, backend, half_width_km=120, speed_max=1.5):
             continue
         _, zonal[j] = backend.model_uv_at_xy(axis*1000, np.full(len(axis),reference.yc_m), row.xc_m,row.yc_m,_q(row),row.Omega,row.Rc_m)
         meridional[j], _ = backend.model_uv_at_xy(np.full(len(axis),reference.xc_m), axis*1000, row.xc_m,row.yc_m,_q(row),row.Omega,row.Rc_m)
-    fig, axes = plt.subplots(1,2,figsize=(13,5),sharey=True,layout="constrained")
+    fig, axes = plt.subplots(1,2,figsize=(2*STD_FIGSIZE, STD_FIGSIZE),sharey=True,layout="constrained")
     for ax, field, offset, label, title in zip(axes, [zonal,meridional], [results.xc_m,results.yc_m], ["East (km)","North (km)"],
         [f"Zonal slice · northward v · y={reference.yc_m/1000:.1f} km", f"Meridional slice · eastward u · x={reference.xc_m/1000:.1f} km"]):
         image=ax.pcolormesh(axis,results.depth_m,np.ma.masked_invalid(field),cmap="RdBu_r",vmin=-speed_max,vmax=speed_max,shading="nearest")
         ax.plot(offset.where(results.valid)/1000,results.depth_m,"k.--",label="Projected centre")
         ax.set(xlabel=label,title=title,ylim=(results.depth_m.max()+4,results.depth_m.min()-4))
-        ax.legend(fontsize=9)
+        ax.legend()#(fontsize=9)
     axes[0].set_ylabel("Depth (m)")
     fig.colorbar(image,ax=axes,label="Reconstructed velocity (m/s)")
     fig.suptitle(f"{results.method.iloc[0]} · fixed planes through centre at {reference.depth_m:g} m\nCentre paths are projected; white rows are rejected fits; no depth interpolation")

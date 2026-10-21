@@ -1,0 +1,43 @@
+{
+  "eddy": "Murphy",
+  "transects_config": "transects.json",
+  "active_transect": "M1",
+  "buffer_hours": {
+    "M1": [
+      7.0,
+      7.0
+    ],
+    "M2": [
+      8.0,
+      8.0
+    ]
+  },
+  "min_attendance": null,
+  "fit": {
+    "core_radius": 50000.0,
+    "outer_radius": 300000.0,
+    "max_centre_step": 200000.0,
+    "radius_limit": 500000.0,
+    "min_core_points": 1,
+    "min_outer_points": 1,
+    "expected_sign": -1,
+    "require_peak_bracket": false
+  },
+  "map_depths": [
+    30,
+    100,
+    200,
+    300,
+    400,
+    500,
+    600,
+    700
+  ],
+  "half_width_km": 100,
+  "velocity_limit": 1,
+  "satellite_half_width_km": 120,
+  "satellite_depth_m": 200,
+  "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
+  "save_results": true,
+  "fit_overrides": {}
+}

@@ -1,0 +1,80 @@
+{
+  "eddy": "Freddy",
+  "transects_config": "transects.json",
+  "visit": "both",
+  "active_transect": "F1",
+  "buffer_hours": {
+    "F1": [
+      5.0,
+      5.0
+    ],
+    "F2": [
+      5.0,
+      5.0
+    ],
+    "F3": [
+      5.0,
+      5.0
+    ],
+    "F4": [
+      6.0,
+      6.0
+    ],
+    "F5": [
+      6.0,
+      6.0
+    ],
+    "F6": [
+      10.0,
+      10.0
+    ],
+    "F7": [
+      6.0,
+      6.0
+    ],
+    "F8": [
+      0.0,
+      6.0
+    ],
+    "F9": [
+      6.0,
+      12.0
+    ]
+  },
+  "min_attendance": null,
+  "fit": {
+    "core_radius": 10000.0,
+    "outer_radius": 40000.0,
+    "max_centre_step": 200000.0,
+    "radius_limit": 150000.0,
+    "min_core_points": 1,
+    "min_outer_points": 1,
+    "expected_sign": -1,
+    "require_peak_bracket": false
+  },
+  "map_depths_by_visit": {
+    "visit1": [
+      30,
+      100,
+      200,
+      300,
+      400,
+      500,
+      600,
+      700
+    ],
+    "visit2": [
+      18,
+      100,
+      200,
+      290
+    ]
+  },
+  "half_width_km": 40,
+  "velocity_limit": 1,
+  "satellite_half_width_km": 80,
+  "satellite_depth_m": null,
+  "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
+  "save_results": true,
+  "fit_overrides": {}
+}

@@ -1,0 +1,94 @@
+{
+  "_note": "Active ADCP crossing windows and coordinate origins. Edit here, then rerun SOLO exports before buffered LATTE. Times are UTC; these are analysis choices, not a transcription of all published MOCA intervals.",
+  "data_path": "/srv/scratch/z5297792/tilt_observation_data/MNF_IN2015_V03_adcp_trawler/MNF_IN2015_V03_adcp_trawler.csv",
+  "transects": [
+    {
+      "id": "M1",
+      "eddy": "Murphy",
+      "start": "2015-06-04T22:00:00Z",
+      "end": "2015-06-05T07:00:00Z",
+      "lon": 154.8351,
+      "lat": -28.6168
+    },
+    {
+      "id": "M2",
+      "eddy": "Murphy",
+      "start": "2015-06-05T14:30:00Z",
+      "end": "2015-06-05T17:30:00Z",
+      "lon": 154.6091,
+      "lat": -28.6726
+    },
+    {
+      "id": "F1",
+      "eddy": "Freddy",
+      "start": "2015-06-08T22:15:00Z",
+      "end": "2015-06-09T01:55:00Z",
+      "lon": 153.2057,
+      "lat": -32.5763
+    },
+    {
+      "id": "F2",
+      "eddy": "Freddy",
+      "start": "2015-06-09T03:00:00Z",
+      "end": "2015-06-09T04:30:00Z",
+      "lon": 153.1891,
+      "lat": -32.5825
+    },
+    {
+      "id": "F3",
+      "eddy": "Freddy",
+      "start": "2015-06-09T05:50:00Z",
+      "end": "2015-06-09T07:20:00Z",
+      "lon": 153.2188,
+      "lat": -32.5691
+    },
+    {
+      "id": "F4",
+      "eddy": "Freddy",
+      "start": "2015-06-09T13:45:00Z",
+      "end": "2015-06-09T14:45:00Z",
+      "lon": 153.2487,
+      "lat": -32.6099
+    },
+    {
+      "id": "F5",
+      "eddy": "Freddy",
+      "start": "2015-06-09T21:00:00Z",
+      "end": "2015-06-09T22:30:00Z",
+      "lon": 153.2435,
+      "lat": -32.655
+    },
+    {
+      "id": "F6",
+      "eddy": "Freddy",
+      "start": "2015-06-10T02:15:00Z",
+      "end": "2015-06-10T03:15:00Z",
+      "lon": 153.2461,
+      "lat": -32.6425
+    },
+    {
+      "id": "F7",
+      "eddy": "Freddy",
+      "start": "2015-06-12T15:30:00Z",
+      "end": "2015-06-12T17:00:00Z",
+      "lon": 153.4448,
+      "lat": -32.8224
+    },
+    {
+      "id": "F8",
+      "eddy": "Freddy",
+      "start": "2015-06-16T15:30:00Z",
+      "end": "2015-06-16T16:30:00Z",
+      "lon": 153.9855,
+      "lat": -33.2769
+    },
+    {
+      "id": "F9",
+      "eddy": "Freddy",
+      "start": "2015-06-16T23:00:00Z",
+      "end": "2015-06-17T00:00:00Z",
+      "lon": 153.8311,
+      "lat": -33.2702
+    }
+  ]
+}

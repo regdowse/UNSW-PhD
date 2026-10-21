@@ -1,0 +1,57 @@
+{
+  "eddy": "Freddy",
+  "transects_config": "transects.json",
+  "visit": "both",
+  "active_transect_by_visit": {
+    "visit1": "F1",
+    "visit2": "F8",
+    "both": "F1"
+  },
+  "overview_bounds_by_visit": {
+    "visit1": [
+      152.8,
+      153.5,
+      -32.9,
+      -32.3
+    ],
+    "visit2": [
+      153.5,
+      154.2,
+      -33.6,
+      -33.0
+    ],
+    "both": [
+      152.8,
+      154.2,
+      -33.6,
+      -32.3
+    ]
+  },
+  "min_attendance": null,
+  "fit": {
+    "core_radius": 10000.0,
+    "outer_radius": 30000.0,
+    "search_half_width": 25000.0,
+    "max_centre_step": 30000.0,
+    "radius_limit": 200000.0,
+    "min_core_points": 1,
+    "min_outer_points": 1,
+    "expected_sign": -1,
+    "require_peak_bracket": true,
+    "solo_initialisation": "local"
+  },
+  "map_depths": [
+    30,
+    100,
+    200,
+    300,
+    400,
+    500,
+    600,
+    700
+  ],
+  "half_width_km": 40,
+  "velocity_limit": 1,
+  "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
+  "save_results": true
+}
