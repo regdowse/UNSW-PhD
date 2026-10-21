@@ -61,7 +61,7 @@ truth. Each crossing starts independently at its own origin.
 | F8 | Freddy | 2015-06-16T15:30:00Z | 2015-06-16T16:30:00Z | 153.9855 | -33.2769 |
 | F9 | Freddy | 2015-06-16T23:00:00Z | 2015-06-17T00:00:00Z | 153.8311 | -33.2702 |
 
-Original
+<!-- Original -->
 <!-- | ID | Eddy | Start UTC | End UTC | Centre lon | Centre lat |
 | --- | --- | --- | --- | --- | --- |
 | M1 | Murphy | 2015-06-05T02:00:00Z | 2015-06-05T05:00:00Z | 154.8351 | -28.6168 |
@@ -143,3 +143,6 @@ Optional CSV exports retain transect IDs, actual time bounds, rejected levels,
 coordinates and settings. Do not treat numerical acceptance as independent
 scientific validation. The shared-helper relocation preserves existing 2021
 settings and saved outputs.
+
+
+
