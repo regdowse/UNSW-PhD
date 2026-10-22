@@ -1,7 +1,7 @@
 {
   "eddy": "Murphy",
   "transects_config": "transects.json",
-  "active_transect": "M1",
+  "active_transect": "M2",
   "overview_bounds": [
     153.5,
     156.0,
@@ -34,5 +34,11 @@
   "half_width_km": 100,
   "velocity_limit": 1,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
-  "save_results": true
+  "save_results": true,
+  "along_track_bin_km": [
+    2,
+    3,
+    4,
+    5
+  ]
 }

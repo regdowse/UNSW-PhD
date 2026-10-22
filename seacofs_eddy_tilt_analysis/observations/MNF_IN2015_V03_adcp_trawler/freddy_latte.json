@@ -52,5 +52,11 @@
   "half_width_km": 40,
   "velocity_limit": 1,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
-  "save_results": true
+  "save_results": true,
+  "along_track_bin_km": [
+    2,
+    3,
+    4,
+    5
+  ]
 }

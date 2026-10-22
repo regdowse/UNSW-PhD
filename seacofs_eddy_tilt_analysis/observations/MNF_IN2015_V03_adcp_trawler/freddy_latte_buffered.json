@@ -1,7 +1,7 @@
 {
   "eddy": "Freddy",
   "transects_config": "transects.json",
-  "visit": "both",
+  "visit": "visit1",
   "active_transect": "F1",
   "buffer_hours": {
     "F1": [
@@ -76,5 +76,11 @@
   "satellite_depth_m": null,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
   "save_results": true,
-  "fit_overrides": {}
+  "fit_overrides": {},
+  "along_track_bin_km": [
+    2,
+    5,
+    10,
+    20
+  ]
 }
