@@ -517,6 +517,7 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
     xx, yy = np.meshgrid(axis*1000, axis*1000)
     image = None
 
+    xy_diff = []
     for ax, z in zip(axs.ravel(), actual):
         row = results.loc[results.depth_m.eq(z)].iloc[0]
         d = samples[z]
@@ -529,6 +530,8 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
         else:
             ax.text(.02, .02, row.status.replace("_", " "), transform=ax.transAxes, fontsize=8, wrap=True)
         ax.quiver(d.x/1000, d.y/1000, d.u, d.v, scale=quiv_scale, color="black", width=quiv_width, zorder=7)
+        xy_diff.append(np.hypot(np.diff(d.x/1000), np.diff(d.y/1000)).mean())
+        
         inner = d["inner"].to_numpy(bool)
         outer_fit = d["outer_fit"].to_numpy(bool) if "outer_fit" in d else d["outer"].to_numpy(bool)
         outer_only = outer_fit & ~inner
@@ -538,7 +541,7 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
             ax.scatter(row.xc_m/1000, row.yc_m/1000, marker="x", color="red")
         ax.set(xlim=(-half_width_km, half_width_km), ylim=(-half_width_km, half_width_km),
                aspect="equal", xlabel="East (km)", ylabel="North (km)", title=f"{z:g} m")
-
+    print(f"{np.array(xy_diff).mean():.2f} km mean spacing")
     for ax in axs.ravel()[len(actual):]:
         ax.set_axis_off()
 
@@ -771,6 +774,60 @@ def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None
     return runs, pd.DataFrame(summary).set_index("transect"), pd.concat(tables, ignore_index=True)
 
 
+def bin_solo_along_track(data, width_km):
+    """Vector-average one SOLO crossing in equal along-track cells at each depth.
+
+    Use the shallowest-bin track direction for every depth. Each occupied cell
+    contributes one observed-position/velocity vector; no depths are interpolated.
+    Apply to one crossing at a time so separate visits are never averaged.
+    """
+    width_km = float(width_km)
+    if not np.isfinite(width_km) or width_km <= 0:
+        raise ValueError("Along-track bin width must be a positive number of km")
+    if data.empty:
+        raise ValueError("Cannot bin an empty crossing")
+    surface = data.loc[data.depth.eq(data.depth.min())]
+    xy = surface[["x", "y"]].to_numpy(float)
+    if len(xy) < 2 or not np.any(np.ptp(xy, axis=0)):
+        raise ValueError("Cannot infer the along-track direction")
+    _, _, vh = np.linalg.svd(xy - xy.mean(axis=0), full_matrices=False)
+    along = data[["x", "y"]].to_numpy(float) @ vh[0]
+    cells = np.floor((along - along.min()) / (width_km * 1000)).astype(int)
+    binned = data.assign(along_track_cell=cells).groupby(
+        ["depth", "along_track_cell"], as_index=False, sort=True
+    ).agg(x=("x", "mean"), y=("y", "mean"),
+          u=("u", "mean"), v=("v", "mean"), n_raw=("u", "size"))
+    return binned
+
+
+def plot_solo_binning_comparison(fits, transect_id):
+    """Compare SOLO centres, radius and inner vorticity against one raw fit."""
+    raw = fits["Original"]
+    accepted = raw.loc[raw.inner_valid]
+    if accepted.empty:
+        return _no_fit(f"{transect_id} · along-track binning", "No accepted original centre")
+    reference = accepted.iloc[0]
+    fig, axes = plt.subplots(1, 4, figsize=(15, 5), sharey=True, layout="constrained")
+    for label, result in fits.items():
+        z = result.depth_m
+        good = result.inner_valid
+        style = dict(marker=".", markersize=3, linewidth=1.3 if label == "Original" else 1)
+        axes[0].plot((result.xc_m.where(good) - reference.xc_m) / 1000, z,
+                     label=label, **style)
+        axes[1].plot((result.yc_m.where(good) - reference.yc_m) / 1000, z, **style)
+        axes[2].plot(result.Rc_m.where(result.valid) / 1000, z, **style)
+        axes[3].plot(result.inner_w.where(good) * 1e5, z, **style)
+    for ax, label in zip(axes, ["East centre offset (km)", "North centre offset (km)",
+                                "Gaussian Rc (km)", "Inner vorticity (10⁻⁵ s⁻¹)"]):
+        ax.set_xlabel(label)
+        ax.grid(alpha=.2)
+    axes[0].set_ylabel("Depth (m)")
+    axes[0].invert_yaxis()
+    axes[0].legend(title="Along-track bin", fontsize=8)
+    fig.suptitle(f"{transect_id} · offsets from original centre at {reference.depth_m:g} m; gaps are rejected fits")
+    return fig
+
+
 def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_settings,
                                  before_hours=1.0, after_hours=1.0,
                                  buffer_overrides=None, min_attendance=None,
@@ -916,14 +973,14 @@ def plot_sections(results, backend, half_width_km=120, speed_max=1.5):
             continue
         _, zonal[j] = backend.model_uv_at_xy(axis*1000, np.full(len(axis),reference.yc_m), row.xc_m,row.yc_m,_q(row),row.Omega,row.Rc_m)
         meridional[j], _ = backend.model_uv_at_xy(np.full(len(axis),reference.xc_m), axis*1000, row.xc_m,row.yc_m,_q(row),row.Omega,row.Rc_m)
-    fig, axes = plt.subplots(1,2,figsize=(2*STD_FIGSIZE, STD_FIGSIZE),sharey=True,layout="constrained")
+    fig, axes = plt.subplots(1,2,figsize=(2.5*STD_FIGSIZE, 1.5*STD_FIGSIZE),sharey=True,layout="constrained")
     for ax, field, offset, label, title in zip(axes, [zonal,meridional], [results.xc_m,results.yc_m], ["East (km)","North (km)"],
-        [f"Zonal slice · northward v · y={reference.yc_m/1000:.1f} km", f"Meridional slice · eastward u · x={reference.xc_m/1000:.1f} km"]):
+        [f"Zonal slice\nnorthward v\ny={reference.yc_m/1000:.1f} km", f"Meridional slice\neastward u\nx={reference.xc_m/1000:.1f} km"]):
         image=ax.pcolormesh(axis,results.depth_m,np.ma.masked_invalid(field),cmap="RdBu_r",vmin=-speed_max,vmax=speed_max,shading="nearest")
         ax.plot(offset.where(results.valid)/1000,results.depth_m,"k.--",label="Projected centre")
         ax.set(xlabel=label,title=title,ylim=(results.depth_m.max()+4,results.depth_m.min()-4))
-        ax.legend()#(fontsize=9)
+        # ax.legend()#(fontsize=9)
     axes[0].set_ylabel("Depth (m)")
     fig.colorbar(image,ax=axes,label="Reconstructed velocity (m/s)")
-    fig.suptitle(f"{results.method.iloc[0]} · fixed planes through centre at {reference.depth_m:g} m\nCentre paths are projected; white rows are rejected fits; no depth interpolation")
+    fig.suptitle(f"{results.method.iloc[0]} · fixed planes through centre at {reference.depth_m:g} m")
     return fig

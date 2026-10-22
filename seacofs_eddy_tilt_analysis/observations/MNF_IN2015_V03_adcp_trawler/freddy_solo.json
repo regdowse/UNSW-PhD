@@ -1,7 +1,7 @@
 {
   "eddy": "Freddy",
   "transects_config": "transects.json",
-  "visit": "both",
+  "visit": "visit1",
   "active_transect_by_visit": {
     "visit1": "F1",
     "visit2": "F8",
@@ -37,7 +37,7 @@
     "min_core_points": 1,
     "min_outer_points": 1,
     "expected_sign": -1,
-    "require_peak_bracket": true,
+    "require_peak_bracket": false,
     "solo_initialisation": "local"
   },
   "map_depths": [
@@ -53,5 +53,11 @@
   "half_width_km": 40,
   "velocity_limit": 1,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
-  "save_results": true
+  "save_results": true,
+  "along_track_bin_km": [
+    2,
+    3,
+    4,
+    5
+  ]
 }
