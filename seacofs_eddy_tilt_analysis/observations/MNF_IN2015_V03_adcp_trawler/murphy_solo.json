@@ -9,18 +9,6 @@
     -27.6
   ],
   "min_attendance": null,
-  "fit": {
-    "core_radius": 10000.0,
-    "outer_radius": 65000.0,
-    "search_half_width": 10000.0,
-    "max_centre_step": 150000.0,
-    "radius_limit": 200000.0,
-    "min_core_points": 1,
-    "min_outer_points": 1,
-    "expected_sign": -1,
-    "require_peak_bracket": true,
-    "solo_initialisation": "local"
-  },
   "map_depths": [
     30,
     100,
@@ -40,5 +28,39 @@
     3,
     4,
     5
-  ]
+  ],
+  "fit_by_transect": {
+    "M1": {
+      "core_radius": 10000.0,
+      "outer_radius": 65000.0,
+      "search_half_width": 10000.0,
+      "max_centre_step": 150000.0,
+      "radius_limit": 200000.0,
+      "min_core_points": 1,
+      "min_outer_points": 1,
+      "expected_sign": -1,
+      "require_peak_bracket": true,
+      "solo_initialisation": "local",
+      "radius_tracking": false,
+      "core_radius_factor": 0.2,
+      "outer_radius_factor": 1.75,
+      "initial_Rc": null
+    },
+    "M2": {
+      "core_radius": 10000.0,
+      "outer_radius": 65000.0,
+      "search_half_width": 10000.0,
+      "max_centre_step": 150000.0,
+      "radius_limit": 200000.0,
+      "min_core_points": 1,
+      "min_outer_points": 1,
+      "expected_sign": -1,
+      "require_peak_bracket": true,
+      "solo_initialisation": "local",
+      "radius_tracking": false,
+      "core_radius_factor": 0.2,
+      "outer_radius_factor": 1.75,
+      "initial_Rc": null
+    }
+  }
 }

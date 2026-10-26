@@ -188,13 +188,18 @@ def _outer(backend, x, y, u, v, centre, q, omega, radius_limit, min_points):
 def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000.,
                search_half_width=60000., max_centre_step=35000., radius_limit=100000.,
                min_core_points=8, min_outer_points=12, expected_sign=1,
-               require_peak_bracket=True, depth_levels=None, solo_initialisation="backend"):
+               require_peak_bracket=True, depth_levels=None, solo_initialisation="backend",
+               radius_tracking=False, core_radius_factor=None, outer_radius_factor=None,
+               initial_Rc=None):
     """Follow accepted inner centres downwards; failed depths do not update the seed.
 
     Both methods start at the specified geographic origin (x=y=0). SOLO uses a
     fixed transect direction derived from the shallowest selected bin. LATTE
     repeats its core selection twice, using the last accepted ellipse as seed.
     Reconstruction acceptance is independent of inner-centre acceptance.
+    With radius_tracking enabled, non-null factors multiply the last accepted
+    Gaussian Rc. Until one exists, use initial_Rc or the explicit fixed radii.
+    Both thresholds are frozen for each depth; rejected fits never update Rc.
     """
     method = method.upper()
     if method not in ("LATTE", "SOLO"):
@@ -203,6 +208,14 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
         raise ValueError("solo_initialisation must be backend or local")
     if min(core_radius, outer_radius, search_half_width, max_centre_step, radius_limit) <= 0:
         raise ValueError("All radii and search distances must be positive.")
+    if not isinstance(radius_tracking, (bool, np.bool_)):
+        raise ValueError("radius_tracking must be a boolean")
+    for name, value in (("core_radius_factor", core_radius_factor),
+                        ("outer_radius_factor", outer_radius_factor), ("initial_Rc", initial_Rc)):
+        if value is not None and (isinstance(value, bool) or not np.isfinite(value) or value <= 0):
+            raise ValueError(f"{name} must be null or a finite positive number")
+    if not np.isfinite([core_radius, outer_radius]).all():
+        raise ValueError("Core and outer radii must be finite")
     if expected_sign not in (-1, 1):
         raise ValueError("expected_sign must be +1 (AE here) or -1 (CE here).")
     surface = data.loc[data.depth.eq(data.depth.min())]
@@ -213,12 +226,23 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
         tangent = -tangent
     normal = np.array([-tangent[1], tangent[0]])
     centre, q_previous = np.zeros(2), np.eye(2)
+    radius_reference = initial_Rc if radius_tracking else None
+    radius_reference_depth = np.nan
     rows, samples = [], {}
     levels = sorted(data.depth.unique() if depth_levels is None else depth_levels)
     for depth in levels:
+        core_threshold, outer_threshold = core_radius, outer_radius
+        if radius_tracking and radius_reference is not None:
+            if core_radius_factor is not None:
+                core_threshold = core_radius_factor * radius_reference
+            if outer_radius_factor is not None:
+                outer_threshold = outer_radius_factor * radius_reference
         d = data.loc[data.depth.eq(depth)]
         x, y, u, v = [d[c].to_numpy(float) for c in ("x", "y", "u", "v")]
         rec = dict(method=method, depth_m=depth, n_obs=len(d), n_core=0,
+                   core_radius_used_m=core_threshold, outer_radius_used_m=outer_threshold,
+                   radius_reference_m=radius_reference if radius_reference is not None else np.nan,
+                   radius_reference_depth_m=radius_reference_depth,
                    inner_valid=False, valid=False, status="unattempted", warnings="",
                    xc_m=np.nan, yc_m=np.nan, q11=np.nan, q12=np.nan, q22=np.nan,
                    inner_w=np.nan, inner_Omega=np.nan, inner_R2=np.nan,
@@ -237,7 +261,7 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
             if method == "LATTE":
                 c, q = centre.copy(), q_previous.copy()
                 for _ in range(2):
-                    core = _rho(x, y, c, q) <= core_radius
+                    core = _rho(x, y, c, q) <= core_threshold
                     sample["inner"] = core
                     rec["n_core"] = int(core.sum())
                     if core.sum() < min_core_points:
@@ -270,11 +294,11 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                     if solo_initialisation == "local":
                         l0, r0, w, q, om = _solo_local(
                             along[search][order], vt[search][order], vn[search][order],
-                            seed, search_half_width, core_radius)
+                            seed, search_half_width, core_threshold)
                     else:
                         l0, r0, w, q, om = backend.solo(
                             along[search][order], vt[search][order], vn[search][order],
-                            core_thresh=core_radius)
+                            core_thresh=core_threshold)
                 rec["warnings"] = "; ".join(str(a.message) for a in caught)
                 if not np.isfinite([l0, r0, w, om]).all():
                     raise ValueError("nonfinite_inner")
@@ -284,7 +308,7 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                 # The line offset is fixed from the shallowest sampling track.
                 offset = surface[["x", "y"]].to_numpy().mean(axis=0) @ normal
                 c = l0 * tangent + (offset + r0) * normal
-                core = search & (abs(along - l0) <= core_radius)
+                core = search & (abs(along - l0) <= core_threshold)
                 sample["inner"] = core
                 rec["n_core"] = int(core.sum())
                 rec["core_spread_ratio"] = _spread(x[core], y[core]) if core.sum() > 1 else 0.
@@ -309,7 +333,7 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                        alpha=alpha, angle_deg=angle if alpha > 1.0001 else np.nan,
                        centre_step_m=step)
             centre, q_previous = c.copy(), q.copy()
-            outer = _rho(x, y, c, q) <= outer_radius
+            outer = _rho(x, y, c, q) <= outer_threshold
             sample["outer"] = outer
             out, status, outer_use = _outer(backend, x[outer], y[outer], u[outer], v[outer],
                                             c, q, om, radius_limit, min_outer_points)
@@ -328,6 +352,10 @@ def fit_depths(data, backend, method, *, core_radius=35000., outer_radius=100000
                 rec["vector_rmse_m_s"] = np.sqrt(np.mean((u[outer]-uh)**2 + (v[outer]-vv)**2))
         except (ValueError, RuntimeError, FloatingPointError, np.linalg.LinAlgError) as exc:
             rec["status"] = str(exc)
+        if (radius_tracking and rec["valid"] and rec["status"] == "ok"
+                and np.isfinite(rec["Rc_m"]) and rec["Rc_m"] > 0):
+            radius_reference = rec["Rc_m"]
+            radius_reference_depth = depth
         rows.append(rec)
     results = pd.DataFrame(rows)
     good = results.inner_valid
@@ -749,19 +777,33 @@ def load_study(config_path, eddy, overview_bounds=None, load_adcp=True):
     return data_path, catalog, adcp
 
 
-def fit_transects(data_path, catalog, backend, fit_settings, min_attendance=None):
+def _validate_fit_by_transect(catalog, settings):
+    """Require exactly one settings block for each selected crossing."""
+    if settings is not None and set(settings) != set(catalog.index):
+        missing = set(catalog.index) - set(settings)
+        unknown = set(settings) - set(catalog.index)
+        raise ValueError(f"Invalid fit_by_transect: missing={sorted(missing)}, unknown={sorted(unknown)}")
+
+
+def fit_transects(data_path, catalog, backend, fit_settings=None, min_attendance=None,
+                  *, fit_by_transect=None):
     """Independent depth fits per crossing: never carry a centre between times."""
+    _validate_fit_by_transect(catalog, fit_by_transect)
+    if fit_by_transect is not None and fit_settings is not None:
+        raise ValueError("Use fit_by_transect without shared settings")
     runs, summary, tables = {}, [], []
     for ident, spec in catalog.iterrows():
         data, coverage, audit = load_observations(data_path, spec.start, spec.end,
                                                  (spec.lon, spec.lat), min_attendance)
+        fit = dict(fit_settings if fit_by_transect is None else fit_by_transect[ident])
+        audit["fit_settings"] = fit
         results, samples = fit_depths(data, backend, "SOLO", depth_levels=coverage.index,
-                                     **fit_settings)
+                                     **fit)
         results["transect_id"] = ident
         results["xc_lon"] = spec.lon + results.xc_m/(111000*np.cos(np.deg2rad(spec.lat)))
         results["yc_lat"] = spec.lat + results.yc_m/111000
         results["start_utc"], results["end_utc"] = audit["start_utc"], audit["end_utc"]
-        runs[ident] = dict(data=data, coverage=coverage, audit=audit, results=results, samples=samples)
+        runs[ident] = dict(data=data, coverage=coverage, audit=audit, results=results, samples=samples, fit_settings=fit)
         good = results.inner_valid
         full = results.valid
         summary.append(dict(transect=ident, times=data.time.nunique(), bins=len(results),
@@ -828,16 +870,19 @@ def plot_solo_binning_comparison(fits, transect_id):
     return fig
 
 
-def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_settings,
+def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_settings=None,
                                  before_hours=1.0, after_hours=1.0,
                                  buffer_overrides=None, min_attendance=None,
-                                 fit_overrides=None):
+                                 fit_overrides=None, fit_by_transect=None):
     """Fit LATTE independently around each SOLO crossing, including time buffers.
 
     Each crossing starts at its own shallowest accepted SOLO inner centre. All
     finite ADCP observations in the expanded time window are used, without a
     spatial or straight-line restriction. Buffers are (hours before, hours after).
     """
+    _validate_fit_by_transect(catalog, fit_by_transect)
+    if fit_by_transect is not None and (fit_settings is not None or fit_overrides):
+        raise ValueError("Use fit_by_transect without shared settings or fit_overrides")
     overrides = {} if buffer_overrides is None else dict(buffer_overrides)
     fit_overrides = {} if fit_overrides is None else dict(fit_overrides)
     unknown_fit = set(fit_overrides) - set(catalog.index)
@@ -866,7 +911,7 @@ def fit_buffered_latte_transects(data_path, catalog, solo_results, backend, fit_
         end = pd.Timestamp(crossing.end) + pd.Timedelta(hours=float(after))
         data, coverage, audit = load_observations(data_path, start, end, origin,
                                                   min_attendance=min_attendance)
-        fit = dict(fit_settings)
+        fit = dict(fit_settings if fit_by_transect is None else fit_by_transect[ident])
         extra = fit_overrides.get(ident, {})
         unknown_keys = set(extra) - set(fit)
         if unknown_keys:

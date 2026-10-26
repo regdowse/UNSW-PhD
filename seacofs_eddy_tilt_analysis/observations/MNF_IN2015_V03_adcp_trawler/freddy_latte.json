@@ -39,16 +39,6 @@
     ]
   },
   "min_attendance": null,
-  "fit": {
-    "core_radius": 20000.0,
-    "outer_radius": 50000.0,
-    "max_centre_step": 200000.0,
-    "radius_limit": 150000.0,
-    "min_core_points": 1,
-    "min_outer_points": 1,
-    "expected_sign": -1,
-    "require_peak_bracket": true
-  },
   "half_width_km": 40,
   "velocity_limit": 1,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
@@ -58,5 +48,39 @@
     3,
     4,
     5
-  ]
+  ],
+  "fit_by_visit": {
+    "visit1": {
+      "core_radius": 20000.0,
+      "outer_radius": 50000.0,
+      "search_half_width": 60000.0,
+      "max_centre_step": 200000.0,
+      "radius_limit": 150000.0,
+      "min_core_points": 1,
+      "min_outer_points": 1,
+      "expected_sign": -1,
+      "require_peak_bracket": true,
+      "solo_initialisation": "backend",
+      "radius_tracking": false,
+      "core_radius_factor": 0.2,
+      "outer_radius_factor": 1.75,
+      "initial_Rc": null
+    },
+    "visit2": {
+      "core_radius": 20000.0,
+      "outer_radius": 50000.0,
+      "search_half_width": 60000.0,
+      "max_centre_step": 200000.0,
+      "radius_limit": 150000.0,
+      "min_core_points": 1,
+      "min_outer_points": 1,
+      "expected_sign": -1,
+      "require_peak_bracket": true,
+      "solo_initialisation": "backend",
+      "radius_tracking": false,
+      "core_radius_factor": 0.2,
+      "outer_radius_factor": 1.75,
+      "initial_Rc": null
+    }
+  }
 }

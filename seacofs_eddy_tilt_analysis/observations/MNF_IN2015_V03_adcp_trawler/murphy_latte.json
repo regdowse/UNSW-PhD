@@ -9,16 +9,6 @@
     -27.6
   ],
   "min_attendance": null,
-  "fit": {
-    "core_radius": 50000.0,
-    "outer_radius": 100000.0,
-    "max_centre_step": 200000.0,
-    "radius_limit": 500000.0,
-    "min_core_points": 1,
-    "min_outer_points": 1,
-    "expected_sign": -1,
-    "require_peak_bracket": false
-  },
   "map_depths": [
     30,
     100,
@@ -38,5 +28,21 @@
     5,
     10,
     20
-  ]
+  ],
+  "fit": {
+    "core_radius": 50000.0,
+    "outer_radius": 100000.0,
+    "search_half_width": 60000.0,
+    "max_centre_step": 200000.0,
+    "radius_limit": 500000.0,
+    "min_core_points": 1,
+    "min_outer_points": 1,
+    "expected_sign": -1,
+    "require_peak_bracket": false,
+    "solo_initialisation": "backend",
+    "radius_tracking": false,
+    "core_radius_factor": 0.2,
+    "outer_radius_factor": 1.75,
+    "initial_Rc": null
+  }
 }
