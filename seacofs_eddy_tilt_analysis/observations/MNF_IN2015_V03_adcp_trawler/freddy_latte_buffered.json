@@ -2,7 +2,7 @@
   "eddy": "Freddy",
   "transects_config": "transects.json",
   "visit": "visit1",
-  "active_transect": "F4",
+  "active_transect": "F3",
   "buffer_hours": {
     "F1": [
       5.0,
@@ -148,10 +148,10 @@
       "expected_sign": -1,
       "require_peak_bracket": false,
       "solo_initialisation": "backend",
-      "radius_tracking": false,
-      "core_radius_factor": 0.2,
-      "outer_radius_factor": 1.75,
-      "initial_Rc": null
+      "radius_tracking": true,
+      "core_radius_factor": 0.5,
+      "outer_radius_factor": 1.5,
+      "initial_Rc": 20000.0
     },
     "F6": {
       "core_radius": 10000.0,
@@ -164,10 +164,10 @@
       "expected_sign": -1,
       "require_peak_bracket": false,
       "solo_initialisation": "backend",
-      "radius_tracking": false,
-      "core_radius_factor": 0.2,
-      "outer_radius_factor": 1.75,
-      "initial_Rc": null
+      "radius_tracking": true,
+      "core_radius_factor": 0.5,
+      "outer_radius_factor": 1.5,
+      "initial_Rc": 20000.0
     },
     "F7": {
       "core_radius": 10000.0,
@@ -180,10 +180,10 @@
       "expected_sign": -1,
       "require_peak_bracket": false,
       "solo_initialisation": "backend",
-      "radius_tracking": false,
-      "core_radius_factor": 0.2,
-      "outer_radius_factor": 1.75,
-      "initial_Rc": null
+      "radius_tracking": true,
+      "core_radius_factor": 0.5,
+      "outer_radius_factor": 1.5,
+      "initial_Rc": 20000.0
     },
     "F8": {
       "core_radius": 10000.0,
@@ -196,10 +196,10 @@
       "expected_sign": -1,
       "require_peak_bracket": false,
       "solo_initialisation": "backend",
-      "radius_tracking": false,
-      "core_radius_factor": 0.2,
-      "outer_radius_factor": 1.75,
-      "initial_Rc": null
+      "radius_tracking": true,
+      "core_radius_factor": 0.5,
+      "outer_radius_factor": 1.5,
+      "initial_Rc": 20000.0
     },
     "F9": {
       "core_radius": 10000.0,
@@ -212,10 +212,10 @@
       "expected_sign": -1,
       "require_peak_bracket": false,
       "solo_initialisation": "backend",
-      "radius_tracking": false,
-      "core_radius_factor": 0.2,
-      "outer_radius_factor": 1.75,
-      "initial_Rc": null
+      "radius_tracking": true,
+      "core_radius_factor": 0.5,
+      "outer_radius_factor": 1.5,
+      "initial_Rc": 20000.0
     }
   }
 }

@@ -40,9 +40,9 @@
     "expected_sign": -1,
     "require_peak_bracket": false,
     "solo_initialisation": "backend",
-    "radius_tracking": false,
-    "core_radius_factor": 0.2,
-    "outer_radius_factor": 1.75,
-    "initial_Rc": null
+    "radius_tracking": true,
+    "core_radius_factor": 0.5,
+    "outer_radius_factor": 1.5,
+    "initial_Rc": 100000.0
   }
 }

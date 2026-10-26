@@ -1,0 +1,46 @@
+{
+  "eddy": "CE23",
+  "transects_config": "transects.json",
+  "solo_transect": "C1",
+  "min_attendance": null,
+  "map_depths": [
+    30,
+    100,
+    200,
+    300,
+    400,
+    500,
+    600,
+    700
+  ],
+  "half_width_km": 100,
+  "velocity_limit": 1,
+  "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
+  "save_results": true,
+  "along_track_bin_km": [
+    2,
+    5,
+    10,
+    20
+  ],
+  "fit": {
+    "core_radius": 50000.0,
+    "outer_radius": 100000.0,
+    "search_half_width": 60000.0,
+    "max_centre_step": 200000.0,
+    "radius_limit": 500000.0,
+    "min_core_points": 1,
+    "min_outer_points": 1,
+    "expected_sign": -1,
+    "require_peak_bracket": false,
+    "solo_initialisation": "backend",
+    "radius_tracking": true,
+    "core_radius_factor": 0.5,
+    "outer_radius_factor": 1.5,
+    "initial_Rc": 100000.0
+  },
+  "time_window_utc": {
+    "start": "2023-10-17T10:27:31Z",
+    "end": "2023-10-21T22:27:30.333Z"
+  }
+}

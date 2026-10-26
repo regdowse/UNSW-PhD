@@ -741,6 +741,81 @@ def plot_3d(results, backend, half_width_km=120, speed_max=1.5):
     return fig
 
 
+
+def plot_spaced_depth_structures(runs, catalog, transect_ids, *, gap_km=20.,
+                                 elev=22, azim=-80, title=False):
+    """Chronological centre-relative structures; layout spacing is not geography.
+
+    Draw every accepted Gaussian rho=Rc/sqrt(2) contour at its measured depth.
+    Keep rejected inner-centre rows as gaps. Equal east/north display scales and
+    extent-based spacing preserve relative sizes without overlapping structures.
+    Dates label the original crossing start in UTC, not the buffered window.
+    """
+    if not np.isfinite(gap_km) or gap_km <= 0:
+        raise ValueError("gap_km must be finite and positive")
+    ids = list(transect_ids)
+    if not ids or len(set(ids)) != len(ids):
+        raise ValueError("Provide unique transect IDs")
+    missing = set(ids) - (set(runs) & set(catalog.index))
+    if missing:
+        raise ValueError(f"Missing crossings: {sorted(missing)}; fit the corresponding visit first")
+    ids.sort(key=lambda ident: pd.to_datetime(catalog.loc[ident, "start"], utc=True))
+    structures = []
+    for ident in ids:
+        result = runs[ident]["results"].sort_values("depth_m")
+        accepted = result.loc[result.inner_valid]
+        if accepted.empty:
+            structures.append((ident, result, None, [], (-10., 10.)))
+            continue
+        reference = accepted.iloc[0]
+        origin = np.array([reference.xc_m, reference.yc_m]) / 1000
+        centres = result[["xc_m", "yc_m"]].where(result.inner_valid, axis=0).to_numpy() / 1000 - origin
+        rings = [(row.depth_m, _contour(row) - origin)
+                 for _, row in result.loc[result.valid & result.inner_valid].iterrows()]
+        points = np.concatenate([centres[result.inner_valid.to_numpy()], *[ring for _, ring in rings]])
+        structures.append((ident, result, centres, rings,
+                           (float(points[:, 0].min()), float(points[:, 0].max()))))
+    fig = plt.figure(figsize=(19, 7))
+    ax = fig.add_subplot(111, projection="3d")
+    ticks, labels, north, depths = [], [], [], []
+    right = None
+    for i, (ident, result, centres, rings, (left_extent, right_extent)) in enumerate(structures):
+        shift = -left_extent if right is None else right + gap_km - left_extent
+        right = shift + right_extent
+        color = plt.cm.tab10(i % 10)
+        ticks.append(shift)
+        stamp = pd.to_datetime(catalog.loc[ident, "start"], utc=True)
+        labels.append(f"{ident}\n{stamp:%d %b %H:%M}")
+        depths.extend(result.depth_m.to_numpy())
+        if centres is None:
+            ax.text(shift, 0, result.depth_m.min(), f"{ident}: no accepted centre", color=color)
+            continue
+        ax.plot(centres[:, 0] + shift, centres[:, 1], result.depth_m,
+                color=color, marker=".", markersize=3, lw=2, clip_on=False)
+        north.extend(centres[np.isfinite(centres[:, 1]), 1])
+        for depth, ring in rings:
+            ax.plot(ring[:, 0] + shift, ring[:, 1], np.full(len(ring), depth),
+                    color=color, lw=.65, alpha=.45, clip_on=False)
+            north.extend(ring[:, 1])
+    yhalf = max(10., max(abs(np.asarray(north)), default=0.) * 1.08)
+    xspan = max(right, 1.)
+    zmin, zmax = min(depths), max(depths)
+    ax.set(xlim=(-gap_km/2, right + gap_km/2), ylim=(-yhalf, yhalf),
+           zlim=(zmax + 1, zmin - 1), ylabel="North offset (km)", zlabel="Depth (m)",
+           xlabel="")
+    ax.set_xticks(ticks, labels, fontsize=8)
+    ax.set_box_aspect((xspan + gap_km, 2*yhalf, max(2*yhalf, .22*xspan)), zoom=1.65)
+    ax.set_position([0, .06, 1, .80])
+    ax.set_yticks([-round(yhalf*.8), 0, round(yhalf*.8)])
+    ax.view_init(elev=elev, azim=azim)
+    if title:
+        fig.suptitle("Freddy · buffered LATTE depth structures in chronological order\n"
+                    "Each centred on its shallowest accepted inner fit; vertical scale exaggerated\n"
+                    "Ellipses: accepted Gaussian ρ=Rc/√2 contours at every measured depth; centreline gaps: rejected fits", fontsize=12)
+        ig.text(.5, .025, "East offsets with artificial spacing · crossing start (UTC)", ha="center")
+    return fig, ax
+
+
 def load_study(config_path, eddy, overview_bounds=None, load_adcp=True):
     """Read active ADCP crossing definitions from JSON, never from study notes."""
     import json

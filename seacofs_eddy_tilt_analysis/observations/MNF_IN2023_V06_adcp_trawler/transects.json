@@ -1,0 +1,14 @@
+{
+  "_note": "UTC crossing windows and initial coordinate origins for CE23. Add independent transects here and matching complete fit_by_transect blocks in CE23_solo.json.",
+  "data_path": "/srv/scratch/z5297792/tilt_observation_data/MNF_IN2023_V06_adcp_trawler/MNF_IN2023_V06_adcp_trawler.csv",
+  "transects": [
+    {
+      "id": "C1",
+      "eddy": "CE23",
+      "start": "2023-10-17T01:30:00Z",
+      "end": "2023-10-18T01:30:00Z",
+      "lon": 154.3,
+      "lat": -37.9
+    }
+  ]
+}
