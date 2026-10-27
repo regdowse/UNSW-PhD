@@ -13,6 +13,8 @@ These experiments are controlled *sensitivity tests*, not a comprehensive observ
 
 ## Repository-first instructions (mandatory)
 
+Existing ESP repository, which was used for preivous anlaysis of the paper, can be found here /srv/scratch/z5297792/UNSW-MRes/MRes/MOCA_PAPER/final_ESP_paper_notebooks with idealiesed tests for SOLO (solo_idealised_tests_updated.ipynb), DOPPIO (doppio_idealised_tests_updated.ipynb), LATTE (latte_idealised_tests.ipynb) and also real applications of the methods in [elliptical_streamfunction_parametrisation](https://github.com/regdowse?tab=repositories#:~:text=elliptical_streamfunction_parametrisation).
+
 1. Inspect the repository before writing code. Identify the canonical elliptical Gaussian streamfunction, velocity evaluation, parameter representation, and existing SOLO, DOPPIO, and LATTE inversion implementations. Search for existing idealised experiments, test cases, geometry builders, and plot styling.
 2. **Reuse existing inversion code and established parameter conventions.** Do not reimplement the inversion algorithms or silently modify them to improve the results. If an adapter is necessary, isolate it in a helper module and document any conversion.
 3. Read the current manuscript / method documentation in the repository, if available, to establish the definition of `Rc`, `Q`, aspect ratio, orientation, vorticity, and coordinate signs. Do not infer definitions from variable names alone.
@@ -25,15 +27,12 @@ These experiments are controlled *sensitivity tests*, not a comprehensive observ
 Use existing repository naming/layout conventions where possible; otherwise create:
 
 ```text
-experiments/rc3_noise_sampling.ipynb
-experiments/rc3_background_flow.ipynb
-experiments/rc3_validation.py        # synthetic fields, geometry, inversion adapters, metrics
-experiments/rc3_plotting.py          # optional; only if it improves clarity
-figures/rc3_noise_sampling.pdf
-figures/rc3_background_flow.pdf
+rc3_noise_sampling.ipynb
+rc3_background_flow.ipynb
+rc3_validation.py        # synthetic fields, geometry, inversion adapters, metrics
+rc3_plotting.py          # optional; only if it improves clarity
 ```
-
-Also save `.png` copies at 300 dpi if convenient. Do not commit large intermediate arrays. Prefer simple CSV summaries for reproducibility, only if useful.
+Produce the plots in the notebooks. Do not commit large intermediate arrays. 
 
 ## Common scientific setup
 
@@ -87,7 +86,7 @@ How do known-parameter recovery errors and inversion success change with velocit
 
 ### One paper figure
 
-Create one clear multi-panel figure showing recovery error against noise amplitude, with curves or grouped points for `N`, faceted by inversion method and/or metric. Prefer median with 10th–90th percentile (or 5th–95th), consistently labelled; include sample counts and failed-fit information in the legend, a compact annotation, or a separate panel **within the same figure**. If a three-method × three-metric grid is too dense, select the two most informative metrics for the main figure and save the remaining metrics to a compact CSV/table.
+Create one clear multi-panel figure showing recovery error against noise amplitude, with curves or grouped points for `N`, faceted by inversion method and/or metric. Prefer median with 10th–90th percentile (or 5th–95th), consistently labelled; include sample counts and failed-fit information in the legend, a compact annotation, or a separate panel **within the same figure**. If a three-method × three-metric grid is too dense, select the two most informative metrics for the main figure and save the remaining metrics to a compact dataframe (saved in the notebooks memory).
 
 The figure must support a restrained conclusion about tested sampling densities and perturbation amplitudes. Avoid a plot dominated by goodness-of-fit scores.
 
@@ -108,7 +107,7 @@ How does a **spatially uniform, unmodelled** background velocity bias ESP parame
 
    with a constant vector `U_bg` across all sample locations. The fit must use the **unmodified existing ESP inversion** unless that inversion already includes a background term by default; if so, explicitly identify this and provide a defensible no-background-fit comparison. Do not subtract the imposed background before fitting the primary experiment.
 3. Vary background speed as a fraction of the same `U_ref`, e.g. `|U_bg| / U_ref = [0, 0.05, 0.10, 0.20, 0.30, 0.50]`.
-4. Test **background direction**, not just magnitude: at minimum eastward, northward, westward and southward vectors in the model's Cartesian coordinates. These directions matter because SOLO transect orientation can cause strongly anisotropic bias.
+4. Test **background direction**, not just magnitude: at minimum eastward and northward vectors in the model's Cartesian coordinates. These directions matter because SOLO transect orientation can cause strongly anisotropic bias.
 5. Fit each method at each speed and direction. Record centre displacement vector and magnitude, relative core-radius error, aspect-ratio error, convergence/failure, and any other metric justified by the existing implementation.
 6. This is a **deterministic sensitivity test**; do not add random noise to the primary analysis. No Monte Carlo replication is required unless a method itself uses stochastic sampling. For LATTE, fix one reproducible point cloud across background conditions.
 7. Include the zero-background baseline and check that baseline errors are small enough to interpret incremental biases. Where baseline bias is nonzero, distinguish **total error relative to truth** from **incremental change relative to zero background**.
@@ -126,7 +125,7 @@ Keep each notebook short, approximately 4–7 cells:
 2. **Imports/config:** local module imports, immutable experiment settings, seed, output path.
 3. **Run:** call one high-level helper function returning tidy `pandas.DataFrame` results.
 4. **Summary:** print a compact parameter/trial/success summary and optionally display a small table. No extra figures.
-5. **Figure:** call one plotting helper, create **one** `matplotlib.figure.Figure`, save PDF (+ optional PNG), and display it.
+5. **Figure:** call one plotting helper, create **one** `matplotlib.figure.Figure` and display it in the notebook.
 6. **Markdown:** 2–4 factual interpretation bullets automatically grounded in the results where feasible, plus a one-sentence limitation. Avoid hard-coded claims before running the experiment.
 
 Use standard NumPy, pandas and Matplotlib and the repository's existing numerical dependencies. Do not introduce heavy dependencies without need.
@@ -135,13 +134,11 @@ Use standard NumPy, pandas and Matplotlib and the repository's existing numerica
 
 - Both notebooks execute from a clean kernel in repository context, with no hidden state or manual edits.
 - Exactly **two** notebooks, **one or two** supporting `.py` modules, and **one** figure per notebook.
-- Each figure is publication-ready: vector PDF, legible font sizes at manuscript width, labelled units, panel labels `(a)`, `(b)` etc., consistent terminology, no titles unless needed, no excessive decimals.
+- Each figure is publication-ready: Labelled units, panel labels `(a)`, `(b)` etc., consistent terminology, no titles unless needed, no excessive decimals. No need to make any adjustements to things like fontsizes, this is something I can tune myself. 
 - Baseline (`sigma=0`, `U_bg=0`) recovers the reference parameters to expected numerical accuracy for an adequately sampled, identifiable configuration; if not, investigate and **report** rather than hide it.
 - `Q` remains symmetric positive definite with determinant 1 when applicable. Preserve the established definition of aspect ratio and `Rc`.
 - Report inversion failures, number of successful trials, and randomness/covariance assumptions. Do not fabricate uncertainty bars from deterministic conditions.
 - No fitted-model `R²` presented as independent validation. Avoid universal claims about real-data robustness, arbitrary sampling, background shear, or 3D reconstruction.
-- Verify output file existence and notebook execution. If a complete run is too costly, run a small smoke test, then clearly identify what remains unexecuted. Never state full validation completed without running it.
-- Provide a short final implementation report listing created paths, tested commands, actual run status, and any scientific caveats.
 
 ## Suggested public helper API (adapt to existing code)
 
