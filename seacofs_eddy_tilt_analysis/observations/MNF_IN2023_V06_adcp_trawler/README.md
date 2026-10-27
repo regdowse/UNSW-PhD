@@ -27,8 +27,14 @@ Exports are `ce23_solo_depth_fits.csv`, `ce23_solo_provenance.json`,
 `ce23_latte_depth_fits.csv` and `ce23_latte_provenance.json` in the input CSV's
 `outputs/` directory. After changing SOLO settings or crossing definitions,
 rerun SOLO with `save_results: true` before LATTE. Changing LATTE's time window
-or fit settings requires rerunning LATTE. Satellite overlays in SOLO are optional
+or fit settings requires rerunning LATTE. Satellite overlays in SOLO and LATTE are optional
 and may download daily maps; they do not affect the fit or export.
 
 The notebooks start without saved outputs. “Surface” means the shallowest
 observed bin. Cyclonic relative vorticity is negative in this workflow.
+
+Select `adcp_instrument` in each JSON: `"OS150"` (default) or `"WH75"`.
+Overview plots and fits use only that source, with independent depth tracking.
+Set both configs to the same instrument and rerun SOLO with exports, then LATTE.
+Selection audits record the chosen instrument and source filename. Existing saved
+notebook outputs and scratch exports need refreshing after changing this setting.

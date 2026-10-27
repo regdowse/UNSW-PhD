@@ -26,13 +26,23 @@ def load_backend(path):
     return backend, {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
-def load_observations(path, start, end, origin, min_attendance=None, bounds=None):
+def load_observations(path, start, end, origin, min_attendance=None, bounds=None,
+                      instrument=None):
     """Keep original depth bins; optional UTC/region selection, no interpolation or QC inference.
 
     Pass start=end=None to use every observation in the supplied spatial region.
     bounds is (west, east, south, north) in degrees.
+    instrument selects the CE23 OS150 or WH75 source; None preserves all sources.
     """
     raw = pd.read_csv(path)
+    if instrument is not None:
+        instrument_files = {
+            "OS150": "IN2023_V06_ADCP_os150nb.nc",
+            "WH75": "in2023_v06_ADCP_wh75bb.nc",
+        }
+        if instrument not in instrument_files:
+            raise ValueError("instrument must be OS150, WH75 or None (all instruments)")
+        raw = raw.loc[raw["Datafile"].eq(instrument_files[instrument])].copy()
     raw["time"] = pd.to_datetime(raw["Start (UTC)"], utc=True)
     if (start is None) != (end is None):
         raise ValueError("start and end must both be set or both be None")
@@ -71,6 +81,7 @@ def load_observations(path, start, end, origin, min_attendance=None, bounds=None
              "missing_avg_qc": int(selected["Avg QC"].isna().sum()),
              "zero_attendance_rows": int(selected.attendance.eq(0).sum()),
              "min_attendance": min_attendance, "origin_lon_lat": origin,
+             "instrument": instrument, "datafiles": sorted(data["Datafile"].unique().tolist()),
              "bounds_lon_lat": bounds}
     return data, coverage, audit
 
@@ -581,7 +592,7 @@ def plot_maps(results, samples, backend, depths=(18, 100, 200, 300), half_width_
 
 
 def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
-                                half_width_km=120, speed_max=1.0, target_depth=None):
+                                half_width_km=120, speed_max=1.0, target_depth=None, legend=False):
     """Shallowest ESP fit samples over daily OceanCurrent velocity at the middle ADCP time.
 
     Missing daily DM03 files are cached beside the ADCP CSV. The colours show
@@ -705,7 +716,8 @@ def plot_solo_satellite_overlay(data, results, samples, map_folder, transect_id,
                   f"Satellite interpolated to {middle:%Y-%m-%d %H:%M} UTC; "
                   f"{method}: {row.status}"))
     ax.set_aspect(1/np.cos(np.deg2rad(mid_lat)))
-    ax.legend(loc="best")#, fontsize=8)
+    if legend:
+        ax.legend(loc="best")#, fontsize=8)
     ax.grid(alpha=.2)
     return fig, ax
 
@@ -861,7 +873,7 @@ def _validate_fit_by_transect(catalog, settings):
 
 
 def fit_transects(data_path, catalog, backend, fit_settings=None, min_attendance=None,
-                  *, fit_by_transect=None):
+                  *, fit_by_transect=None, instrument=None):
     """Independent depth fits per crossing: never carry a centre between times."""
     _validate_fit_by_transect(catalog, fit_by_transect)
     if fit_by_transect is not None and fit_settings is not None:
@@ -869,7 +881,8 @@ def fit_transects(data_path, catalog, backend, fit_settings=None, min_attendance
     runs, summary, tables = {}, [], []
     for ident, spec in catalog.iterrows():
         data, coverage, audit = load_observations(data_path, spec.start, spec.end,
-                                                 (spec.lon, spec.lat), min_attendance)
+                                                 (spec.lon, spec.lat), min_attendance,
+                                                 instrument=instrument)
         fit = dict(fit_settings if fit_by_transect is None else fit_by_transect[ident])
         audit["fit_settings"] = fit
         results, samples = fit_depths(data, backend, "SOLO", depth_levels=coverage.index,

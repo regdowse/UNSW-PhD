@@ -13,7 +13,7 @@
     600,
     700
   ],
-  "half_width_km": 100,
+  "half_width_km": 150,
   "velocity_limit": 1,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
   "save_results": true,
@@ -40,7 +40,8 @@
     "initial_Rc": 100000.0
   },
   "time_window_utc": {
-    "start": "2023-10-17T10:27:31Z",
-    "end": "2023-10-21T22:27:30.333Z"
-  }
+    "start": "2023-10-16T22:27:31Z",
+    "end": "2023-10-21T10:27:30.333Z"
+  },
+  "adcp_instrument": "OS150" 
 }

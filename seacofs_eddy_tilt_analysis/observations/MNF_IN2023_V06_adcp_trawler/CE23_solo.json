@@ -13,7 +13,7 @@
     600,
     700
   ],
-  "half_width_km": 100,
+  "half_width_km": 150,
   "velocity_limit": 1,
   "backend_path": "/home/z5297792/ESP_zonodo/functions.py",
   "save_results": true,
@@ -27,7 +27,7 @@
     "C1": {
       "core_radius": 50000.0,
       "outer_radius": 100000.0,
-      "search_half_width": 50000.0,
+      "search_half_width": 30000.0,
       "max_centre_step": 300000.0,
       "radius_limit": 200000.0,
       "min_core_points": 1,
@@ -36,13 +36,14 @@
       "require_peak_bracket": true,
       "solo_initialisation": "local",
       "radius_tracking": true,
-      "core_radius_factor": 0.5,
+      "core_radius_factor": 0.3,
       "outer_radius_factor": 1.5,
-      "initial_Rc": 80000.0
+      "initial_Rc": 50000.0
     }
   },
   "time_window_utc": {
-    "start": "2023-10-17T10:27:31Z",
-    "end": "2023-10-21T22:27:30.333Z"
-  }
+    "start": "2023-10-16T22:27:31Z",
+    "end": "2023-10-21T10:27:30.333Z"
+  },
+  "adcp_instrument": "OS150"
 }
