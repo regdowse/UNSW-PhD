@@ -1,10 +1,11 @@
-"""One Figure per experiment; all summaries retain failed-fit denominators."""
+"""Sampling overviews and sensitivity figures with explicit failure denominators."""
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.ticker import MaxNLocator
 
-from rc3_validation import METRICS
+from rc3_validation import (METRICS, load_backend, truth_parameters,
+                            make_geometry, velocity)
 
 
 LABELS = ("Centre error (km)", "Radius error (%)", "Aspect-ratio error (%)")
@@ -14,6 +15,67 @@ def _panel(ax, letter, label):
     ax.text(.02, 1.02, f"({letter}) {label}", transform=ax.transAxes, va="bottom")
     ax.grid(alpha=.2)
     ax.xaxis.set_major_locator(MaxNLocator(5))
+
+
+def plot_sampling_layout(config):
+    """Two truth assignments by method; exact observation locations, no fits.
+
+    Nested point sets overlap. Concentric, hollow markers show every count at
+    shared locations without jittering the actual sample coordinates.
+    """
+    backend = load_backend(config)
+    counts = sorted(set(config.sample_counts) | {config.background_n})
+    colors = plt.get_cmap("viridis")(np.linspace(.12, .85, len(counts)))
+    marker_sizes = np.linspace(7., 2.5, len(counts)) ** 2
+    fig, axes = plt.subplots(2, len(config.methods), figsize=(12, 7.5),
+                             sharex=True, sharey=True, squeeze=False)
+    arrow_axis = np.linspace(-90., 90., 13)
+    x, y = np.meshgrid(arrow_axis, arrow_axis)
+    arrow_xy = np.column_stack((x.ravel(), y.ravel())) * 1000.
+    angle = np.linspace(0., 2 * np.pi, 241)
+    unit_circle = np.column_stack((np.cos(angle), np.sin(angle)))
+    for row, all_circular in enumerate((False, True)):
+        for col, method in enumerate(config.methods):
+            ax = axes[row, col]
+            truth = truth_parameters(backend, method, all_circular)
+            uv = velocity(backend, arrow_xy, truth)
+            ax.quiver(x.ravel(), y.ravel(), uv[:, 0], uv[:, 1], color=".45",
+                      alpha=.25, angles="xy", scale_units="xy", scale=.75,
+                      width=.0018, headwidth=3, headlength=4, minlength=0,
+                      zorder=1)
+            eigenvalues, eigenvectors = np.linalg.eigh(truth["q"])
+            outline = ((unit_circle / np.sqrt(eigenvalues)) @ eigenvectors.T
+                       * truth["rc_m"] / np.sqrt(2) / 1000.)
+            ax.plot(outline[:, 0], outline[:, 1], color=".6", linewidth=.7, zorder=1)
+            ax.plot(0, 0, "+", color=".5", markersize=4, markeredgewidth=.7, zorder=2)
+            for n, color, size in zip(counts, colors, marker_sizes):
+                xy = make_geometry(method, n, config.seed)["xy"] / 1000.
+                points = ax.scatter(xy[:, 0], xy[:, 1], s=size, facecolors="none",
+                                    edgecolors=[color], linewidths=.8, zorder=3)
+                points.set_gid(f"{method}:{'circular' if all_circular or method == 'SOLO' else 'elliptical'}:N={n}")
+            shape = "circular" if all_circular or method == "SOLO" else "elliptical"
+            _panel(ax, chr(97 + row * len(config.methods) + col), f"{method} ({shape})")
+            ax.grid(False)
+            ax.set_aspect("equal", adjustable="box")
+            ax.set_xlim(-100, 100)
+            ax.set_ylim(-100, 100)
+            ax.set_xticks([-100, -50, 0, 50, 100])
+            ax.set_yticks([-100, -50, 0, 50, 100])
+            if col == 0:
+                ax.set_ylabel(("Original cases" if row == 0 else "All circular") + "\ny (km)")
+            if row == 1:
+                ax.set_xlabel("x (km)")
+    handles = [Line2D([], [], linestyle="", marker="o", markerfacecolor="none",
+                      markeredgecolor=color, markersize=np.sqrt(size), label=f"N = {n}")
+               for n, color, size in zip(counts, colors, marker_sizes)]
+    fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False)
+    fig.text(.5, .015,
+             "N: per transect for DOPPIO (2N−1 unique); total for SOLO/LATTE. Coincident samples use concentric rings.\n"
+             f"All noise-experiment counts are shown; background-flow fits use N = {config.background_n} only.\n"
+             r"Faint arrows: true eddy velocity. Grey outline: $\rho=R_c/\sqrt{2}$. Cross: true centre.",
+             ha="center", va="bottom")
+    fig.tight_layout(rect=(0, .12, 1, .94))
+    return fig
 
 
 def plot_noise_sampling(results, config):

@@ -90,7 +90,7 @@ Create one clear multi-panel figure showing recovery error against noise amplitu
 
 The figure must support a restrained conclusion about tested sampling densities and perturbation amplitudes. Avoid a plot dominated by goodness-of-fit scores.
 
-## Experiment 2 — uniform background-flow sensitivity
+## Experiment 2 — uniform background-flow sensitivity 
 
 ### Scientific question
 
