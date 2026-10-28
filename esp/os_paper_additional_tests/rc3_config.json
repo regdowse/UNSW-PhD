@@ -1,0 +1,193 @@
+{
+  "source_root": "/srv/scratch/z5297792/UNSW-MRes/MRes",
+  "source_utilities": "modules/utils.py",
+  "source_notebooks": {
+    "SOLO": "solo_idealised_tests_updated.ipynb",
+    "DOPPIO": "doppio_idealised_tests_updated.ipynb",
+    "LATTE": "latte_idealised_tests.ipynb"
+  },
+  "output_directory": "results/revised",
+  "supplementary_output_directory": "results",
+  "seed": 20261027,
+  "methods": [
+    "SOLO",
+    "DOPPIO",
+    "LATTE"
+  ],
+  "truth": {
+    "centre_m": [
+      0.0,
+      0.0
+    ],
+    "rc_m": 85000.0,
+    "psi0_m2_s": 250000.0,
+    "q": [
+      [
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ]
+  },
+  "sampling": {
+    "extent_rc": 1.2,
+    "regimes": {
+      "LOW": {
+        "SOLO": 11,
+        "DOPPIO": 11,
+        "LATTE": 21
+      },
+      "MEDIUM": {
+        "SOLO": 31,
+        "DOPPIO": 31,
+        "LATTE": 61
+      },
+      "HIGH": {
+        "SOLO": 101,
+        "DOPPIO": 101,
+        "LATTE": 201
+      }
+    },
+    "latte": {
+      "distribution": "d4_stratified_uniform_area",
+      "stream_key": 17,
+      "eight_point_seed_wedge": "0 < theta < pi/4; signs and coordinate swaps",
+      "four_point_groups": "coordinate axes; random radius within the stratum",
+      "ordering": "centre, inner eight-point groups, inner axis groups, outer eight-point groups, outer axis groups; seed-pool prefixes",
+      "groups": {
+        "LOW": {
+          "inner_eight": 1,
+          "inner_axis": 0,
+          "outer_eight": 1,
+          "outer_axis": 1,
+          "inner_count": 9,
+          "outer_count": 12
+        },
+        "MEDIUM": {
+          "inner_eight": 4,
+          "inner_axis": 0,
+          "outer_eight": 3,
+          "outer_axis": 1,
+          "inner_count": 33,
+          "outer_count": 28
+        },
+        "HIGH": {
+          "inner_eight": 14,
+          "inner_axis": 1,
+          "outer_eight": 10,
+          "outer_axis": 1,
+          "inner_count": 117,
+          "outer_count": 84
+        }
+      }
+    },
+    "background_regime": "HIGH",
+    "reference_transect_sha256": {
+      "SOLO": {
+        "LOW": "9b1a8b30dac223401c35198a8027647aa461a096c14c286e7746bd98cb55d11a",
+        "MEDIUM": "d79ec10e3e0dfeba8181c654ca98d3bbf487bb2ed06780a2ca22faccb3186132",
+        "HIGH": "dbe55d886282ce45ee68ad5b65fe5ed256d573d8746a0e1a2fe182fcd9ee1681"
+      },
+      "DOPPIO": {
+        "LOW": "5dde2ebeb0c2dae3871ed1f369e6eaf441b57fb16957d106572c9033a18181e5",
+        "MEDIUM": "eadeb5daf4cac0ad51bc866e15f2df8c0ecab9b5bfc46519819a9e136558cd3c",
+        "HIGH": "d8a0d48a2526b433495423c15c9d0b5aae175219523e3c2c44fbf6cba20758a0"
+      }
+    }
+  },
+  "noise": {
+    "fractions": [
+      0.0,
+      0.025,
+      0.05,
+      0.1
+    ],
+    "replicates": 100,
+    "stream_key": 31,
+    "method_stream_keys": {
+      "DOPPIO": 0,
+      "LATTE": 1,
+      "SOLO": 2
+    }
+  },
+  "background": {
+    "fractions": [
+      0.0,
+      0.05,
+      0.1,
+      0.2,
+      0.3,
+      0.5
+    ],
+    "directions": {
+      "SOLO": [
+        "eastward",
+        "northward"
+      ],
+      "DOPPIO": [
+        "northward"
+      ],
+      "LATTE": [
+        "northward"
+      ]
+    },
+    "direction_vectors": {
+      "eastward": [
+        1.0,
+        0.0
+      ],
+      "northward": [
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "inversion": {
+    "metres_per_backend_length_unit": 1000.0,
+    "solo_core_thresh_km": 30000.0,
+    "outer_rc_max_km": {
+      "SOLO": 1000000.0,
+      "DOPPIO": 1000000.0,
+      "LATTE": 100000.0
+    },
+    "outer_maxfev": 10000,
+    "q_symmetry_atol": 1e-10,
+    "q_det_rtol": 1e-08,
+    "q_det_atol": 1e-08,
+    "initialisation": "unchanged_source_data_derived_rules",
+    "inner_stopping_rules": "unchanged_source_scipy_defaults"
+  },
+  "plotting": {
+    "dpi": 300,
+    "percentiles": [
+      10,
+      90
+    ],
+    "regime_colors": {
+      "LOW": "#7B2CBF",
+      "MEDIUM": "#F28E2B",
+      "HIGH": "#00A6A6"
+    },
+    "method_colors": {
+      "SOLO": "#1f77b4",
+      "DOPPIO": "#ff7f0e",
+      "LATTE": "#2ca02c"
+    },
+    "direction_styles": {
+      "eastward": "--",
+      "northward": "-"
+    },
+    "relative_linthresh_pct": 1.0,
+    "centre_linthresh_km": 1.0,
+    "symlog_min_decades": 2.0,
+    "geometry_limit_rc": 1.5,
+    "direction_arrow_origin_rc": [
+      -1.32,
+      -1.32
+    ],
+    "direction_arrow_length_rc": 0.36
+  }
+}

@@ -1,15 +1,12 @@
-"""Controlled RC3 experiments using the manuscript's unchanged ESP functions.
+"""Circular RC3 experiments; source inversions are loaded unchanged.
 
-Public coordinates, Rc and streamfunction use SI. Only the inversion adapter
-converts to the original notebooks' km and m/s, preserving numerical scaling,
-seeds, bounds and stopping rules. Functions are selected by AST from the source
-files; notebook imports, data loading and plotting cells are never executed.
+Public quantities use SI. The adapter alone converts to the manuscript notebooks'
+km-coordinate / m/s numerical conventions. Configuration lives in rc3_config.json.
 """
 from __future__ import annotations
-
 import ast
 from contextlib import contextmanager, redirect_stdout
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 import hashlib
 import io
 import json
@@ -18,32 +15,61 @@ import platform
 from types import SimpleNamespace
 from unittest.mock import patch
 import warnings
-
 import numpy as np
 import pandas as pd
 import scipy
 from scipy import optimize
 
+METRICS = ("centre_error_km", "omega_error_pct", "alpha_error_pct", "rc_error_pct")
+
 
 @dataclass(frozen=True)
 class Config:
-    source_root: str = "/srv/scratch/z5297792/UNSW-MRes/MRes"
-    seed: int = 20261027
-    sample_counts: tuple = (11, 21, 51, 101)
-    noise_fractions: tuple = (0., .025, .05, .10)
-    replicates: int = 100
-    background_fractions: tuple = (0., .05, .10, .20, .30, .50)
-    background_n: int = 101
-    methods: tuple = ("SOLO", "DOPPIO", "LATTE")
-    all_circular: bool = False  # Additional comparison; original setup is default.
+    values: dict
+    path: Path
+
+    @property
+    def source_root(self):
+        return self.values["source_root"]
+
+    @property
+    def methods(self):
+        return tuple(self.values["methods"])
+
+    @property
+    def regimes(self):
+        return tuple(self.values["sampling"]["regimes"])
+
+    @property
+    def seed(self):
+        return self.values["seed"]
+
+    @property
+    def output(self):
+        return self.path.parent / self.values["output_directory"]
+
+    @property
+    def supplementary_output(self):
+        return self.path.parent / self.values["supplementary_output_directory"]
 
 
-NOTEBOOKS = {
-    "SOLO": "solo_idealised_tests_updated.ipynb",
-    "DOPPIO": "doppio_idealised_tests_updated.ipynb",
-    "LATTE": "latte_idealised_tests.ipynb",
-}
-METRICS = ("centre_error_km", "rc_error_pct", "alpha_error_pct")
+def load_config(path=None):
+    path = Path(path or Path(__file__).with_name("rc3_config.json")).resolve()
+    config = Config(json.loads(path.read_text()), path)
+    v = config.values
+    if config.methods != ("SOLO", "DOPPIO", "LATTE"):
+        raise ValueError("This design requires SOLO, DOPPIO and LATTE in that order.")
+    if config.regimes != ("LOW", "MEDIUM", "HIGH"):
+        raise ValueError("Expected LOW, MEDIUM, HIGH sampling regimes.")
+    if v["noise"]["replicates"] < 1:
+        raise ValueError("Require a positive Monte Carlo replicate count.")
+    if not np.array_equal(v["truth"]["q"], np.eye(2)) or not np.array_equal(v["truth"]["centre_m"], [0, 0]):
+        raise ValueError("The revised design requires circular truth centred at zero.")
+    for experiment in ("noise", "background"):
+        fractions = v[experiment]["fractions"]
+        if 0 not in fractions or len(set(fractions)) != len(fractions) or any(f < 0 or not np.isfinite(f) for f in fractions):
+            raise ValueError("Perturbation fractions must be distinct, finite, nonnegative and include zero.")
+    return config
 
 
 def _definitions(text, names, filename, namespace):
@@ -57,7 +83,7 @@ def _definitions(text, names, filename, namespace):
 
 def load_backend(config):
     root = Path(config.source_root).expanduser().resolve()
-    utils_path = root / "modules/utils.py"
+    utils_path = root / config.values["source_utilities"]
     utils = dict(np=np, pd=pd)
     required = {"unit_det", "axis_ratio_from_Q", "tangential_velocity",
                 "psi_params", "gaussian_vel_reconstruction"}
@@ -67,7 +93,7 @@ def load_backend(config):
     sources = {str(utils_path): hashlib.sha256(utils_path.read_bytes()).hexdigest()}
     methods = {}
     for method in config.methods:
-        path = root / "MOCA_PAPER/final_ESP_paper_notebooks" / NOTEBOOKS[method]
+        path = root / "MOCA_PAPER/final_ESP_paper_notebooks" / config.values["source_notebooks"][method]
         namespace = dict(np=np, pd=pd)
         required = {method.lower(), "out_core_param_fit"}
         found = set()
@@ -84,28 +110,20 @@ def load_backend(config):
         "psi_params", "gaussian_vel_reconstruction"}}, methods=methods, sources=sources)
 
 
-def truth_parameters(backend, method="DOPPIO", all_circular=False):
-    """Manuscript circular control for SOLO; elliptical control otherwise.
-
-    Original psi0=250 (km m/s), Rc=85 km; SI psi0=250,000 m²/s.
-    u=+dpsi/dy, v=-dpsi/dx, Omega=-2 psi0/Rc²; x east, y north.
-    Alpha is major/minor semiaxis length. Rc is the Gaussian scale, with
-    normalised tangential-speed peak at elliptical radius Rc/sqrt(2).
-    """
-    off_diagonal = 0. if method == "SOLO" or all_circular else .4
-    q, _ = backend.unit_det(np.array([[1., off_diagonal], [off_diagonal, 1.]]))
-    rc, psi = 85_000., 250_000.
-    eigenvalues, eigenvectors = np.linalg.eigh(q)
-    truth = dict(xc_m=0., yc_m=0., rc_m=rc, psi0_m2_s=psi,
-                 omega_s=-2 * psi / rc**2, q=q,
-                 alpha=float(backend.axis_ratio_from_Q(q)),
-                 major_axis_deg=(None if off_diagonal == 0 else float(np.degrees(np.arctan2(
-                     eigenvectors[1, 0], eigenvectors[0, 0])) % 180)))
+def truth_parameters(backend, config):
+    spec = config.values["truth"]
+    q = np.asarray(spec["q"], float)
+    rc, psi = float(spec["rc_m"]), float(spec["psi0_m2_s"])
+    if rc <= 0 or not np.isfinite(psi):
+        raise ValueError("Invalid Gaussian truth parameters.")
+    truth = dict(xc_m=float(spec["centre_m"][0]), yc_m=float(spec["centre_m"][1]),
+                 rc_m=rc, psi0_m2_s=psi, q=q, alpha=float(backend.axis_ratio_from_Q(q)),
+                 omega_s=-2 * psi / rc**2, major_axis_deg=None)
     truth["vorticity_s"] = truth["omega_s"] * np.trace(q)
-    # The full-field maximum is on the eigenvector of Q's largest eigenvalue.
-    # Evaluate the EXISTING model there, independently of any degraded samples.
-    peak_xy = eigenvectors[:, -1] * rc / np.sqrt(2 * eigenvalues[-1])
-    truth["u_ref_m_s"] = float(np.linalg.norm(velocity(backend, peak_xy[None], truth)))
+    eigenvalues, eigenvectors = np.linalg.eigh(q)
+    peak = eigenvectors[:, -1] * rc / np.sqrt(2 * eigenvalues[-1])
+    peak += [truth["xc_m"], truth["yc_m"]]
+    truth["u_ref_m_s"] = float(np.linalg.norm(velocity(backend, peak[None], truth)))
     return truth
 
 
@@ -117,38 +135,187 @@ def velocity(backend, xy_m, truth):
     return np.column_stack((u, v))
 
 
-def make_geometry(method, n, seed):
-    """Fixed coverage; no geometry is regenerated between noise replicates.
+def _sampling_signature(config):
+    v = config.values
+    return hashlib.sha256(json.dumps({k: v[k] for k in ("seed", "truth", "sampling")}, sort_keys=True).encode()).hexdigest()
 
-    SOLO: manuscript P1/L2 eastward transect, x=-70..70 km, y=20 km.
-    N is total count; original default core_thresh=30000 in km is retained.
-    DOPPIO: manuscript P1/L2 cross at (10,10) km, half-length 30 km.
-    N counts points PER transect; one intersection is shared (2N-1 unique).
-    LATTE: scattered extension of the idealised [-50,50] km footprint.
-    Four corner anchors make the convex hull identical for every N; the
-    remaining nested points are uniform iid in the square. N is total count.
+
+def _bank_to_json(bank):
+    return {method: {regime: {key: value.tolist() for key, value in geometry.items()}
+                     for regime, geometry in regimes.items()} for method, regimes in bank.items()}
+
+
+def _bank_from_json(data):
+    return {method: {regime: {key: np.asarray(value, dtype=float if key == "xy" else int)
+                             for key, value in geometry.items()}
+                     for regime, geometry in regimes.items()} for method, regimes in data.items()}
+
+
+def outer_count(geometry, truth):
+    distance = np.linalg.norm(geometry["xy"] - [truth["xc_m"], truth["yc_m"]], axis=1)
+    return int(np.count_nonzero(distance > truth["rc_m"] / np.sqrt(2)))
+
+
+def _point_set(xy):
+    return set(map(tuple, np.asarray(xy)))
+
+
+def _assert_d4_symmetry(xy):
+    """Sign/swap transforms preserve coordinate values exactly, even after JSON."""
+    points = _point_set(xy)
+    assert _point_set(np.column_stack((-xy[:, 1], xy[:, 0]))) == points, "Missing 90-degree counterpart"
+    assert _point_set(xy * [-1, 1]) == points, "Missing reflection across y axis"
+    assert _point_set(xy * [1, -1]) == points, "Missing reflection across x axis"
+
+
+def _draw_open_radii(rng, n, lower, upper):
+    """Uniform by stratum area, excluding floating-point boundary values."""
+    radius = np.empty(n)
+    pending = np.arange(n)
+    while len(pending):
+        draws = np.sqrt(lower**2 + rng.random(len(pending)) * (upper**2-lower**2))
+        good = (draws > lower) & (draws < upper)
+        radius[pending[good]] = draws[good]
+        pending = pending[~good]
+    return radius
+
+
+def _symmetric_latte_clouds(config, truth):
+    """Nested D4 orbits with exact stratum counts; no boundary anchors."""
+    spec = config.values["sampling"]["latte"]
+    if spec["distribution"] != "d4_stratified_uniform_area":
+        raise ValueError("Expected the specified D4 stratified LATTE construction.")
+    peak = truth["rc_m"] / np.sqrt(2)
+    extent = config.values["sampling"]["extent_rc"] * truth["rc_m"]
+    pools = {}
+    for stratum, lower, upper, stream in (("inner", 0., peak, 0), ("outer", peak, extent, 1)):
+        rng = np.random.default_rng(np.random.SeedSequence([config.seed, spec["stream_key"], stream]))
+        n_eight = max(spec["groups"][r][stratum+"_eight"] for r in config.regimes)
+        n_axis = max(spec["groups"][r][stratum+"_axis"] for r in config.regimes)
+        radii = _draw_open_radii(rng, n_eight+n_axis, lower, upper)
+        theta = rng.uniform(0, np.pi/4, n_eight)
+        # Reject only degenerate axes/diagonal seeds, never fitted outcomes.
+        degenerate = (theta <= 0) | (theta >= np.pi/4)
+        while degenerate.any():
+            theta[degenerate] = rng.uniform(0, np.pi/4, degenerate.sum())
+            degenerate = (theta <= 0) | (theta >= np.pi/4)
+        groups = []
+        for radius, angle in zip(radii[:n_eight], theta):
+            x, y = radius*np.cos(angle), radius*np.sin(angle)
+            assert x > y > 0, "Generic eight-point seed must avoid axes and diagonals"
+            groups.append(np.array([[x,y],[-x,-y],[y,-x],[-y,x],[-x,y],[x,-y],[-y,-x],[y,x]]))
+        axis_groups = [np.array([[r,0],[0,r],[-r,0],[0,-r]]) for r in radii[n_eight:]]
+        pools[stratum] = (groups, axis_groups)
+    clouds = {}
+    for regime in config.regimes:
+        counts = spec["groups"][regime]
+        pieces = [np.zeros((1, 2))]
+        for stratum in ("inner", "outer"):
+            eight, axis = pools[stratum]
+            pieces.extend(eight[:counts[stratum+"_eight"]])
+            pieces.extend(axis[:counts[stratum+"_axis"]])
+        clouds[regime] = np.vstack(pieces)
+    return clouds
+
+
+def validate_geometry(bank, config, truth):
+    sampling = config.values["sampling"]
+    extent = sampling["extent_rc"] * truth["rc_m"]
+    for method in config.methods:
+        for regime in config.regimes:
+            g = bank[method][regime]
+            xy = g["xy"]
+            n = sampling["regimes"][regime][method]
+            expected = 2 * n - 1 if method == "DOPPIO" else n
+            assert len(xy) == expected == len(np.unique(xy, axis=0)), (method, regime, "unique count")
+            assert np.isfinite(xy).all()
+            assert outer_count(g, truth) > 0
+            if method == "LATTE":
+                radius = np.linalg.norm(xy, axis=1)
+                peak = truth["rc_m"] / np.sqrt(2)
+                assert np.count_nonzero(np.all(xy == 0, axis=1)) == 1
+                assert np.all(radius < extent), "LATTE points must be strictly inside Rmax"
+                assert not np.any(radius == peak), "LATTE points cannot be on the stratum boundary"
+                _assert_d4_symmetry(xy)
+                counts = sampling["latte"]["groups"][regime]
+                outer = outer_count(g, truth)
+                assert (len(xy)-outer, outer) == (counts["inner_count"], counts["outer_count"])
+                assert outer == outer_count(bank["DOPPIO"][regime], truth)
+            else:
+                paths = (g["horizontal"], g["vertical"]) if method == "DOPPIO" else (np.arange(n),)
+                for axis, path in enumerate(paths):
+                    np.testing.assert_allclose(xy[path, axis], np.linspace(-extent, extent, n), atol=1e-9)
+                    np.testing.assert_equal(xy[path, 1-axis], 0)
+                if method == "DOPPIO":
+                    common = np.intersect1d(*paths)
+                    assert len(common) == 1
+                    np.testing.assert_equal(xy[common[0]], [0, 0])
+                expected_hash = sampling["reference_transect_sha256"][method][regime]
+                assert hashlib.sha256(xy.tobytes()).hexdigest() == expected_hash, "Transect changed from preceding revision"
+    for small, large in zip(config.regimes[:-1], config.regimes[1:]):
+        a, b = bank["LATTE"][small]["xy"], bank["LATTE"][large]["xy"]
+        assert _point_set(a).issubset(_point_set(b)), "LATTE density sets must be nested"
+
+
+def load_geometry_bank(config, truth):
+    """One immutable coordinate manifest shared by both experiments and plots.
+
+    D4 seed-pool prefixes give nested point sets with exact inner/outer counts.
+    Reflections and quarter turns are applied only to positions, never noise.
     """
-    if int(n) != n or n < 5:
-        raise ValueError("N must be an integer >= 5.")
-    if method == "SOLO":
-        # Manuscript P1/L2: x=-70..70 km, y=20 km; N is total.
-        return dict(xy=np.column_stack((np.linspace(-70_000., 70_000., n),
-                                        np.full(n, 20_000.))))
-    if method == "DOPPIO":
-        if n % 2 != 1:
-            raise ValueError("DOPPIO requires odd N to retain the exact intersection.")
-        axis = np.linspace(-30_000., 30_000., n)
-        horizontal = np.column_stack((axis + 10_000., np.full(n, 10_000.)))
-        vertical = np.column_stack((np.full(n, 10_000.), axis + 10_000.))
-        xy, inverse = np.unique(np.vstack((horizontal, vertical)), axis=0,
-                                return_inverse=True)
-        return dict(xy=xy, horizontal=inverse[:n], vertical=inverse[n:])
-    if method != "LATTE":
-        raise ValueError(f"Unsupported method: {method}")
-    rng = np.random.default_rng(np.random.SeedSequence([seed, 17]))
-    corners = np.array([[-1., -1.], [-1., 1.], [1., -1.], [1., 1.]]) * 50_000.
-    xy = np.vstack((corners, rng.uniform(-50_000., 50_000., size=(n - 4, 2))))
-    return dict(xy=xy)
+    config.output.mkdir(parents=True, exist_ok=True)
+    signature = _sampling_signature(config)
+    path = config.output / f"rc3_sampling_coordinates_{signature[:12]}.json"
+    if path.exists():
+        saved = json.loads(path.read_text())
+        assert saved["sampling_signature"] == signature
+        bank = _bank_from_json(saved["coordinates_m"])
+    else:
+        sampling = config.values["sampling"]
+        extent = sampling["extent_rc"] * truth["rc_m"]
+        clouds = _symmetric_latte_clouds(config, truth)
+        bank = {method: {} for method in config.methods}
+        for regime in config.regimes:
+            for method in config.methods:
+                n = sampling["regimes"][regime][method]
+                if method == "LATTE":
+                    geometry = dict(xy=clouds[regime].copy())
+                else:
+                    if n < 5 or n % 2 != 1:
+                        raise ValueError("Transect counts must be odd integers >= 5.")
+                    axis = np.linspace(-extent, extent, n)
+                    horizontal = np.column_stack((axis, np.zeros(n)))
+                    if method == "SOLO":
+                        geometry = dict(xy=horizontal)
+                    else:
+                        vertical = np.column_stack((np.zeros(n), axis))
+                        xy, inverse = np.unique(np.vstack((horizontal, vertical)), axis=0, return_inverse=True)
+                        geometry = dict(xy=xy, horizontal=inverse[:n], vertical=inverse[n:])
+                bank[method][regime] = geometry
+        validate_geometry(bank, config, truth)
+        radii = dict(Rc=truth["rc_m"], Rpeak=truth["rc_m"]/np.sqrt(2), Rmax=extent)
+        path.write_text(json.dumps(dict(sampling_signature=signature, sampling_seed=config.seed,
+            reference_radii_m=radii, coordinates_m=_bank_to_json(bank)), indent=2) + "\n")
+    validate_geometry(bank, config, truth)
+    return bank, path
+
+
+def prepare_experiment(config):
+    backend = load_backend(config)
+    truth = truth_parameters(backend, config)
+    bank, manifest = load_geometry_bank(config, truth)
+    return SimpleNamespace(config=config, backend=backend, truth=truth, geometries=bank,
+                           manifest=manifest, clean_fits={})
+
+
+def sampling_summary(context):
+    c, t = context.config, context.truth
+    return pd.DataFrame([dict(method=m, density=r,
+        n_per_transect=(c.values["sampling"]["regimes"][r][m] if m == "DOPPIO" else np.nan),
+        n_unique=len(context.geometries[m][r]["xy"]),
+        n_inner_true=len(context.geometries[m][r]["xy"])-outer_count(context.geometries[m][r], t),
+        n_outer_true=outer_count(context.geometries[m][r], t))
+        for m in c.methods for r in c.regimes])
 
 
 @contextmanager
@@ -182,18 +349,20 @@ def _observe_optimizer(name):
         yield calls
 
 
-def fit_observations(backend, method, geometry, uv, truth):
+def fit_observations(backend, method, geometry, uv, truth, config):
     """Original km-scale inversion, with explicit convergence/physical statuses."""
-    xy = geometry["xy"] / 1000.
+    settings = config.values["inversion"]
+    unit = settings["metres_per_backend_length_unit"]
+    xy = geometry["xy"] / unit
     result = dict(success=False, inner_success=False, status="unattempted",
                   inner_optimizer_success=False, outer_optimizer_success=False,
                   inner_nfev=np.nan, n_unique=len(xy), warning_messages="",
                   shape_estimated=method != "SOLO",
-                  optimizer_message="", n_outer=0,
+                  optimizer_message="", n_outer_fit=0,
                   **{key: np.nan for key in (*METRICS, "xc_m", "yc_m", "rc_m",
                      "alpha", "q11", "q12", "q22", "q_det", "q_min_eigenvalue",
                      "omega_inner_s", "omega_s", "psi0_m2_s", "vorticity_s",
-                     "dx_km", "dy_km", "attempted_rc_m")})
+                     "dx_km", "dy_km", "attempted_rc_m", "attempted_omega_s", "outer_omega_backend_units")})
     functions = backend.methods[method]
     with warnings.catch_warnings(record=True) as caught, redirect_stdout(io.StringIO()):
         warnings.simplefilter("always")
@@ -201,7 +370,7 @@ def fit_observations(backend, method, geometry, uv, truth):
             optimizer = "curve_fit" if method == "SOLO" else "least_squares"
             with _observe_optimizer(optimizer) as calls:
                 if method == "SOLO":
-                    fitted = functions.solo(xy[:, 0] - xy[0, 0], uv[:, 0], uv[:, 1], plot=False)
+                    fitted = functions.solo(xy[:, 0] - xy[0, 0], uv[:, 0], uv[:, 1], core_thresh=settings["solo_core_thresh_km"], plot=False)
                 elif method == "DOPPIO":
                     i, j = geometry["horizontal"], geometry["vertical"]
                     if min(len(i), len(j)) < 4:
@@ -222,7 +391,7 @@ def fit_observations(backend, method, geometry, uv, truth):
             xc, yc, _, q, omega = fitted[:5]
             if method == "SOLO":
                 xc, yc = xc + xy[0, 0], yc + xy[0, 1]
-            result.update(xc_m=1000 * xc, yc_m=1000 * yc, omega_inner_s=omega / 1000.)
+            result.update(xc_m=unit * xc, yc_m=unit * yc, omega_inner_s=omega / unit)
             if not calls or not all(call["success"] for call in calls):
                 result["status"] = "inner_optimizer_failed"
                 return result
@@ -233,8 +402,8 @@ def fit_observations(backend, method, geometry, uv, truth):
                 return result
             result.update(q11=q[0, 0], q12=q[0, 1], q22=q[1, 1],
                           q_det=np.linalg.det(q), q_min_eigenvalue=np.linalg.eigvalsh(q)[0])
-            if (not np.allclose(q, q.T, atol=1e-10) or result["q_min_eigenvalue"] <= 0
-                    or not np.isclose(result["q_det"], 1., rtol=1e-8)):
+            if (not np.allclose(q, q.T, atol=settings["q_symmetry_atol"]) or result["q_min_eigenvalue"] <= 0
+                    or not np.isclose(result["q_det"], 1., rtol=settings["q_det_rtol"], atol=settings["q_det_atol"])):
                 result["status"] = "invalid_shape_matrix"
                 return result
             result["inner_success"] = True
@@ -246,32 +415,34 @@ def fit_observations(backend, method, geometry, uv, truth):
                 result["alpha_error_pct"] = 100 * abs(result["alpha"] / truth["alpha"] - 1)
             frame = backend.psi_params(xc, yc, q, xy[:, 0], xy[:, 1], uv[:, 0], uv[:, 1])
             good = (np.isfinite(frame).all(axis=1) & (frame.rho2 >= 0) & (frame.Qr != 0))
-            result["n_outer"] = int(good.sum())
+            result["n_outer_fit"] = int(good.sum())
             if good.sum() < 3 or frame.loc[good, "rho2"].nunique() < 3:
                 result["status"] = "insufficient_outer_samples"
                 return result
             # Preserve the exact original call choices (limits are in km).
-            kwargs = {"Rc_max": 1e6} if method in ("SOLO", "DOPPIO") else {}
+            kwargs = dict(Rc_max=settings["outer_rc_max_km"][method], maxfev=settings["outer_maxfev"])
             with _observe_optimizer("curve_fit") as calls:
                 rc, psi, omega_outer = functions.out_core_param_fit(
                     frame.rho2, frame.Qr, frame.vt, Omega0=omega, plot=False, **kwargs)
-            result.update(rc_m=1000 * rc, psi0_m2_s=1000 * psi,
-                          omega_s=omega_outer / 1000.,
-                          vorticity_s=omega_outer / 1000. * np.trace(q))
+            result.update(rc_m=unit * rc, psi0_m2_s=unit * psi,
+                          omega_s=omega_outer / unit, outer_omega_backend_units=omega_outer,
+                          vorticity_s=omega_outer / unit * np.trace(q))
             if not calls or not calls[-1]["success"]:
                 result["status"] = "outer_optimizer_failed"
                 result["optimizer_message"] = calls[-1].get("exception", "") if calls else "not called"
                 return result
             result["outer_optimizer_success"] = True
             attempted = calls[-1]["parameters"]
-            result["attempted_rc_m"] = 1000 * attempted[1]
+            result["attempted_rc_m"] = unit * attempted[1]
+            result["attempted_omega_s"] = attempted[0] / unit
             if not np.isfinite(attempted[1]) or attempted[1] > kwargs.get("Rc_max", 1e5):
                 result["status"] = "outer_radius_limit_fallback"
                 return result
             if not np.all(np.isfinite([rc, psi, omega_outer])) or rc <= 0:
                 result["status"] = "invalid_outer_parameters"
                 return result
-            result["rc_error_pct"] = 100 * abs(rc * 1000 / truth["rc_m"] - 1)
+            result["rc_error_pct"] = 100 * abs(rc * unit / truth["rc_m"] - 1)
+            result.update(recovery_metrics(result, truth, method))
             result.update(success=True, status="ok")
         except (ValueError, RuntimeError, FloatingPointError, np.linalg.LinAlgError) as exc:
             result.update(status="numerical_exception", optimizer_message=f"{type(exc).__name__}: {exc}")
@@ -280,168 +451,267 @@ def fit_observations(backend, method, geometry, uv, truth):
     return result
 
 
-def _validate(config):
-    if config.replicates < 1 or not config.methods or len(set(config.methods)) != len(config.methods):
-        raise ValueError("Require positive replicates and distinct methods.")
-    if not set(config.methods) <= set(NOTEBOOKS):
-        raise ValueError("Only SOLO, DOPPIO and LATTE are supported.")
-    if not config.sample_counts or len(set(config.sample_counts)) != len(config.sample_counts):
-        raise ValueError("Require distinct sample counts.")
-    for fractions in (config.noise_fractions, config.background_fractions):
-        if 0 not in fractions or any(not np.isfinite(f) or f < 0 for f in fractions):
-            raise ValueError("Fractions must be finite/nonnegative and include zero.")
+def recovery_metrics(fitted, truth, method):
+    """Truth errors use FINAL outer-fit omega_s, never omega_inner_s."""
+    centre = np.array([fitted["xc_m"], fitted["yc_m"]])
+    return dict(centre_error_km=float(np.linalg.norm(centre - [truth["xc_m"], truth["yc_m"]]) / 1000),
+                omega_error_pct=100 * abs((fitted["omega_s"] - truth["omega_s"]) / truth["omega_s"]),
+                alpha_error_pct=(np.nan if method == "SOLO" else 100 * abs(fitted["alpha"] / truth["alpha"] - 1)),
+                rc_error_pct=100 * abs(fitted["rc_m"] / truth["rc_m"] - 1))
 
 
-def _attach_metadata(frame, config, backend, truths, experiment):
-    serial_truth = {method: {k: v.tolist() if isinstance(v, np.ndarray) else
-                           (None if v is None else float(v)) for k, v in truth.items()}
-                    for method, truth in truths.items()}
-    frame.attrs.update(experiment=experiment, config=asdict(config), truth_by_method=serial_truth,
-                       source_sha256=backend.sources,
+def _clean_fit(context, method, regime):
+    """Self-tests and experiment records share one deterministic fit per case."""
+    key = (method, regime)
+    if key not in context.clean_fits:
+        geometry = context.geometries[method][regime]
+        context.clean_fits[key] = fit_observations(context.backend, method, geometry,
+            velocity(context.backend, geometry["xy"], context.truth), context.truth, context.config)
+    return context.clean_fits[key].copy()
+
+
+def verify_high_geometry(context):
+    """Compare the actual background coordinates with saved noise coordinates.
+
+    Standalone background execution can use the common immutable manifest;
+    after the noise run, its trial provenance supplies an additional comparison.
+    """
+    c = context.config
+    manifest_bank = _bank_from_json(json.loads(context.manifest.read_text())["coordinates_m"])
+    sources = [(str(context.manifest), manifest_bank)]
+    noise_path = c.output / "rc3_noise_sampling_provenance.json"
+    if noise_path.exists():
+        noise = json.loads(noise_path.read_text())
+        if noise["sampling_signature"] != _sampling_signature(c):
+            raise ValueError("Saved revised noise geometry differs from this configuration; run the noise notebook first or select a new output directory.")
+        sources.append((str(noise_path), _bank_from_json(noise["sampling_coordinates_m"])))
+    high = c.values["sampling"]["background_regime"]
+    for _, bank in sources:
+        for method in c.methods:
+            for key, coordinates in context.geometries[method][high].items():
+                np.testing.assert_array_equal(coordinates, bank[method][high][key])
+    return [source for source, _ in sources]
+
+
+def run_self_tests(context):
+    c, t = context.config, context.truth
+    validate_geometry(context.geometries, c, t)
+    verified = verify_high_geometry(context)
+    np.testing.assert_allclose(t["u_ref_m_s"], abs(t["omega_s"]) * t["rc_m"] / np.sqrt(2*np.e), rtol=1e-14)
+    # Independent finite differences verify signs against the positive Gaussian psi.
+    point = np.array([[.3*t["rc_m"], .2*t["rc_m"]]])
+    step = 1.
+    def psi(xy):
+        delta = xy - [t["xc_m"], t["yc_m"]]
+        return t["psi0_m2_s"] * np.exp(-np.einsum("ni,ij,nj->n", delta, t["q"], delta)/t["rc_m"]**2)
+    expected_u = -(psi(point+[0, step])-psi(point-[0, step]))/(2*step)
+    expected_v = (psi(point+[step, 0])-psi(point-[step, 0]))/(2*step)
+    np.testing.assert_allclose(velocity(context.backend, point, t), np.column_stack((expected_u, expected_v)), rtol=1e-8)
+    # Deliberately different preliminary/final Omegas expose scoring the wrong field.
+    probe = dict(xc_m=t["xc_m"]+3000, yc_m=t["yc_m"]+4000,
+                 omega_inner_s=9*t["omega_s"], omega_s=1.1*t["omega_s"],
+                 alpha=1.2, rc_m=.9*t["rc_m"])
+    errors = recovery_metrics(probe, t, "LATTE")
+    np.testing.assert_allclose(list(errors.values()), [5., 10., 20., 10.], atol=1e-12)
+    assert np.isnan(recovery_metrics(probe, t, "SOLO")["alpha_error_pct"])
+    baselines = []
+    high = c.values["sampling"]["background_regime"]
+    for method in c.methods:
+        fit = _clean_fit(context, method, high)
+        assert fit["success"], (method, fit["status"], fit["optimizer_message"])
+        assert np.isfinite([fit["centre_error_km"], fit["omega_error_pct"], fit["rc_error_pct"]]).all()
+        np.testing.assert_equal(fit["omega_s"], fit["outer_omega_backend_units"] / c.values["inversion"]["metres_per_backend_length_unit"])
+        baselines.append(dict(method=method, **{key: fit[key] for key in METRICS}))
+    return dict(passed=True, high_geometry_checked_against=verified, clean_high_baselines=baselines,
+                checks=["centred extents", "unique/outer counts", "one DOPPIO intersection",
+                        "nested D4 LATTE strata", "exact LATTE inner/outer counts", "90-degree rotations and axis reflections",
+                        "unchanged preceding-revision transects", "identical HIGH coordinates", "error definitions",
+                        "final outer Omega and units", "streamfunction derivative signs", "common true U_ref", "finite accepted clean fits"])
+
+
+def _record(context, method, regime, uv, **condition):
+    c, t = context.config, context.truth
+    g = context.geometries[method][regime]
+    clean = condition["noise_fraction"] == 0 and condition["background_fraction"] == 0
+    fit = (_clean_fit(context, method, regime) if clean else
+           fit_observations(context.backend, method, g, uv, t, c))
+    return dict(method=method, density=regime,
+                n_samples=c.values["sampling"]["regimes"][regime][method],
+                n_per_transect=(len(g["horizontal"]) if method == "DOPPIO" else np.nan),
+                n_outer_true=outer_count(g, t), truth_shape="circular", u_ref_m_s=t["u_ref_m_s"],
+                geometry_sha256=hashlib.sha256(g["xy"].tobytes()).hexdigest(), **condition, **fit)
+
+
+def validate_trial_records(frame, context, experiment):
+    """Check complete attempts, not just the subset accepted for quantiles."""
+    c = context.config
+    assert frame.status.notna().all()
+    assert frame.success.eq(frame.status.eq("ok")).all()
+    if experiment == "noise_sampling":
+        keys = ["method", "density", "noise_fraction"]
+        assert not frame.duplicated(keys+["replicate"]).any()
+        expected = {(m, r, f): (1 if f == 0 else c.values["noise"]["replicates"])
+                    for m in c.methods for r in c.regimes for f in c.values["noise"]["fractions"]}
+    else:
+        keys = ["method", "background_direction", "background_fraction"]
+        expected = {(m, "baseline", 0.): 1 for m in c.methods}
+        expected.update({(m, d, f): 1 for m in c.methods
+                         for d in c.values["background"]["directions"][m]
+                         for f in c.values["background"]["fractions"] if f > 0})
+    assert frame.groupby(keys).size().to_dict() == expected, "Missing or duplicated trial conditions"
+    assert frame.groupby(["method", "density"]).geometry_sha256.nunique().eq(1).all()
+    accepted = frame.loc[frame.success]
+    assert np.isfinite(accepted[["centre_error_km", "omega_error_pct", "rc_error_pct"]]).all().all()
+    assert np.isfinite(accepted.loc[accepted.method != "SOLO", "alpha_error_pct"]).all()
+    assert frame.loc[frame.method == "SOLO", "alpha_error_pct"].isna().all()
+
+
+def _attach_metadata(frame, context, experiment, checks):
+    validate_trial_records(frame, context, experiment)
+    c = context.config
+    truth = {key: value.tolist() if isinstance(value, np.ndarray) else value
+             for key, value in context.truth.items()}
+    import matplotlib
+    frame.attrs.update(experiment=experiment, config=c.values, config_path=str(c.path),
+                       config_sha256=hashlib.sha256(c.path.read_bytes()).hexdigest(), truth=truth,
+                       sampling_signature=_sampling_signature(c),
+                       sampling_manifest=str(context.manifest),
+                       sampling_coordinates_m=_bank_to_json(context.geometries),
+                       sampling_reference_radii_m=dict(Rc=context.truth["rc_m"],
+                           Rpeak=context.truth["rc_m"]/np.sqrt(2),
+                           Rmax=c.values["sampling"]["extent_rc"]*context.truth["rc_m"]),
+                       sampling_seed=c.seed,
+                       trial_validation="complete condition/replicate counts; explicit statuses; accepted full-fit metric validity; fixed coordinates",
+                       sampling_counts=sampling_summary(context).to_dict(orient="records"),
+                       source_sha256=context.backend.sources, self_tests=checks,
                        versions=dict(python=platform.python_version(), numpy=np.__version__,
-                                     pandas=pd.__version__, scipy=scipy.__version__))
+                                     pandas=pd.__version__, scipy=scipy.__version__, matplotlib=matplotlib.__version__),
+                       definitions=dict(centre_error_km="norm(fitted centre - truth centre), km",
+                           omega_error_pct="100*abs((FINAL outer Omega - true Omega)/true Omega)",
+                           alpha_error_pct="100*abs(fitted alpha/true alpha-1); SOLO not estimated",
+                           rc_error_pct="100*abs(fitted Rc/true Rc-1)",
+                           n_samples="DOPPIO per transect; SOLO/LATTE unique total",
+                           n_outer_true="unique observed locations with true rho > true Rc/sqrt(2)",
+                           n_outer_fit="observations eligible for original outer fit; not N_outer_true",
+                           units="locations/radius m; velocities m/s; Omega s^-1; psi m^2/s",
+                           velocity_convention="u=-dpsi/dy; v=dpsi/dx; Omega=-2*psi0/Rc^2",
+                           acceptance="source optimiser convergence, finite parameters, positive Rc, physical unit-det Q; no accuracy rejection"))
     return frame
 
 
-def run_noise_sampling(config=Config()):
-    _validate(config)
-    backend = load_backend(config)
-    truths = {method: truth_parameters(backend, method, config.all_circular) for method in config.methods}
+def run_noise_sampling(context, checks=None):
+    c, t = context.config, context.truth
+    noise_config = c.values["noise"]
     rows = []
-    for method in config.methods:
-        truth = truths[method]
-        for n in config.sample_counts:
-            geometry = make_geometry(method, n, config.seed)
-            clean = velocity(backend, geometry["xy"], truth)
-            for replicate in range(config.replicates):
-                # Method/count/replicate keys make streams invariant to loop order.
-                rng = np.random.default_rng(np.random.SeedSequence(
-                    [config.seed, 31, ("DOPPIO", "LATTE", "SOLO").index(method), n, replicate]))
-                noise = rng.standard_normal(clean.shape)
-                for fraction in config.noise_fractions:
+    for method in c.methods:
+        for regime in c.regimes:
+            g = context.geometries[method][regime]
+            clean = velocity(context.backend, g["xy"], t)
+            n = c.values["sampling"]["regimes"][regime][method]
+            for replicate in range(noise_config["replicates"]):
+                rng = np.random.default_rng(np.random.SeedSequence([
+                    c.seed, noise_config["stream_key"], noise_config["method_stream_keys"][method], n, replicate]))
+                normal = rng.standard_normal(clean.shape)
+                for fraction in noise_config["fractions"]:
                     if fraction == 0 and replicate != 0:
                         continue
-                    uv = clean + fraction * truth["u_ref_m_s"] * noise
-                    fitted = fit_observations(backend, method, geometry, uv, truth)
-                    rows.append(dict(method=method, n_samples=n, noise_fraction=fraction,
-                                     truth_shape="circular" if method == "SOLO" or config.all_circular else "elliptical",
-                                     u_ref_m_s=truth["u_ref_m_s"],
-                                     background_fraction=0., background_direction="none",
-                                     replicate=replicate, **fitted))
-    return _attach_metadata(pd.DataFrame(rows), config, backend, truths, "noise_sampling")
+                    uv = clean + fraction * t["u_ref_m_s"] * normal
+                    rows.append(_record(context, method, regime, uv,
+                        noise_fraction=fraction, background_fraction=0., background_direction="none",
+                        replicate=replicate))
+    return _attach_metadata(pd.DataFrame(rows), context, "noise_sampling", checks)
 
 
-def run_background_flow(config=Config()):
-    _validate(config)
-    backend = load_backend(config)
-    truths = {method: truth_parameters(backend, method, config.all_circular) for method in config.methods}
+def run_background_flow(context, checks=None):
+    c, t = context.config, context.truth
+    verified = verify_high_geometry(context)
+    high = c.values["sampling"]["background_regime"]
     rows = []
-    for method in config.methods:
-        truth = truths[method]
-        geometry = make_geometry(method, config.background_n, config.seed)
-        clean = velocity(backend, geometry["xy"], truth)
-        for direction, unit in (("eastward", np.array([1., 0.])),
-                                ("northward", np.array([0., 1.]))):
-            for fraction in config.background_fractions:
-                background = fraction * truth["u_ref_m_s"] * unit
-                fitted = fit_observations(backend, method, geometry, clean + background, truth)
-                rows.append(dict(method=method, n_samples=config.background_n,
-                                 truth_shape="circular" if method == "SOLO" or config.all_circular else "elliptical",
-                                 u_ref_m_s=truth["u_ref_m_s"],
-                                 noise_fraction=0., background_fraction=fraction,
-                                 background_direction=direction, background_u_m_s=background[0],
-                                 background_v_m_s=background[1], replicate=0, **fitted))
-    frame = pd.DataFrame(rows)
-    for (_, _), group in frame.groupby(["method", "background_direction"]):
-        baseline = group.loc[group.background_fraction == 0].iloc[0]
-        frame.loc[group.index, "baseline_success"] = bool(baseline.success)
-        for index, row in group.iterrows():
-            good = row.success and baseline.success
-            frame.loc[index, "incremental_centre_km"] = (
-                np.hypot(row.xc_m - baseline.xc_m, row.yc_m - baseline.yc_m) / 1000 if good else np.nan)
-            for component in ("xc_m", "yc_m"):
-                frame.loc[index, f"incremental_{component}"] = row[component] - baseline[component] if good else np.nan
-            for parameter in ("rc", "alpha"):
-                column = "rc_m" if parameter == "rc" else "alpha"
-                frame.loc[index, f"incremental_{parameter}_pct"] = (
-                    100 * (row[column] / baseline[column] - 1)
-                    if good and not (row.method == "SOLO" and parameter == "alpha") else np.nan)
-    return _attach_metadata(frame, config, backend, truths, "background_flow")
+    for method in c.methods:
+        clean = velocity(context.backend, context.geometries[method][high]["xy"], t)
+        # One baseline is shared by both SOLO directional series in the plot.
+        rows.append(_record(context, method, high, clean, noise_fraction=0., background_fraction=0.,
+                            background_direction="baseline", background_u_m_s=0., background_v_m_s=0., replicate=0))
+        for direction in c.values["background"]["directions"][method]:
+            unit = np.asarray(c.values["background"]["direction_vectors"][direction])
+            np.testing.assert_allclose(np.linalg.norm(unit), 1)
+            for fraction in c.values["background"]["fractions"]:
+                if fraction == 0:
+                    continue
+                background = fraction * t["u_ref_m_s"] * unit
+                rows.append(_record(context, method, high, clean + background,
+                    noise_fraction=0., background_fraction=fraction, background_direction=direction,
+                    background_u_m_s=background[0], background_v_m_s=background[1], replicate=0))
+    frame = _attach_metadata(pd.DataFrame(rows), context, "background_flow", checks)
+    frame.attrs["high_geometry_verified_against"] = verified
+    return frame
 
 
 def summarize(results):
-    keys = ["method", "n_samples", "noise_fraction"] if results.attrs["experiment"] == "noise_sampling" else [
-        "method", "background_direction", "background_fraction"]
-    counts = results.groupby(keys, sort=False).agg(
-        attempted=("success", "size"), successful=("success", "sum"),
-        inner_converged=("inner_optimizer_success", "sum"),
-        outer_converged=("outer_optimizer_success", "sum"))
-    valid = results.loc[results.success].groupby(keys)[list(METRICS)].median()
-    return counts.join(valid).reset_index()
+    keys = (["method", "density", "noise_fraction"] if results.attrs["experiment"] == "noise_sampling"
+            else ["method", "background_direction", "background_fraction"])
+    counts = results.groupby(keys, sort=False).agg(attempted=("success", "size"), accepted=("success", "sum"))
+    counts["acceptance_pct"] = 100 * counts.accepted / counts.attempted
+    values = results.loc[results.success].groupby(keys)[list(METRICS)]
+    summary = counts.join(values.median().add_suffix("_median"))
+    if results.attrs["experiment"] == "noise_sampling":
+        for percentile in results.attrs["config"]["plotting"]["percentiles"]:
+            summary = summary.join(values.quantile(percentile/100).add_suffix(f"_p{percentile:g}"))
+    return summary.reset_index()
+
+
+def acceptance_table(results):
+    if results.attrs["experiment"] != "noise_sampling":
+        return results.groupby("method", sort=False).success.agg(accepted="sum", attempted="size")
+    summary = summarize(results)
+    summary["accepted/attempted"] = summary.accepted.astype(str) + "/" + summary.attempted.astype(str)
+    table = summary.pivot(index=["method", "density"], columns="noise_fraction", values="accepted/attempted")
+    order = pd.MultiIndex.from_product([results.attrs["config"]["methods"],
+                                       results.attrs["config"]["sampling"]["regimes"]], names=["method", "density"])
+    return table.reindex(index=order, columns=results.attrs["config"]["noise"]["fractions"])
 
 
 def interpretation(results):
-    """Generate factual Markdown from this execution, including baseline bias."""
-    lines = []
-    for method, group in results.groupby("method", sort=False):
-        condition = "noise_fraction" if results.attrs["experiment"] == "noise_sampling" else "background_fraction"
-        baseline = group.loc[(group[condition] == 0) & (group.n_samples == group.n_samples.max())]
-        if len(baseline) and baseline.success.all():
-            b = baseline.iloc[0]
-            lines.append(f"- {method}, N={int(b.n_samples)} clean baseline: centre {b.centre_error_km:.3f} km; "
-                         f"radius {b.rc_error_pct:.2f}% absolute error" + (
-                             "; shape fixed circular (not estimated)." if method == "SOLO" else
-                             f"; aspect ratio {b.alpha_error_pct:.2f}% absolute error."))
-        else:
-            lines.append(f"- {method}: the adequately sampled clean baseline failed; incremental biases require caution.")
+    clean_column = "noise_fraction" if results.attrs["experiment"] == "noise_sampling" else "background_fraction"
+    clean = results.loc[results[clean_column] == 0]
+    if "density" in clean:
+        clean = clean.loc[clean.density == results.attrs["config"]["sampling"]["background_regime"]]
+    lines = [f"- {row.method} clean HIGH baseline: centre {row.centre_error_km:.3f} km; "
+             f"final Ω {row.omega_error_pct:.3g}%; Rc {row.rc_error_pct:.3g}% absolute error."
+             if row.success else f"- {row.method} clean HIGH baseline failed: {row.status}."
+             for _, row in clean.iterrows()]
     failures = results.loc[~results.success, "status"].value_counts().to_dict()
-    lines.append(f"- Accepted {int(results.success.sum())}/{len(results)} fits; failure statuses: {failures or 'none'}. "
-                 "Acceptance requires solver convergence and physical Q, with no accuracy threshold.")
-    if results.attrs["experiment"] == "noise_sampling":
-        high = results.loc[results.noise_fraction == results.noise_fraction.max()]
-        details = []
-        for method, group in high.groupby("method", sort=False):
-            group = group.loc[(group.n_samples == group.n_samples.max()) & group.success]
-            if len(group):
-                details.append(f"{method} median centre {group.centre_error_km.median():.2f} km, "
-                               f"radius {group.rc_error_pct.median():.2f}%")
-        lines.append(f"- At the largest tested noise and N, among accepted fits: {'; '.join(details) or 'no accepted fits'}. "
-                     "Bands show 10th–90th simulation percentiles, not confidence intervals.")
-        limitation = ("These are fixed-geometry, independent component-noise perturbations; sampling-location variability, "
-                      "correlated errors and observational error statistics were not tested.")
-    else:
-        details = []
-        high = results.loc[results.background_fraction == results.background_fraction.max()]
-        for _, row in high.iterrows():
-            details.append(f"{row.method}/{row.background_direction}: " + (
-                f"{row.centre_error_km:.2f} km total, {row.incremental_centre_km:.2f} km incremental centre displacement"
-                if row.success else row.status))
-        lines.append("- At the largest tested background: " + "; ".join(details) + ".")
-        limitation = "These deterministic uniform-current tests do not test shear, noise, time dependence or real-data robustness."
-    extreme_note = ""
-    if results.attrs["config"].get("all_circular"):
-        accepted = results.loc[results.success]
-        if len(accepted):
-            largest = accepted.loc[accepted.rc_m.idxmax()]
-            true_rc = results.attrs["truth_by_method"][largest.method]["rc_m"]
-            if largest.rc_m > 10 * true_rc:
-                extreme_note = (f"\n\nThe largest circular-case fitted radius is {largest.rc_m/1000:,.0f} km "
-                                f"({largest.method}; background fraction {largest.background_fraction:g}, "
-                                f"{largest.background_direction}; noise fraction {largest.noise_fraction:g}). "
-                                "This extreme estimate is retained: solver convergence does not establish "
-                                "useful radius recovery. Radius plots use a logarithmic scale beyond 1% error.")
-    return "\n".join(lines) + "\n\n" + limitation + (
-        " The original inner-core approximations cause nonzero clean bias, especially LATTE shape bias; "
-        "the simulations are sensitivity tests, not exact Gaussian-parameter estimators.") + extreme_note
+    lines.append(f"- Accepted {int(results.success.sum())}/{len(results)} full fits. Failure statuses: {failures or 'none'}. "
+                 "Acceptance is numerical validity, not an accuracy or identifiability guarantee.")
+    maximum = results.loc[results.success, "rc_error_pct"].max()
+    if np.isfinite(maximum):
+        lines.append(f"- Largest retained accepted-fit Rc error: {maximum:.4g}%; no error-based trimming is applied.")
+    if results.attrs["experiment"] == "background_flow":
+        alpha = results.loc[(results.method == "LATTE") & results.success, "alpha"]
+        if len(alpha):
+            lines.append(f"- LATTE fitted aspect ratio across the tested northward backgrounds: "
+                         f"{alpha.min():.12g}–{alpha.max():.12g} (range {alpha.max()-alpha.min():.3g}). "
+                         "This is an observation for these conditions, not a claim of general background-flow immunity.")
+    return "\n".join(lines) + "\n\nThese fixed-geometry circular-Gaussian tests do not establish an unconditional method ranking or robustness to correlated errors, shear, temporal evolution, non-Gaussian eddies or platform-specific observation errors."
 
 
-def save_results(results, directory, stem):
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    results.to_csv(directory / f"{stem}_trials.csv", index=False)
-    summarize(results).to_csv(directory / f"{stem}_summary.csv", index=False)
+def save_results(results, context, figure_paths):
+    c = context.config
+    stem = "rc3_" + results.attrs["experiment"]
+    results.to_csv(c.output / f"{stem}_trials.csv", index=False)
+    summarize(results).to_csv(c.output / f"{stem}_summary.csv", index=False)
+    sampling_summary(context).to_csv(c.output / f"{stem}_sampling.csv", index=False)
     metadata = dict(results.attrs)
-    metadata["helper_sha256"] = {
-        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+    metadata["figure_paths"] = {key: str(value) for key, value in figure_paths.items()}
+    metadata["helper_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
         for p in (Path(__file__), Path(__file__).with_name("rc3_plotting.py"))}
-    (directory / f"{stem}_provenance.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    metadata["geometry_manifest_sha256"] = hashlib.sha256(context.manifest.read_bytes()).hexdigest()
+    def json_safe(value):
+        if isinstance(value, dict):
+            return {k: json_safe(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [json_safe(v) for v in value]
+        if isinstance(value, (float, np.floating)) and not np.isfinite(value):
+            return None
+        return value
+    (c.output / f"{stem}_provenance.json").write_text(json.dumps(json_safe(metadata), indent=2, allow_nan=False) + "\n")
