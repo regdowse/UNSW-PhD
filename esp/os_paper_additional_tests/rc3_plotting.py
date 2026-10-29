@@ -8,11 +8,11 @@ from matplotlib.ticker import MaxNLocator
 
 from rc3_validation import METRICS, outer_count
 
-LABELS = ("Centre error (km)", "Final Ω error (%)", "Aspect-ratio error (%)", "Gaussian Rc error (%)")
+LABELS = ("Center error (km)", r"$\Omega$ error (%)", "Aspect-ratio error (%)", r"$R_c$ error (%)")
 
 
 def _panel(ax, letter, label=""):
-    ax.text(.01, 1.02, f"({letter}) {label}", transform=ax.transAxes, va="bottom")
+    ax.text(.01, 1.02, rf"$\mathbf{{{letter})}}$ {label}", transform=ax.transAxes, va="bottom")
     ax.grid(alpha=.18)
 
 
@@ -20,11 +20,11 @@ def _scale(ax, config, metric, values):
     values = np.asarray(values, float)
     finite = np.abs(values[np.isfinite(values)])
     settings = config.values["plotting"]
-    threshold = settings["centre_linthresh_km"] if metric == "centre_error_km" else settings["relative_linthresh_pct"]
+    threshold = settings["center_linthresh_km"] if metric == "center_error_km" else settings["relative_linthresh_pct"]
     use_log = len(finite) and finite.max() >= threshold * 10**settings["symlog_min_decades"]
     if use_log:
         ax.set_yscale("symlog", linthresh=threshold)
-        unit = "km" if metric == "centre_error_km" else "%"
+        unit = "km" if metric == "center_error_km" else "%"
         return f" (symlog: linear ≤{threshold:g} {unit})"
     return ""
 
@@ -41,7 +41,7 @@ def _acceptance_caption(results):
     return caption
 
 
-def plot_noise_sampling(results, config):
+def plot_noise_sampling(results, config, caption_flag=False):
     settings = config.values["plotting"]
     fig, axes = plt.subplots(3, 4, figsize=(15, 9), sharex=True, sharey="col")
     plotted = {key: [] for key in METRICS}
@@ -74,7 +74,7 @@ def plot_noise_sampling(results, config):
             ax.set_ylabel(LABELS[col])
             ax.set_xticks(100*np.asarray(config.values["noise"]["fractions"]))
             if row == 2:
-                ax.set_xlabel(r"Component noise SD / $U_{\rm ref}$ (%)")
+                ax.set_xlabel(r"$\sigma_{\mathrm{noise}}/U_{\mathrm{ref}}$ (%)")
         if method == "SOLO":
             axes[row, 2].text(.5, .5, "Not estimated", ha="center", va="center", transform=axes[row, 2].transAxes)
             axes[row, 2].set_axis_off()
@@ -89,17 +89,18 @@ def plot_noise_sampling(results, config):
             axes[row, col].set_ylabel(LABELS[col] + ("\n(symlog)" if note else ""))
     handles = [Line2D([], [], color=settings["regime_colors"][r], marker="o", label=r) for r in config.regimes]
     fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False)
-    caption = ("Median and 10th–90th percentiles among accepted full fits; bands are Monte Carlo spread, not confidence intervals.\n"
-               f"{config.values['noise']['replicates']} trials per nonzero condition; one clean trial. No error-based trimming.\n" +
-               _acceptance_caption(results))
-    if scale_notes:
-        caption += "\n" + "; ".join(scale_notes)
-    fig.text(.5, .01, caption, ha="center", va="bottom", wrap=True)
+    if caption_flag:
+        caption = ("Median and 10th–90th percentiles among accepted full fits; bands are Monte Carlo spread, not confidence intervals.\n"
+                f"{config.values['noise']['replicates']} trials per nonzero condition; one clean trial. No error-based trimming.\n" +
+                _acceptance_caption(results))
+        if scale_notes:
+            caption += "\n" + "; ".join(scale_notes)
+        fig.text(.5, .01, caption, ha="center", va="bottom", wrap=True)
     fig.tight_layout(rect=(0, .14 if scale_notes else .12, 1, .94))
     return fig
 
 
-def plot_background_flow(results, config):
+def plot_background_flow(results, config, caption_flag=False):
     settings = config.values["plotting"]
     fig, axes = plt.subplots(1, 4, figsize=(15, 4.2), sharex=True)
     for method in config.methods:
@@ -123,7 +124,7 @@ def plot_background_flow(results, config):
     for col, (ax, metric) in enumerate(zip(axes, METRICS)):
         _panel(ax, chr(97+col))
         values = results.loc[results.success, metric].dropna()
-        note = _scale(ax, config, metric, values)
+        note = "" #_scale(ax, config, metric, values)
         if note:
             notes.append(LABELS[col] + note)
             # largest = results.loc[results.success & results[metric].notna()].sort_values(metric).iloc[-1]
@@ -131,7 +132,7 @@ def plot_background_flow(results, config):
             #             xy=(100*largest.background_fraction, largest[metric]), xytext=(-5, -15),
             #             textcoords="offset points", ha="right", va="top",
             #             color=settings["method_colors"][largest.method])
-        ax.set_ylim(bottom=0)
+        ax.set_ylim(bottom=-0.02 * ax.get_ylim()[1]) #ax.set_ylim(bottom=0)
         ax.set_ylabel(LABELS[col] + ("\n(symlog)" if note else ""))
         ax.set_xlabel(r"$|U_{\rm bg}|/U_{\rm ref}$ (%)")
         ax.set_xticks(100*np.asarray(config.values["background"]["fractions"]))
@@ -140,12 +141,13 @@ def plot_background_flow(results, config):
                         label="Eastward (SOLO)" if d == "eastward" else "Northward")
                 for d in ("eastward", "northward")]
     fig.legend(handles=handles, loc="upper center", ncol=5, frameon=False)
-    caption = ("HIGH density; total absolute errors against the common circular truth. Deterministic fits, no noise or uncertainty bands.\n"
-               "SOLO: both directions; DOPPIO/LATTE: northward only. SOLO α not estimated. One baseline per method.\n" +
-               _acceptance_caption(results))
-    if notes:
-        caption += "\n" + "; ".join(notes)
-    fig.text(.5, .01, caption, ha="center", va="bottom", wrap=True)
+    if caption_flag:
+        caption = ("HIGH density; total absolute errors against the common circular truth. Deterministic fits, no noise or uncertainty bands.\n"
+                "SOLO: both directions; DOPPIO/LATTE: northward only. SOLO α not estimated. One baseline per method.\n" +
+                _acceptance_caption(results))
+        if notes:
+            caption += "\n" + "; ".join(notes)
+        fig.text(.5, .01, caption, ha="center", va="bottom", wrap=True)
     fig.tight_layout(rect=(0, .23 if notes else .19, 1, .9))
     return fig
 
@@ -156,7 +158,10 @@ def _geometry_panel(ax, geometry, context, letter, label, color):
     xy = geometry["xy"]/1000
     ax.scatter(xy[:, 0], xy[:, 1], s=9, color=color, zorder=3)
     ax.plot(0, 0, "kx", markersize=5, zorder=4)
-    for radius, style in ((rc/np.sqrt(2), "--"), (rc, "-")):
+    contours = [(rc/np.sqrt(2), "-")]
+    if config.values["plotting"].get("geometry_show_rc", True):
+        contours.append((rc, "--"))
+    for radius, style in contours:
         ax.add_patch(Circle((0, 0), radius, fill=False, edgecolor=".45", linestyle=style, linewidth=.8))
     _panel(ax, letter, label)
     ax.grid(False)
@@ -168,11 +173,12 @@ def _geometry_panel(ax, geometry, context, letter, label, color):
     ax.xaxis.set_major_locator(MaxNLocator(5)); ax.yaxis.set_major_locator(MaxNLocator(5))
 
 
-def _geometry_legend(fig):
-    handles = [Line2D([], [], color="k", marker="x", linestyle="", label="True centre"),
-               Line2D([], [], color=".45", linestyle="--", label=r"$r=R_c/\sqrt{2}$"),
-               Line2D([], [], color=".45", linestyle="-", label=r"$r=R_c$")]
-    fig.legend(handles=handles, loc="upper center", ncol=3, frameon=False)
+def _geometry_legend(fig, config):
+    handles = [Line2D([], [], color="k", marker="x", linestyle="", label="True center"),
+               Line2D([], [], color=".45", linestyle="-", label=r"$\rho=R_c/\sqrt{2}$")]
+    if config.values["plotting"].get("geometry_show_rc", True):
+        handles.append(Line2D([], [], color=".45", linestyle="--", label=r"$r=R_c$"))
+    fig.legend(handles=handles, loc="upper center", ncol=len(handles), frameon=False)
 
 
 def plot_noise_geometry(context):
@@ -185,7 +191,7 @@ def plot_noise_geometry(context):
                             chr(97+row*3+col), f"{method} — {regime}", c.values["plotting"]["regime_colors"][regime])
             if col == 0: ax.set_ylabel("y (km)")
             if row == 2: ax.set_xlabel("x (km)")
-    _geometry_legend(fig)
+    _geometry_legend(fig, c)
     fig.text(.5, .01, "S1. Actual fixed observation locations used at each density; N counts unique velocity vectors.\n"
              "N_outer counts unique locations with true r > Rc/√2. DOPPIO's intersection is counted once.\n"
              "HIGH panels (c), (f), (i) are reused for background flow: SOLO eastward/northward; DOPPIO/LATTE northward only.", ha="center", va="bottom")
