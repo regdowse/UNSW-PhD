@@ -1,0 +1,19 @@
+{
+  "inputs": {
+    "profiles": "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/vertical_profiles_confirmed/profiles.parquet",
+    "tilt": "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/tilt/tilt_dataset.parquet"
+  },
+  "example": {"Eddy": 2103, "Day": 7923},
+  "calculation": {
+    "window_days": 5,
+    "temporal_sigma_days": 1.0,
+    "depth_interval_m": 10,
+    "max_depth_m": 1000,
+    "min_depth_range_m": 200,
+    "min_points": 5,
+    "bearing_offset_deg": 20.0,
+    "variance_epsilon": 1e-10
+  },
+  "plot": {"size_inches": [15, 4.8], "dpi": 600},
+  "output_dir": "outputs"
+}

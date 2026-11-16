@@ -5,6 +5,112 @@ HEAD `bb1d6c6` (figure tags), with user's uncommitted `manuscript/info.md` updat
 This document records the investigation and decisions. Historical planning-only
 statements below are superseded by the current implementation status here.
 
+## Tilt-method illustration status (2026-11-16)
+
+`tilt_method/` implements Figure 3 with JSON, a short notebook and local delta
+calculation/plotting helpers. Fixed Eddy 2103 / Day 7923 (window 7921–7925), no
+random example search. No legacy or upstream runtime imports, PV/background
+product dependency or scratch writes. This completes requested Figures 2–17;
+Figure 1 and the extra post-composite figure remain excluded as agreed.
+
+Production-equivalent settings: centred five calendar days, Gaussian sigma 1 day,
+10 m increments, 1000 m cap, minimum 200 m fit-label range / five fit points,
+inverse unweighted sample-variance depth weights with epsilon 1e-10, 20-degree
+bearing offset. Interpolate only inside each day's capped observed range; retain
+reference-day-supported intervals before averaging, variance and reconstruction.
+Keep existing upper-interval labels and mixed numerical units (horizontal km,
+depth m) in the weighted 3-D SVD. This is an illustration of the current estimator,
+not a change to production tilt. The no-interpolation control/composite decisions
+do not change this estimator's own interpolation step.
+
+Fresh result: tilt 3.6888208011596264 km, 64.9503132314173 degrees; saved distance
+differs by 4.44e-16 km, circular bearing difference zero. Maximum projected extent
+21.070722511684558 km. All five days have 22 capped fitted levels; reference
+support 0–858.918478 m, fit labels 0–840 m (85 points, five contributions each).
+The sub-5-km methods example is independent of the population directional cutoff.
+
+Original three-panel style retained and visually compared with the tagged saved
+image. The ribbon is relative fit weight, not uncertainty. Extent is max-minus-min
+reference position along the fitted axis, distinct from maximum pairwise 2-D or
+surface-relative distance. Display positive axis is shallow-to-deep; arrow and
+saved bearing are deep-to-shallow. Outputs include PNG/PDF, concise writing report,
+summary, source/support and step tables, manifest with input/config/code hashes.
+Eight new scientific checks bring the full suite to 49 passing tests.
+Fresh-kernel execution passed. Full-example checks verify 134 source / 110 capped
+profile points, 425 increments and 85 reconstruction points; temporal means,
+sample variances, fit weights, endpoint distance, projected extent and manifest
+hashes. A separate read-only check agrees with the current production functions
+within 1e-12. The stored notebook has no saved output clutter. No source dataset
+was regenerated; no commit or push performed.
+
+## Background implementation status (2026-11-16)
+
+User authorized Figure 11's agreed implementation. `background/` now contains
+JSON settings, a short notebook, local climatology/layer/bootstrap kernels and
+the tagged three-panel plotting style, including `seaborn-v0_8-whitegrid`.
+No legacy runtime imports. Independent scratch root:
+`/srv/scratch/z5297792/eddy_tilt_manuscript/background_flow/monthly_v1/`.
+The full independent rebuild completed: all 307 partitions were freshly computed,
+then reduced into monthly means/counts and 31/61/91-day all-source tables. No
+legacy cache or partition was used as an input. Fresh-kernel notebook execution
+passed and the regenerated figure was compared with the tagged saved output.
+
+Archive preflight found 307 files / 9,189 unique consecutive daily records,
+1994-01-02 through 2019-02-28. This is 26 calendar years, with incomplete first
+and final years, not 26 full years. All source eddy-days are within the archive.
+Current deep-planetary directional population: 6,103 days; all centre cells are
+wet and >=500 m deep (minimum 1423.99 m). Footprint-mean h remains the 3000 m
+population selector; centre-column bathymetry checks layer coverage separately.
+
+Preserve the original static physical sigma-centre / midpoint-interface layer
+approximation. Read all 30 model levels; surface is the top model level. Require
+complete finite 0–200 and 0–500 m coverage, rather than renormalising missing
+depths. Derive 200–500 m from those layer integrals, and retain geographic
+east/north fields. Monthly sums/counts use all archive days, including days
+without eddies. The circular 365-day seasonal calendar maps Feb 29 to Feb 28.
+31/61/91-day windows use identical monthly fields and complete matched days;
+91 is primary. Pooled day medians and whole-track bootstrap (5000 draws, seed
+42 with exported statistic offsets), reusing seeds across windows.
+
+Fresh partitions are atomic and restartable only with matching input/kernel
+signature. A completed product is validated before use; changed inputs/code
+require a fresh product directory. Raw archive provenance records paths, sizes,
+mtime_ns and all ocean-time values, not a claimed content hash of ~0.8 TB.
+Small source files, kernels and generated products have SHA-256 identities.
+Eight new checks bring the suite to 41 passing tests. A fresh one-file partition
+and real-grid 200/500 m thickness checks passed before the full run.
+
+Full-data coverage validation retains all 6,103 deep-planetary directional days:
+AE 4,347 / 489 eddies; CE 1,756 / 378. No layer/window exclusions. Every targeted
+cell has all expected archive days for every month, component and layer. Fresh
+91-day values agree with the historical background table after keyed comparison:
+surface exactly; layer means differ by at most 8.33e-17 m/s (round-off). This is
+validation after independent regeneration, not reuse of the historical cache.
+
+Matched internal checks preserve the zonal-contrast population result. Median
+surface-minus-200–500 m zonal velocity (m/s): AE 31/61/91-day =
+0.04813/0.04744/0.04719; CE = 0.04803/0.04774/0.04763. Every lower 95% whole-track
+CI bound is positive. Primary 91-day CIs: AE [0.04474,0.04955], CE [0.04430,0.05049].
+The median of paired daily differences is distinct from a difference of medians:
+31 minus 91 days gives AE -0.00039, CE -0.00054 m/s; individual absolute changes
+can reach ~0.042 m/s. Do not imply individual days are unchanged or that window
+agreement establishes causation. Internal checks remain in tables, not paper panels.
+
+Outputs: Figure 11 PNG/PDF, layer median/CIs, window contrast summaries and paired
+differences, monthly coverage, matched members, selection/exclusion audit, writing
+report and manifest. Numerical/bootstrap settings are in JSON, with actual seeds
+in the CSVs. The original whitegrid style, 1x3 layout, colours, labels, maps and
+98th-percentile shared colour saturation are retained. A small automatic y-margin
+keeps the original panel-a label from colliding with the new top tick; no estimates
+or CI are clipped. Figure 3 is now implemented in the topic above.
+No commit or push performed.
+
+Final checks passed: 18,309 matched window rows, all 36 layer summaries, six
+contrast summaries and 144 monthly-support checks; daily layer algebra, pooled
+medians, identical Figure 10 target membership, complete CIs and manifest hashes.
+All 41 tests pass. The final display adjustment was re-exported and visually
+checked; it changes only automatic axis headroom, not numerical tables.
+
 ## Composite implementation status (2026-11-16)
 
 `composites/` contains JSON settings, a short notebook and local calculation/plotting
@@ -36,8 +142,8 @@ row-wise axes retained and compared with the tagged output. Column titles clarif
 deep planetary / shallow topographic selection. Local outputs contain PNG/PDF,
 depthwise means/CIs/spread/support, inventory, selection/exclusion audit, projected
 member centres, concise writing report and provenance manifest. Seven new tests
-bring the full suite to 33 passing checks. Background flow (Figure 11) is next;
-Figure 3's method illustration also remains outstanding.
+bring the suite at that stage to 33 passing checks. Background status is above;
+Figure 3's method illustration is now implemented above.
 Fresh-kernel notebook execution passed. Full-data checks covered 936,326 fitted
 profile rows / 43,670 selected days and all 132 group-depth estimates: zero surface
 offsets, distance-preserving rotation, exact pooled means/support, identical target
@@ -72,7 +178,7 @@ audits, ellipse bootstrap estimates/coverage/paired depth contrasts, descriptive
 environment fit coefficients and report.md. No new scratch products or legacy
 runtime imports. Tests are in the shared ignored tests directory. Controls are
 not a dominance/depth-selected population. Composite status is recorded above;
-background remains next.
+background status is recorded above.
 Seven controls tests bring the full suite to 26 passing checks. Fresh-kernel
 notebook execution passed. All four figures were compared with saved tagged
 outputs. Additional checks verify exact depth-key matching, histogram percentages,
@@ -109,7 +215,7 @@ sample_audit.csv, concise report.md and run manifest. No inference/CI is attache
 to this method illustration. Tests are in the shared Git-ignored tests directory.
 The notebook passed fresh-kernel loading, product validation and figure export.
 Figures 7–10/12 and regime classification are now implemented below. Figure 11
-remains for the later background-flow topic.
+is implemented in the background topic above.
 
 Figure 2 arrow-frame correction (approved by user): rotate both local magenta
 vectors and the green mean vector from geographic east/north into model x/y
@@ -172,7 +278,7 @@ Fresh-kernel notebook execution passed. Compared all five figures visually with
 saved tagged outputs. Verified category percentages/counts, spatial-bin support,
 unclipped planetary roses and exact run-manifest code hashes. Figure 7 excludes
 two AE source days without a region label; neither had valid tilt. Figure 11
-remains for the background topic; controls/composites are implemented above.
+is implemented in the background topic; controls/composites are also implemented above.
 The all-depth directional counts above describe the pre-depth-filter population;
 current targeted counts and exclusions are in report.md, figure_samples.csv and
 depth_selection_counts.csv. direction_summary.csv explicitly labels all-depth
@@ -361,8 +467,8 @@ commit or push is part of this relocation task.
   inspection of GitHub Figures/delta_schematic.png shows tilt 3.7 km and maximum
   projected extent 21.1 km. These match the first saved tagged example:
   Eddy 2103, Day 7923 (saved 3.69 km and 21.070723 km), uniquely among the
-  three outputs. Plan to pin that pair; this is identification from image labels
-  and saved output, not a fresh numerical rerun. The >=5 km directional sample
+  three outputs. That pair is now pinned and freshly rerun in `tilt_method/`;
+  see the current status above. The >=5 km directional sample
   threshold does not prohibit this methods illustration of a smaller tilt.
 - These decisions authorize planning/documentation only, not implementation.
   Remaining population/QC/weighting decisions are still open.

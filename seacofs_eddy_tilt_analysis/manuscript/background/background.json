@@ -1,0 +1,23 @@
+{
+  "dominance_config": "../pv_dominance/dominance.json",
+  "model_root": "/srv/scratch/z3533156/26year_BRAN2020",
+  "sigma_depths": "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy",
+  "product_dir": "/srv/scratch/z5297792/eddy_tilt_manuscript/background_flow/monthly_v1",
+  "output_dir": "outputs",
+  "calculation": {
+    "upper_depth_m": 200.0,
+    "deep_depth_m": 500.0,
+    "windows_days": [31, 61, 91],
+    "primary_window_days": 91,
+    "workers": 4
+  },
+  "bootstrap_replicates": 5000,
+  "seed": 42,
+  "plot": {
+    "style": "seaborn-v0_8-whitegrid",
+    "summary_y_margin": 0.1,
+    "size_inches": [10, 4],
+    "colour_percentile": 98.0,
+    "dpi": 600
+  }
+}

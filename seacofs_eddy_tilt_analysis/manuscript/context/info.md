@@ -14,6 +14,14 @@ Current controls workflow (Figures 13–16): `controls/controls.ipynb`, settings
 Current composites workflow (Figure 17): `composites/composites.ipynb`, settings in
 `composites/composites.json`; outputs in `composites/outputs/`.
 
+Current background workflow (Figure 11): `background/background.ipynb`, settings in
+`background/background.json`; outputs in `background/outputs/`. Build the fresh
+scratch product explicitly with `python background/background.py --build`.
+
+Current tilt-method workflow (Figure 3): `tilt_method/tilt_method.ipynb`, settings in
+`tilt_method/tilt_method.json`; outputs in `tilt_method/outputs/`. Fixed Eddy 2103,
+Day 7923, matching the original manuscript example.
+
 pv_measurement_demo.png FIG 2 '/home/z5297792/UNSW-PhD/seacofs_eddy_tilt_analysis/legacy_analysis/surface_pv_esp_gaussian'
 
 delta_schematic.png FIG 3 '/home/z5297792/UNSW-PhD/seacofs_eddy_tilt_analysis/legacy_analysis/delta_tilt_method'

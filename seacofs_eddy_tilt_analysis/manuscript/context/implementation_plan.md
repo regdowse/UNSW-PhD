@@ -47,7 +47,7 @@ short notebook. Figures 7–10/12, writing report and supporting CSVs are in
 scratch computation. Uses shared manuscript census geography/rose styling.
 Approved display corrections: rotate Figure 7 bearings into model-grid axes;
 expand Figure 9 distribution limits and Figure 10 radial limits only as needed.
-Figure 11 remains part of the later background-flow topic.
+Figure 11 is implemented separately in the background-flow topic.
 Keep magnitude-only categories distinct from target selection: Figure 10 uses
 deep planetary days (footprint-mean h>=3000 m), Figure 12 shallow topographic
 days (h<=3000 m). Figures 7–9 show all depths. A single configurable threshold
@@ -73,5 +73,32 @@ frame before averaging. Positive perpendicular is counterclockwise. Equal-day
 means and pointwise whole-track bootstrap CIs (500 draws, seed 731); counts vary
 with depth and are exported. No interpolation or velocity reconstruction.
 The local output folder contains figures, statistics/support, selection audit,
-members, writing report and manifest. Background flow (Figure 11) is next;
-Figure 3's tilt-method illustration also remains to be reconstructed.
+members, writing report and manifest. Background flow (Figure 11) is implemented
+below; Figure 3's tilt-method illustration is implemented in `tilt_method/`.
+
+Background: `background/background.json`, short notebook, local monthly/layer and
+bootstrap kernels, and original Figure 11 plotting style. Build the full archive
+into fresh `background_flow/monthly_v1/` scratch space, including new file partitions,
+monthly sums/counts and all-source eddy-day tables for windows 31/61/91 days.
+Primary 91-day centred seasonal climatology; fixed surface, 0–200 and 200–500 m
+layers. Preserve the original physical sigma-centre midpoint-interface approximation
+and require full finite layer coverage. Use the same complete deep-planetary
+directional sample for every window and displayed layer. Pooled eddy-day medians,
+whole-track bootstrap (5000 draws, seed 42 with exported offsets). Internal window
+checks stay in compact tables, with paired differences from 91 days; no extra paper
+panels. Preserve legacy products and reject changed product inputs/code/content.
+Executed against all 307 archive files (9,189 consecutive days); all 6,103 target
+days have complete layer/month/window coverage. The 31/61/91-day population contrast
+is consistently positive; detailed checks are in the topic's local outputs.
+Fresh-kernel execution and original-style figure comparison passed.
+
+Tilt method: `tilt_method/tilt_method.json`, short notebook, local delta kernels
+and original Figure 3 plotting function. Fixed Eddy 2103 / Day 7923; five calendar
+days, Gaussian sigma 1 day, 10 m increments, cap 1000 m, reference-supported
+intervals only, inverse unweighted sample-variance depth weights and the existing
+weighted 3-D SVD convention. This method retains within-profile interpolation,
+unlike the exact-depth control/composite comparisons. No extrapolation. Export
+source profiles, temporal increments, reconstructed trace/weights/support, line
+endpoints, projected profiles, example summary, report and manifest. Saved source
+tilt and scratch products stay unchanged. Recomputed example agrees with saved
+tilt and the tagged original; Figures 2–17 are now recreated independently.

@@ -64,3 +64,21 @@ and support, selection audit, constituent centres and writing report are in
 centres within 0–1000 m, referenced to each day's own surface centre. Means weight
 eddy-days equally; confidence intervals resample whole tracks. No interpolation,
 legacy imports, ESP backend or new scratch product is required.
+
+Background flow: settings `background/background.json`, notebook
+`background/background.ipynb`. Build once with `python background/background.py --build`
+from manuscript; the notebook or `python background/background.py` validates and
+loads the independent scratch product. A matching interrupted build resumes its
+new partitions; changed scientific inputs/code require a new `product_dir`.
+The primary Figure 11, layer summaries, matched internal 31/61/91-day checks,
+selection audit and writing report go to `background/outputs/`. This topic uses
+monthly climatological model fields and the shared deep-planetary selection.
+The archive build additionally uses joblib for file-level parallel processing.
+
+Tilt method: run `tilt_method/tilt_method.ipynb`, or
+`python tilt_method/tilt_method.py` from manuscript. Settings are in the matching
+JSON. Figure 3 pins Eddy 2103 / Day 7923, recomputes the five-day delta fit from
+confirmed centres and compares it with saved tilt. Original plotting style is
+retained. Figure, concise writing report and calculation-step tables are in
+`tilt_method/outputs/`. No scratch build or legacy/production imports are needed.
+All requested figure workflows (Figures 2–17) are now available by topic.

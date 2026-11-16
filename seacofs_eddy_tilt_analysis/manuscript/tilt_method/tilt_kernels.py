@@ -1,0 +1,78 @@
+"""Local production-equivalent delta reconstruction for the pinned illustration."""
+import numpy as np
+import pandas as pd
+
+
+def increments(track, depth_int=10, max_depth=1000):
+    """Calendar-day columns and upper-interval depth labels match production."""
+    if track.empty:
+        raise ValueError('No profile data')
+    if track.Eddy.nunique()!=1:
+        raise ValueError('Supply one eddy track at a time')
+    days = np.arange(int(track.Day.min()), int(track.Day.max()) + 1)
+    target = np.arange(0, max_depth + depth_int, depth_int)
+    x, y = {}, {}
+    for day in days:
+        g = track.loc[track.Day.eq(day)].copy()
+        g['Depth'] = g.Depth.abs()
+        g = g.loc[g.Depth.le(max_depth)].sort_values('Depth')
+        if g.Depth.duplicated().any():
+            raise ValueError(f'Duplicate depths on Day {day}')
+        if not np.isfinite(g[['Depth', 'xc', 'yc']].to_numpy()).all():
+            raise ValueError(f'Nonfinite profile on Day {day}')
+        levels = target[(target >= g.Depth.min()) & (target <= g.Depth.max())]
+        if len(g) < 2 or len(levels) < 2:
+            x[day] = pd.Series(np.nan, index=target[:-1])
+            y[day] = pd.Series(np.nan, index=target[:-1])
+        else:
+            x[day] = pd.Series(np.diff(np.interp(levels, g.Depth, g.xc)), index=levels[:-1])
+            y[day] = pd.Series(np.diff(np.interp(levels, g.Depth, g.yc)), index=levels[:-1])
+    return pd.DataFrame(x), pd.DataFrame(y)
+
+
+def fit_snapshot(dx, dy, day, sigma=None, half_window=3, min_depth_range=200,
+                 min_points=5, bearing_offset=20.0, eps=1e-10):
+    """Fit only intervals supported by the reference day, before reconstruction.
+
+    Increment rows exist only when both interval endpoints lie within that
+    day's measured profile range. Neighbours can smooth these intervals, but
+    cannot add shallower or deeper intervals, or stand in for a missing day.
+    Upper-interval depth labels and all other fit conventions are retained.
+    """
+    if sigma is not None and (not np.isfinite(sigma) or sigma<=0):
+        raise ValueError('Temporal sigma must be finite and positive, or None')
+    days = np.arange(day - half_window, day + half_window + 1)
+    if days[0] < dx.columns.min() or days[-1] > dx.columns.max():
+        return None
+    if day not in dx.columns or day not in dy.columns:
+        return None
+    reference_support = np.isfinite(dx[day]) & np.isfinite(dy[day])
+    if not reference_support.any():
+        return None
+    # Clip BEFORE averaging, variance estimation, and cumulative reconstruction.
+    x = dx.loc[reference_support].reindex(columns=days)
+    y = dy.loc[reference_support].reindex(columns=days)
+    a = pd.Series(1.0 if sigma is None else np.exp(-0.5*((days-day)/sigma)**2), index=days)
+    def mean(d):
+        return d.mul(a, axis=1).sum(axis=1, min_count=1) / d.notna().mul(a, axis=1).sum(axis=1).replace(0, np.nan)
+    mx,my=mean(x),mean(y)
+    vx,vy=x.var(axis=1),y.var(axis=1)
+    trace = pd.DataFrame({'x': mx.cumsum(), 'y': my.cumsum(),
+                          'weight': 1/(vx + vy + eps),
+                          'mean_dx_km':mx,'mean_dy_km':my,'variance_dx_km2':vx,
+                          'variance_dy_km2':vy,'contributing_days':(x.notna()&y.notna()).sum(axis=1)})
+    trace['Depth'] = trace.index
+    trace = trace.replace([np.inf, -np.inf], np.nan).dropna()
+    if len(trace) < min_points or trace.Depth.max()-trace.Depth.min() < min_depth_range:
+        return None
+    points = trace[['x', 'y', 'Depth']].to_numpy()
+    w = trace.weight.to_numpy()/trace.weight.max()
+    centre = np.average(points, axis=0, weights=w)
+    _, _, vt = np.linalg.svd((points-centre)*np.sqrt(w[:, None]), full_matrices=False)
+    v = vt[0]
+    if not np.isfinite(v).all() or abs(v[2]) < eps:
+        return None
+    ends = centre + ((np.array([trace.Depth.min(), trace.Depth.max()])-centre[2])/v[2])[:, None]*v
+    delta = ends[0, :2]-ends[1, :2]
+    return dict(trace=trace, ends=ends, TiltDis=float(np.linalg.norm(delta)),
+                TiltDir=float((np.degrees(np.arctan2(delta[0], delta[1]))+bearing_offset)%360))
