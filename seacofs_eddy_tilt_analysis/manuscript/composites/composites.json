@@ -1,0 +1,13 @@
+{
+  "dominance_config": "../pv_dominance/dominance.json",
+  "output_dir": "outputs",
+  "max_profile_depth_m": 1000.0,
+  "bootstrap_replicates": 500,
+  "seed": 731,
+  "plot": {
+    "min_eddies": 2,
+    "sparse_eddies": 20,
+    "size_inches": [13, 6],
+    "dpi": 600
+  }
+}

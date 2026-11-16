@@ -53,3 +53,25 @@ deep planetary days (footprint-mean h>=3000 m), Figure 12 shallow topographic
 days (h<=3000 m). Figures 7–9 show all depths. A single configurable threshold
 controls both target filters; excluded days keep their dominance category.
 Reports and depth_selection_counts.csv distinguish depth exclusions from other QC.
+
+Controls: `controls/controls.json`, short notebook and local Python helpers retain
+the tagged Figures 13–16 styles. Structure depths are exactly 0, 181.26479327,
+515.41648935 m; ellipse depths (approved) are 0, 48.89763802, 105.61553821,
+181.26479327, 327.44085148 m. Fixed fits only; no interpolation/ranking. Plotted
+statistics weight eddy-days equally; Figure 15 intervals resample whole tracks.
+Figure 16 raw y-limit is 50 km (approved to display full IQR); normalised limit
+remains 0.6. Local outputs include CSV estimates/support/audits and report.md.
+Figure 13 shared y-axis expansion is also approved to show full IQR bands;
+`figure13_expand_to_iqr` records this presentation correction in JSON.
+
+Composites: `composites/composites.json`, short notebook and local Python helpers
+produce Figure 17 in its original six-panel style. Select deep planetary and
+shallow topographic days using the shared 3000 m threshold; mixed remains purely
+magnitude-defined. Use valid actual fitted centres within 0–1000 m, referenced to
+each day's own fitted surface centre, rotated into that day's total signed-PV
+frame before averaging. Positive perpendicular is counterclockwise. Equal-day
+means and pointwise whole-track bootstrap CIs (500 draws, seed 731); counts vary
+with depth and are exported. No interpolation or velocity reconstruction.
+The local output folder contains figures, statistics/support, selection audit,
+members, writing report and manifest. Background flow (Figure 11) is next;
+Figure 3's tilt-method illustration also remains to be reconstructed.

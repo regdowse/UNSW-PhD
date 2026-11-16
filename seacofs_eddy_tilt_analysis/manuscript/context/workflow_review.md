@@ -5,7 +5,81 @@ HEAD `bb1d6c6` (figure tags), with user's uncommitted `manuscript/info.md` updat
 This document records the investigation and decisions. Historical planning-only
 statements below are superseded by the current implementation status here.
 
-## Surface-PV implementation status (2026-11-16)
+## Composite implementation status (2026-11-16)
+
+`composites/` contains JSON settings, a short notebook and local calculation/plotting
+helpers for Figure 17. Reads confirmed fitted profiles, saved tilt and validated
+fresh surface PV. Uses shared unsmoothed magnitude categories and 3000 m target
+selection: deep planetary / all-depth magnitude-defined mixed / shallow topographic.
+Other-depth dominated days remain excluded, never relabelled mixed. Shared directional
+QC includes saved tilt >=5 km. No legacy imports, external ESP backend, interpolation,
+velocity reconstruction or scratch rebuild is needed.
+
+Retains valid actual fitted centres within 0–1000 m inclusive, referenced to each
+day's own valid fitted surface centre. Rotate individual offsets into that day's
+total environmental-PV frame before averaging; along is with the signed gradient,
+perpendicular is +90 degrees counterclockwise. Displacements are surface-to-depth,
+distinct from saved fitted deep-to-shallow TiltDis/TiltDir. Each available day has
+equal weight at each exact depth. Pointwise 95% CIs use whole-track resampling
+(500 draws, seed 731), with the same draw across depths within each group.
+
+Retained days/eddies: planetary AE 4,347/489, CE 1,756/378; mixed AE 14,601/931,
+CE 9,411/874; topographic AE 5,297/335, CE 8,258/586. Current deepest contributing
+fit is 858.918478 m in every group; depthwise support is exported rather than
+assuming constant membership. At that depth: planetary AE 3,925/414, CE 1,589/342;
+mixed AE 12,118/818, CE 8,157/802; topographic AE 3,100/257, CE 6,090/523.
+Eddy counts overlap across regimes. Surface-reference means and CIs are zero by
+construction; a composite's vector magnitude is not the mean member magnitude.
+
+Original six-panel layout, colours, confidence shading, labels and symmetric
+row-wise axes retained and compared with the tagged output. Column titles clarify
+deep planetary / shallow topographic selection. Local outputs contain PNG/PDF,
+depthwise means/CIs/spread/support, inventory, selection/exclusion audit, projected
+member centres, concise writing report and provenance manifest. Seven new tests
+bring the full suite to 33 passing checks. Background flow (Figure 11) is next;
+Figure 3's method illustration also remains outstanding.
+Fresh-kernel notebook execution passed. Full-data checks covered 936,326 fitted
+profile rows / 43,670 selected days and all 132 group-depth estimates: zero surface
+offsets, distance-preserving rotation, exact pooled means/support, identical target
+membership to Figures 10/12 and current manifest hashes. No commit or push performed.
+
+## Controls implementation status (2026-11-16)
+
+`controls/` has JSON settings, short notebook and local analysis/plotting helpers.
+Figures 13/14 use fixed existing levels 0, 181.2647932696809 and
+515.416489345845 m, with the same days/properties at all levels. No ranking or
+interpolation. Original |Omega| and AR plots and surface-Rc normalisation retained.
+Actual structure sample: AE 43,889 days / 1,344 eddies, CE 45,495 / 1,491.
+
+User approved Figure 15's five exact levels 0, 48.89763802286193,
+105.61553821400828, 181.2647932696809, 327.44085148324933 m. Depth comparison
+matches days after the directional AR/tilt QC at every level. Surface histograms
+and AR-class panels have their own documented samples. Day-weighted means and
+1000 whole-eddy bootstrap resamples (seed 42) replace old equal-eddy estimates;
+original six-panel style retained. Depth-matched sample: AE 38,460 days / 1,309
+eddies, CE 39,549 / 1,483. Preserve the inherited support thresholds: >=5 days
+per eddy in the actual sample/class and >=20 eddies per displayed estimate.
+
+Figure 16 joins current surface latitude with validated fresh surface-fit PV.
+Plots remain unadjusted medians/IQR and fits to bin medians; no causal inference.
+User approved raw y-limit 50 km (old 40 clips IQR reaching 43.7 km), while the
+normalised limit stays 0.6. An additional Figure 13 shared-axis clipping issue
+(IQR reaches 48.1 km) was also approved for correction: the shared upper bound
+now expands to show all IQR shading while preserving layout and styling.
+
+Outputs include figures, bin estimates/counts, matched members, QC/eligibility
+audits, ellipse bootstrap estimates/coverage/paired depth contrasts, descriptive
+environment fit coefficients and report.md. No new scratch products or legacy
+runtime imports. Tests are in the shared ignored tests directory. Controls are
+not a dominance/depth-selected population. Composite status is recorded above;
+background remains next.
+Seven controls tests bring the full suite to 26 passing checks. Fresh-kernel
+notebook execution passed. All four figures were compared with saved tagged
+outputs. Additional checks verify exact depth-key matching, histogram percentages,
+matched ellipse support and readable exports. The final axis correction does not
+change numerical CSVs; raw structure/environment IQR bands are checked for clipping.
+
+## Surface-PV implementation details (2026-11-16)
 
 Implemented independent `pv/pv.py`, `pv/pv_kernels.py`, `pv/pv_plots.py`, JSON
 settings and a short notebook. Required scientific/plotting kernels are local;
@@ -98,7 +172,7 @@ Fresh-kernel notebook execution passed. Compared all five figures visually with
 saved tagged outputs. Verified category percentages/counts, spatial-bin support,
 unclipped planetary roses and exact run-manifest code hashes. Figure 7 excludes
 two AE source days without a region label; neither had valid tilt. Figure 11
-and controls/composites remain unimplemented.
+remains for the background topic; controls/composites are implemented above.
 The all-depth directional counts above describe the pre-depth-filter population;
 current targeted counts and exclusions are in report.md, figure_samples.csv and
 depth_selection_counts.csv. direction_summary.csv explicitly labels all-depth
@@ -153,7 +227,8 @@ differences are in report.md.
 The new region grid matches the old -33 definition on every wet cell. It leaves
 land cells unlabelled (old shelf expansion labels 46 dry cells). Two source days
 are consequently unassigned, both without valid tilt; plotted samples unaffected.
-Later analysis topics remain unimplemented. No commit or push performed.
+Later topic implementations are recorded above. No commit or push was part of
+the census implementation.
 
 ## Relocation completed 2026-11-16
 
@@ -237,8 +312,8 @@ commit or push is part of this relocation task.
   regenerated results to preserve existing conclusions.
 - Figure 15 ellipse-depth comparison uses actual fitted levels, with matched
   Eddy-Day observations across compared depths; no interpolation of ellipse
-  geometry. Exact levels remain to be selected and documented; agreement does
-  not automatically restrict this figure to the three levels in Figures 13/14.
+  geometry. User approved five existing levels: approximately 0, 49, 106, 181,
+  327 m; exact values are recorded in controls.json and the current status above.
 - Figure 15 directional geometry requires 1.1 <= axis ratio <= 5 alongside
   TiltDis >= 5 km and valid geometry. Apply the axis-ratio requirement at each
   compared depth before forming the matched Eddy-Day sample.

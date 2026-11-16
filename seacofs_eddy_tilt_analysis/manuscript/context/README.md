@@ -50,3 +50,17 @@ Dominance is magnitude-only. Figures 10/12 additionally select deep planetary
 remain all-depth. `water_depth_threshold_m` sets the shared cutoff. The report,
 audit and `depth_selection_counts.csv` show retained/excluded populations without
 reclassifying excluded days as mixed.
+
+Controls: run `controls/controls.ipynb`, or `python controls/controls.py` from
+manuscript. Exact depths, QC, bootstrap and plotting settings are in `controls.json`.
+Figures 13–16 and CSV estimates, support/audits and writing report are in
+`controls/outputs/`. Reads existing source fits and validated PV; no legacy imports
+or new scratch builds. Axis alignment uses day weighting and whole-track CIs.
+
+Composites: run `composites/composites.ipynb`, or `python composites/composites.py`
+from manuscript. Settings are in `composites.json`. Figure 17, depthwise means/CIs
+and support, selection audit, constituent centres and writing report are in
+`composites/outputs/`. Uses shared dominance/depth selections and actual fitted
+centres within 0–1000 m, referenced to each day's own surface centre. Means weight
+eddy-days equally; confidence intervals resample whole tracks. No interpolation,
+legacy imports, ESP backend or new scratch product is required.
