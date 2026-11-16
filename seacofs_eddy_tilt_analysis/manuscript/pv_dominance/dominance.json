@@ -1,0 +1,24 @@
+{
+  "pv_config": "../pv/pv.json",
+  "census_config": "../census/census.json",
+  "output_dir": "outputs",
+  "dominance_factor": 2.0,
+  "direction_min_tilt_km": 5.0,
+  "shelf_longitude_deg": 154.75,
+  "alignment_tolerance_deg": 45.0,
+  "water_depth_threshold_m": 3000.0,
+  "plot": {
+    "dpi": 600,
+    "pv_log_magnitude_edges": [null, -34, -33, -32, -31, -30, -29, -28, -27, null],
+    "figure7_size_inches": [20, 8],
+    "figure7_rose_size_factor": 3.0,
+    "figure7_map_normalisation": 1000.0,
+    "figure8_size_inches": [12, 5],
+    "map_log_ratio_limit": 2.0,
+    "figure9_size_inches": [11, 3],
+    "figure10_size_inches": [14, 4],
+    "planetary_radial_tick_step": 50,
+    "planetary_min_radial_limits": {"AE": 270, "CE": 170},
+    "figure12_size_inches": [12.5, 4]
+  }
+}

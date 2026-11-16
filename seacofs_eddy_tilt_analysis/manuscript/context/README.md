@@ -39,3 +39,14 @@ Figure 2 rotates geographic arrows into model-grid coordinates for display.
 An intentional replacement requires `--build --rebuild`. Figure 2 and its writing
 report are in `pv/outputs/`. Both surface PV and auxiliary peak-vorticity fields
 are saved; only surface vorticity enters the PV calculation.
+
+PV dominance: run `pv_dominance/dominance.ipynb`, or
+`python pv_dominance/dominance.py` from manuscript. Settings are in the matching
+JSON; outputs include Figures 7–10/12, `report.md`, counts, directional summaries,
+map-bin support and an audit. Shared census/PV modules are inside manuscript;
+no legacy functions or old PV caches are used.
+Dominance is magnitude-only. Figures 10/12 additionally select deep planetary
+(h>=3000 m) / shallow topographic (h<=3000 m) days, respectively; Figures 7–9
+remain all-depth. `water_depth_threshold_m` sets the shared cutoff. The report,
+audit and `depth_selection_counts.csv` show retained/excluded populations without
+reclassifying excluded days as mixed.

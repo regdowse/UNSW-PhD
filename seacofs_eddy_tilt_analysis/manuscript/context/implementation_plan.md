@@ -40,3 +40,16 @@ require explicit `--build --rebuild` to replace. Default fresh product root:
 Local figure/report/CSV outputs: `pv/outputs/`. No legacy runtime imports.
 Only the surface Gaussian method is built; unrelated uniform-control comparisons
 and PV-dominance figures are outside this step.
+
+PV dominance: `pv_dominance/dominance.json`, Python analysis/plotting modules and
+short notebook. Figures 7–10/12, writing report and supporting CSVs are in
+`pv_dominance/outputs/`. Reads and validates the fresh surface-PV product; no new
+scratch computation. Uses shared manuscript census geography/rose styling.
+Approved display corrections: rotate Figure 7 bearings into model-grid axes;
+expand Figure 9 distribution limits and Figure 10 radial limits only as needed.
+Figure 11 remains part of the later background-flow topic.
+Keep magnitude-only categories distinct from target selection: Figure 10 uses
+deep planetary days (footprint-mean h>=3000 m), Figure 12 shallow topographic
+days (h<=3000 m). Figures 7–9 show all depths. A single configurable threshold
+controls both target filters; excluded days keep their dominance category.
+Reports and depth_selection_counts.csv distinguish depth exclusions from other QC.

@@ -34,7 +34,8 @@ Outputs: `pv/outputs/` contains Figure 2 PNG/PDF, examples.csv, summary.csv,
 sample_audit.csv, concise report.md and run manifest. No inference/CI is attached
 to this method illustration. Tests are in the shared Git-ignored tests directory.
 The notebook passed fresh-kernel loading, product validation and figure export.
-Figures 7–12 and regime classification remain for the next step.
+Figures 7–10/12 and regime classification are now implemented below. Figure 11
+remains for the later background-flow topic.
 
 Figure 2 arrow-frame correction (approved by user): rotate both local magenta
 vectors and the green mean vector from geographic east/north into model x/y
@@ -52,6 +53,61 @@ its update record. No PV recomputation or Parquet rewrite was performed.
 Regenerated Figure 2 PNG/PDF and writing report; visually checked the corrected
 directions. Example/summary/audit CSVs and the PV Parquet are byte-for-byte
 unchanged. The original figure style and arrow reference scales are retained.
+
+## PV-dominance implementation status (2026-11-16)
+
+`pv_dominance/` contains JSON settings, short notebook and analysis/plotting Python.
+Reads validated fresh PV covariates, joins current tilt by unique Eddy-Day keys,
+and reuses geography/rose helpers from manuscript census. No legacy runtime
+imports, old-cache inputs or temporal smoothing. Dominance remains magnitude-only;
+targeted populations additionally use the shared 3000 m water-depth threshold.
+Factor-two categories include their boundaries; invalid, negative and zero/zero
+inputs are unclassified. Magnitude categories are independent of tilt validity.
+Directional comparisons use tilt >=5 km and valid total PV/tilt bearings.
+
+Full-data classification: AE planetary/mixed/topographic days 5,662/20,259/39,031;
+CE 2,388/13,131/46,955. No unclassified days in current inputs. Directional
+planetary sample: AE 4,352 days / 494 eddies; CE 1,757 / 379. Directional
+topographic: AE 27,814 / 1,282; CE 33,945 / 1,470. Eddy counts overlap by regime.
+
+Figure styles ported from tagged cells for Figures 7–10/12. User approved three
+specific corrections during this step: Figure 7 geographic bearings rotate by
+the actual grid angle (-20 degrees) for model-grid display; Figure 9 limits
+expand to cover unsmoothed tails (raw log ratio -5.9894 to 6.8938); Figure 10
+retains AE radial minimum 270 and expands CE 170 to 200 to accommodate peak 188.
+Figure 10 selects deep planetary days (h>=3000 m); Figure 12 selects shallow
+topographic days (h<=3000 m). Here h is Gaussian-footprint-mean water depth from
+PV, not centre-column or profile depth. Other-depth dominated days keep their
+dominance category and are excluded from these targets, never relabelled mixed.
+Figures 7–9 and the all-depth inventory remain unchanged. The same JSON threshold
+drives population selection and the plotted isobaths. The contour uses local grid
+bathymetry, so its position need not exactly match footprint-mean selection.
+Figure 12 keeps the original longitude split at 154.75 E; equality is off-shelf.
+It should not be described as a new bathymetric shelf classification.
+
+`outputs/` contains PNG/PDF figures, concise writing report, regime proportions,
+directional summaries (all and longitude groups), gradient quartiles, figure
+sample/exclusion counts, spatial mean-log-ratio bins/support and row-level audit.
+These are descriptive results, not independent-day significance tests. Five new
+tests cover boundary/invalid/zero inputs, scale/component symmetry, instantaneous
+classification without depth filters, direction thresholds, circular differences
+and key coverage. A depth-boundary/exclusion test brings the total to nineteen
+passing tests, including earlier topics. Scratch inputs
+and PV products are read-only in this step. No commit/push performed.
+Fresh-kernel notebook execution passed. Compared all five figures visually with
+saved tagged outputs. Verified category percentages/counts, spatial-bin support,
+unclipped planetary roses and exact run-manifest code hashes. Figure 7 excludes
+two AE source days without a region label; neither had valid tilt. Figure 11
+and controls/composites remain unimplemented.
+The all-depth directional counts above describe the pre-depth-filter population;
+current targeted counts and exclusions are in report.md, figure_samples.csv and
+depth_selection_counts.csv. direction_summary.csv explicitly labels all-depth
+versus deep_planetary/shallow_topographic populations; audit retains both regime
+and target_population, including exclusion reasons and h.
+After depth selection and directional QC: Figure 10 AE 4,347 days / 489 eddies,
+CE 1,756 / 378; Figure 12 AE 5,297 / 335, CE 8,258 / 586. Regenerated Figures
+10/12 and checked their styles visually. Figures 7–9, all-depth regime counts,
+gradient summaries and map-bin tables remain byte-for-byte unchanged.
 
 ## Census implementation and style details (2026-11-16)
 
@@ -148,9 +204,11 @@ commit or push is part of this relocation task.
   topographic if |g_topo| >= 2|g_plan|; otherwise mixed among valid inputs.
   Invalid/missing inputs remain unclassified; zero/zero must not satisfy both
   dominance definitions. No bathymetry in classification.
-- Remove the additional deep/shallow water population filters from Figures
-  10–12 as well. User considers them unnecessary; do not reintroduce depth
-  restrictions through helper defaults. Depth may still be shown descriptively.
+- After reviewing the all-depth results, user restored a separate shared 3000 m
+  depth selection for targeted populations: deep planetary h>=3000 m, shallow
+  topographic h<=3000 m. Keep dominance magnitude-only and all-depth Figures 7–9.
+  Excluded deep topographic/shallow planetary days retain their original category;
+  they are not mixed. Record retained/excluded days and eddies explicitly.
 - Retain TiltDis >= 5 km for directional analyses. Magnitude analyses retain all
   valid tilt distances, including valid values below 5 km. This threshold does
   not affect the PV dominance category itself. Apply alongside the relevant
@@ -190,12 +248,14 @@ commit or push is part of this relocation task.
   before averaging. Equal eddy-day weights at each depth; whole-eddy bootstrap
   confidence intervals; report contributing days/eddies by depth. Directional
   selection uses saved TiltDis >= 5 km. Regimes follow the newly agreed raw
-  magnitude-only classification, with no water-depth restrictions.
+  magnitude-only classification. Future targeted planetary/topographic comparisons
+  should use the agreed deep/shallow selection separately; mixed remains purely
+  the magnitude-defined mixed category, not a complement of depth selections.
 - Figure 11 background: retain centred 91-day seasonal climatology as primary,
   using monthly climatological model fields; retain surface, 0–200 m and
   200–500 m velocities and primary surface-minus-200–500 m zonal contrast.
-  Rebuild in fresh scratch and use revised planetary selection without a water-
-  depth population filter. Validate layer coverage and report exclusions.
+  Rebuild in fresh scratch and use the deep-planetary selection (h>=3000 m).
+  Validate layer coverage and report exclusions separately.
 - Agreed small robustness comparison: seasonal windows 31, 61 and 91 days,
   holding depth ranges and Eddy-Day sample fixed. All use the same monthly
   climatological fields; shorter windows do not provide daily temporal resolution.

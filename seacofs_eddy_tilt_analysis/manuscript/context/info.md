@@ -5,6 +5,9 @@ The paths below identify legacy source material.
 Current surface-PV workflow (Figure 2 and fresh PV covariates): `pv/pv.ipynb`,
 settings in `pv/pv.json`; figures, tables and writing report in `pv/outputs/`.
 
+Current PV-dominance workflow (Figures 7–10/12): `pv_dominance/dominance.ipynb`,
+settings in `pv_dominance/dominance.json`; outputs in `pv_dominance/outputs/`.
+
 pv_measurement_demo.png FIG 2 '/home/z5297792/UNSW-PhD/seacofs_eddy_tilt_analysis/legacy_analysis/surface_pv_esp_gaussian'
 
 delta_schematic.png FIG 3 '/home/z5297792/UNSW-PhD/seacofs_eddy_tilt_analysis/legacy_analysis/delta_tilt_method'
