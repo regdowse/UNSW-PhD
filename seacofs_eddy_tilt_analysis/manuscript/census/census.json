@@ -1,0 +1,49 @@
+{
+  "inputs": {
+    "surface": "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/processed/eddy_dataset_processed.parquet",
+    "tilt": "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/tilt/tilt_dataset.parquet",
+    "grid": "/srv/scratch/z3533156/26year_BRAN2020/outer_avg_01461.nc"
+  },
+  "output_dir": "outputs",
+  "direction_min_tilt_km": 5.0,
+  "regions": {
+    "latitude_split_deg": -33.0,
+    "longitude_split_deg": 157.0,
+    "shelf_max_depth_m": 4000.0,
+    "shelf_max_x_km": 400.0,
+    "shelf_max_longitude_deg": 154.85,
+    "shelf_extension_km": 80.0
+  },
+  "plot": {
+    "magnitude_bins_km": [
+      0,
+      10,
+      20,
+      30,
+      40,
+      null
+    ],
+    "direction_bin_width_deg": 15,
+    "density_bins": 42,
+    "density_smoothing_sigma_bins": 1.15,
+    "magnitude_display_quantile": 0.995,
+    "dpi": 600,
+    "per_eddy_density_edges": 38,
+    "figure4_size_inches": [
+      10,
+      2.5
+    ],
+    "figure5_size_inches": [
+      16,
+      4
+    ],
+    "figure5_radial_tick_step": 1000,
+    "figure5_radial_limit": 2450,
+    "figure6_size_inches": [
+      20,
+      8
+    ],
+    "figure6_rose_size_factor": 2.4,
+    "figure6_display_rotation_deg": -20
+  }
+}

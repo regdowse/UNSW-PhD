@@ -1,4 +1,9 @@
+Current census workflow (Figures 4–6): `census/census.ipynb`, settings in `census/census.json`.
+Generated figures, CSV tables and writing report: `census/outputs/`.
+The paths below identify legacy source material.
 
+Current surface-PV workflow (Figure 2 and fresh PV covariates): `pv/pv.ipynb`,
+settings in `pv/pv.json`; figures, tables and writing report in `pv/outputs/`.
 
 pv_measurement_demo.png FIG 2 '/home/z5297792/UNSW-PhD/seacofs_eddy_tilt_analysis/legacy_analysis/surface_pv_esp_gaussian'
 

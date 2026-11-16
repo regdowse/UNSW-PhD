@@ -2,7 +2,102 @@
 
 Review date: 2026-11-16 (Australia/Sydney). Local source: UNSW-PhD `main`,
 HEAD `bb1d6c6` (figure tags), with user's uncommitted `manuscript/info.md` update.
-This document is investigation and a proposed plan, **not implemented architecture**.
+This document records the investigation and decisions. Historical planning-only
+statements below are superseded by the current implementation status here.
+
+## Surface-PV implementation status (2026-11-16)
+
+Implemented independent `pv/pv.py`, `pv/pv_kernels.py`, `pv/pv_plots.py`, JSON
+settings and a short notebook. Required scientific/plotting kernels are local;
+no legacy runtime imports. Explicit fresh build completed at
+`/srv/scratch/z5297792/eddy_tilt_manuscript/surface_pv/surface_fit_v1/`:
+`surface_pv.parquet` and a provenance manifest. Existing caches were untouched.
+
+127,426 rows, unique Eddy-Day keys; all have finite environmental PV gradients.
+No cached tilt outcomes, temporal smoothing or depth-population filtering. Surface
+geometry and surface w drive PV. Auxiliary signed/absolute peak w, selected depth
+and support count are retained separately for future work. Hash-validated loads
+fail on changed inputs, settings, calculation code or product content; rebuilds
+must be explicit. Formula implementation is the original environmental gradient
+with Gaussian-envelope weights, not full 3-D Ertel PV.
+
+Validation: five new scientific tests (ten including census) pass. All 44 shared
+PV covariates agree with the historical surface-fit comparison cache on all
+127,426 matched days (rtol=1e-12, atol=0). Auxiliary peak amplitude/depth match
+the old peak-w cache. This is a comparison after independent regeneration, not
+use of either old cache as an input. Fixed Figure 2 examples reproduce
+1.146674e-11 and 7.482916e-14 m^-2 s^-1. Visually compared the regenerated PNG
+with tagged notebook cell 7: original layout, bathymetry, ellipse/profile lines,
+magenta local arrows, green mean arrows, legends and colourbar retained.
+
+Outputs: `pv/outputs/` contains Figure 2 PNG/PDF, examples.csv, summary.csv,
+sample_audit.csv, concise report.md and run manifest. No inference/CI is attached
+to this method illustration. Tests are in the shared Git-ignored tests directory.
+The notebook passed fresh-kernel loading, product validation and figure export.
+Figures 7–12 and regime classification remain for the next step.
+
+Figure 2 arrow-frame correction (approved by user): rotate both local magenta
+vectors and the green mean vector from geographic east/north into model x/y
+before drawing. For grid angle a in radians, x=cos(a)E+sin(a)N and
+y=-sin(a)E+cos(a)N. The reference grid has a=-20 degrees, so display arrows turn
++20 degrees relative to the old plot. Magnitudes, colours, mean-arrow display
+length, layout and underlying geographic products are unchanged. Tests cover
+cardinal directions, inverse rotation, preserved magnitudes, actual Quiver
+components and mean-arrow endpoints. Thirteen tests pass.
+
+Scientific input/function hashes now determine product validity separately from
+plot/report code. The manifest was upgraded after verifying unchanged numerical
+functions, kernels, inputs and product hash; original provenance is retained in
+its update record. No PV recomputation or Parquet rewrite was performed.
+Regenerated Figure 2 PNG/PDF and writing report; visually checked the corrected
+directions. Example/summary/audit CSVs and the PV Parquet are byte-for-byte
+unchanged. The original figure style and arrow reference scales are retained.
+
+## Census implementation and style details (2026-11-16)
+
+Presentation rule (user correction): preserve the original tagged figures' style
+for every topic: layouts, sizes, colours, fonts, legends, axes, histogram/box
+construction and map arrangement. Agreed scientific changes may change plotted
+values, not the presentation by default. Discuss any necessary style departure.
+Correctness takes priority over visual matching: raise issues for discussion
+rather than reproducing an error silently; implement approved corrections.
+Use this existing document as the decision/progress record; no extra log is needed.
+
+Census style restoration: `census/census_plots.py` contains the required original
+plotting routines adapted locally from the tagged notebook cells and shared
+legacy helper. It has no legacy runtime imports. Figures 4/5 restore original
+dimensions, outlined boxes, mirrored histograms, polar legends and mean arrows.
+Figure 6 restores model-grid maps, region colours/boundaries and inset roses.
+Its -20 degree rotation is a display transformation into grid coordinates;
+analytical bearings and tables remain geographic. The shared -33 degree region
+definition, >=5 km direction selection and equal-day primary weighting remain.
+JSON records figure dimensions, original radial scale and display rotation.
+The manifest includes the plotting module hash as well as the analysis code.
+Validation after restoration: visually compared all three PNGs with saved tagged
+legacy notebook outputs; five scientific tests and fresh-kernel notebook execution
+passed. Exported rose counts conserve each regional sample, original Figure 5
+radial limits do not clip bars, and both module hashes match the run manifest.
+
+User authorized the census topic. Implemented `census/census.py`, `census/census.json` and a
+short `census/census.ipynb`; see README.md and implementation_plan.md. No legacy imports.
+Figures 4–6, CSV summaries/audit and manuscript report are generated locally at
+`census/outputs/` (ignored by Git). Run manifest records config and source/code
+SHA-256 hashes. No derived scratch cache is required for this topic.
+
+Validated against full source data: 127,426 days / 2,982 eddies, 101,656 valid
+tilts, 91,880 directional days. AE/CE median tilts: 18.03/15.18 km. Five scientific
+invariant tests pass; notebook passed fresh-kernel execution. Original notebook
+kept without saved output clutter; executed validation copy is in /tmp.
+
+Additional inconsistency resolved explicitly: old census regions use -33 degrees
+latitude, old regional rose figure uses -33.5. New single JSON region definition
+uses -33 for all census summaries/figures. Geographic bearings are retained for
+analysis; Figure 6 uses the original model-grid display rotation. Counts and
+differences are in report.md.
+The new region grid matches the old -33 definition on every wet cell. It leaves
+land cells unlabelled (old shelf expansion labels 46 dry cells). Two source days
+are consequently unassigned, both without valid tilt; plotted samples unaffected.
+Later analysis topics remain unimplemented. No commit or push performed.
 
 ## Relocation completed 2026-11-16
 

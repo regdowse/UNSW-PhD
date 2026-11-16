@@ -3,8 +3,9 @@
 ## Current layout (2026-11-16; takes precedence over historical notes below)
 
 - `manuscript/` is the destination for the independent manuscript workflow.
-  Read `manuscript/workflow_review.md` for agreed scientific definitions and scope.
-  Analysis implementation has not yet been authorized; the relocation was authorized.
+  Read `manuscript/context/workflow_review.md` for agreed scientific definitions and scope.
+  The user authorized the census and surface-PV implementations after agreeing
+  the scientific definitions. Keep later topics to their agreed plan until requested.
 - `legacy_analysis/` contains the previous analysis tree, relocated unchanged as
   a reference snapshot. Consult/adapt it as needed; update legacy code only when
   needed for an explicit task. Do not bulk-repair notebook paths or regenerate
@@ -15,6 +16,11 @@
   not relative to `legacy_analysis/`. Absolute scratch input/cache paths are unchanged.
 - Keep new manuscript code independent of legacy imports. No archiving of the
   base datasets or scratch products was performed.
+- Preserve the original tagged manuscript figures' plotting style for every
+  topic. Scientific changes do not authorize redesigning the plots. Record
+  progress/decisions in `manuscript/context/workflow_review.md`.
+  Correctness takes priority: discuss inherited errors or proposed improvements
+  with the user, and implement approved corrections rather than preserving errors.
 
 Last reviewed: **2026-09-28**, against repository commit **09d5dd9** (before this
 documentation addition). This is a maintained context snapshot, not a scientific
