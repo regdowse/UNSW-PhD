@@ -1,5 +1,21 @@
 # SEACOFS eddy tilt: agent context and navigation
 
+## Current layout (2026-11-16; takes precedence over historical notes below)
+
+- `manuscript/` is the destination for the independent manuscript workflow.
+  Read `manuscript/workflow_review.md` for agreed scientific definitions and scope.
+  Analysis implementation has not yet been authorized; the relocation was authorized.
+- `legacy_analysis/` contains the previous analysis tree, relocated unchanged as
+  a reference snapshot. Consult/adapt it as needed; update legacy code only when
+  needed for an explicit task. Do not bulk-repair notebook paths or regenerate
+  its caches as part of the relocation.
+- The historical workflow paths below (e.g. `census/`, `seacofs_tilt_tools.py`)
+  now live under `legacy_analysis/`. References to sibling dataset projects such
+  as `../seacofs_eddy_dataset_modular/` remain relative to this AGENTS.md directory,
+  not relative to `legacy_analysis/`. Absolute scratch input/cache paths are unchanged.
+- Keep new manuscript code independent of legacy imports. No archiving of the
+  base datasets or scratch products was performed.
+
 Last reviewed: **2026-09-28**, against repository commit **09d5dd9** (before this
 documentation addition). This is a maintained context snapshot, not a scientific
 results archive. Paths below are relative to this directory unless stated otherwise.
