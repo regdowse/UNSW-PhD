@@ -5,6 +5,38 @@ HEAD `bb1d6c6` (figure tags), with user's uncommitted `manuscript/info.md` updat
 This document records the investigation and decisions. Historical planning-only
 statements below are superseded by the current implementation status here.
 
+## Dataset refresh (2026-11-17)
+
+User requested clearing and rerunning all seven manuscript notebooks after the
+source dataset update. Current source: 133,038 eddy-days / 3,097 eddies;
+106,865 valid tilts and 97,012 directional days. Earlier numerical summaries
+below describe the previous dataset; use the current topic outputs/report.md
+and CSVs for manuscript revision.
+
+The rebuilt PV cache passes current input/settings/code/content checks and was
+reused. Background monthly fields, grid, sigma depths, calculation kernels and
+archive identities are unchanged; only the source eddy-day table differed.
+Validated all existing product hashes, retained the monthly fields/partitions,
+and refreshed the three background sampling tables for 133,038 rows each.
+The previous manifest is retained in scratch, with the sampling refresh recorded
+in the current manifest. No archive pass or PV calculation was repeated.
+
+Example IDs changed with the dataset: Figure 2 CE 613/3370 -> 643/3370;
+AE 76/1675 -> 81/1675. These are identified from matching surface-vorticity,
+footprint counts (420/474), gradient direction/magnitude and coherence fingerprints,
+not by assuming a surviving ID represents the same eddy. Figure 3
+2103/7923 -> 2191/7923 is identified from the retained reference profile's centre
+(the next nearest current surface centre is >43 km away). Configs now pin these
+current IDs. Figure 3 recomputes to 3.593093 km / 66.566643 degrees, matching saved
+tilt within numerical precision; current projected extent is 14.498783 km.
+These updated values supersede the former 3.7/21.1 km labels.
+
+All notebooks explicitly enable inline Matplotlib, clear previous outputs and
+run in fresh myenv310 kernels. Executed notebooks retain figures and report/table
+outputs as requested. Figures, CSV/Parquet results, reports and manifests are
+regenerated in each topic's outputs directory. All 49 scientific tests pass.
+No changes to analysis definitions or plotting styles; no commit or push.
+
 ## Tilt-method illustration status (2026-11-16)
 
 `tilt_method/` implements Figure 3 with JSON, a short notebook and local delta

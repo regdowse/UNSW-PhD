@@ -93,7 +93,7 @@ is consistently positive; detailed checks are in the topic's local outputs.
 Fresh-kernel execution and original-style figure comparison passed.
 
 Tilt method: `tilt_method/tilt_method.json`, short notebook, local delta kernels
-and original Figure 3 plotting function. Fixed Eddy 2103 / Day 7923; five calendar
+and original Figure 3 plotting function. Fixed Eddy 2191 / Day 7923 (original ID 2103 before the dataset update); five calendar
 days, Gaussian sigma 1 day, 10 m increments, cap 1000 m, reference-supported
 intervals only, inverse unweighted sample-variance depth weights and the existing
 weighted 3-D SVD convention. This method retains within-profile interpolation,

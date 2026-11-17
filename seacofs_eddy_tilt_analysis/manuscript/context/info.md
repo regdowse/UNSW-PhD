@@ -19,7 +19,7 @@ Current background workflow (Figure 11): `background/background.ipynb`, settings
 scratch product explicitly with `python background/background.py --build`.
 
 Current tilt-method workflow (Figure 3): `tilt_method/tilt_method.ipynb`, settings in
-`tilt_method/tilt_method.json`; outputs in `tilt_method/outputs/`. Fixed Eddy 2103,
+`tilt_method/tilt_method.json`; outputs in `tilt_method/outputs/`. Fixed Eddy 2191,
 Day 7923, matching the original manuscript example.
 
 pv_measurement_demo.png FIG 2 '/home/z5297792/UNSW-PhD/seacofs_eddy_tilt_analysis/legacy_analysis/surface_pv_esp_gaussian'

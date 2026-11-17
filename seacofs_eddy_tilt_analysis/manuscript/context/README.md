@@ -77,8 +77,13 @@ The archive build additionally uses joblib for file-level parallel processing.
 
 Tilt method: run `tilt_method/tilt_method.ipynb`, or
 `python tilt_method/tilt_method.py` from manuscript. Settings are in the matching
-JSON. Figure 3 pins Eddy 2103 / Day 7923, recomputes the five-day delta fit from
+JSON. Figure 3 pins Eddy 2191 / Day 7923, recomputes the five-day delta fit from
 confirmed centres and compares it with saved tilt. Original plotting style is
 retained. Figure, concise writing report and calculation-step tables are in
 `tilt_method/outputs/`. No scratch build or legacy/production imports are needed.
 All requested figure workflows (Figures 2–17) are now available by topic.
+
+Dataset refresh 2026-11-17: all seven notebooks are saved with executed inline
+figures and updated reports/tables. See workflow_review.md for cache reuse and
+example-ID remapping after the source dataset changed. Use the latest topic
+reports rather than historical numerical values in the context notes.

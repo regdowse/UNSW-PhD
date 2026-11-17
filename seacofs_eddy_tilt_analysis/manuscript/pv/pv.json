@@ -13,8 +13,20 @@
     "chunk_rows": 2000
   },
   "figure": {
-    "examples": [{"Eddy": 613, "Day": 3370}, {"Eddy": 76, "Day": 1675}],
-    "size_inches": [11.5, 5.1],
+    "examples": [
+      {
+        "Eddy": 643,
+        "Day": 3370
+      },
+      {
+        "Eddy": 81,
+        "Day": 1675
+      }
+    ],
+    "size_inches": [
+      11.5,
+      5.1
+    ],
     "profile_depth_limit_m": 1000.0,
     "min_pad_km": 40.0,
     "pad_rc": 1.4,
@@ -22,7 +34,10 @@
     "reference_percentile": 90.0,
     "local_arrow_length_inches": 0.38,
     "net_arrow_fraction": 0.38,
-    "quiver_key_position": [0.6, 0.9],
+    "quiver_key_position": [
+      0.6,
+      0.9
+    ],
     "dpi": 600
   }
 }
