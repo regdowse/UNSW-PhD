@@ -1,5 +1,9 @@
 # Manuscript workflow review / agent handoff
 
+Analysis decisions and historical progress; moved here on 2026-11-17.
+Current revision work is tracked in [revision/checklist.md](../revision/checklist.md).
+Use the latest topic reports for numerical claims; dated results below may be historical.
+
 Review date: 2026-11-16 (Australia/Sydney). Local source: UNSW-PhD `main`,
 HEAD `bb1d6c6` (figure tags), with user's uncommitted `manuscript/info.md` update.
 This document records the investigation and decisions. Historical planning-only

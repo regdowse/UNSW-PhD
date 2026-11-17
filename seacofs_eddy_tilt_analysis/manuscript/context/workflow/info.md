@@ -1,3 +1,6 @@
+Figure source map. Inline paths below are relative to `manuscript/`.
+See [resources.md](../resources.md) for repository and current-output locations.
+
 Current census workflow (Figures 4–6): `census/census.ipynb`, settings in `census/census.json`.
 Generated figures, CSV tables and writing report: `census/outputs/`.
 The paths below identify legacy source material.

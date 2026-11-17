@@ -1,12 +1,15 @@
 # SEACOFS eddy tilt: agent context and navigation
 
-## Current layout (2026-11-16; takes precedence over historical notes below)
+## Current layout (2026-11-17; takes precedence over historical notes below)
 
 - `manuscript/` is the destination for the independent manuscript workflow.
-  Read `manuscript/context/workflow_review.md` for agreed scientific definitions and scope.
+  Read `manuscript/context/workflow/workflow_review.md` for agreed scientific definitions and scope.
   The user authorized census, surface-PV, PV-dominance, controls, composite,
   background and tilt-method illustration implementations after agreeing the
   definitions. Figures 2–17 now have independent manuscript workflows.
+- For coordinated paper/supplement review, start at `manuscript/context/README.md`;
+  `manuscript/context/resources.md` maps the repositories and
+  `manuscript/context/revision/checklist.md` tracks revision work.
 - `legacy_analysis/` contains the previous analysis tree, relocated unchanged as
   a reference snapshot. Consult/adapt it as needed; update legacy code only when
   needed for an explicit task. Do not bulk-repair notebook paths or regenerate
@@ -19,7 +22,7 @@
   base datasets or scratch products was performed.
 - Preserve the original tagged manuscript figures' plotting style for every
   topic. Scientific changes do not authorize redesigning the plots. Record
-  progress/decisions in `manuscript/context/workflow_review.md`.
+  progress/decisions in `manuscript/context/workflow/workflow_review.md`.
   Correctness takes priority: discuss inherited errors or proposed improvements
   with the user, and implement approved corrections rather than preserving errors.
 
