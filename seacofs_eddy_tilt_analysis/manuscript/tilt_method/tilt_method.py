@@ -27,6 +27,7 @@ def load_config(path):
     for key,value in c['inputs'].items():
         p=Path(value).expanduser();c['inputs'][key]=str(p if p.is_absolute() else path.parent/p)
     p=Path(c['output_dir']).expanduser();c['output_dir']=str(p if p.is_absolute() else path.parent/p)
+    p=Path(c['figure_dir']).expanduser();c['figure_dir']=str(p if p.is_absolute() else path.parent/p)
     a=c['calculation'];num=a['window_days']
     if not isinstance(num,int) or isinstance(num,bool) or num<3 or num%2!=1:
         raise ValueError('Use an odd window of at least three calendar days')
@@ -100,7 +101,8 @@ def run(config_path=None):
     with plt.rc_context(matplotlib.rcParamsDefault):
         fig=tilt_plots.plot(eddy,day,profiles,result['fit'],dict(**a,**c['plot']))
     out=Path(c['output_dir']);out.mkdir(parents=True,exist_ok=True)
-    for ext in ['png','pdf']:fig.savefig(out/f'delta_schematic.{ext}',dpi=c['plot']['dpi'],bbox_inches='tight')
+    figure_dir=Path(c['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
+    fig.savefig(figure_dir/f'delta_schematic.png',dpi=c['plot']['dpi'],bbox_inches='tight')
     pd.DataFrame([s]).to_csv(out/'example.csv',index=False)
     profiles.to_csv(out/'source_profiles.csv',index=False)
     for name in ['trace','endpoints','intervals','projected']:result[name].to_csv(out/f'{name}.csv',index=False)

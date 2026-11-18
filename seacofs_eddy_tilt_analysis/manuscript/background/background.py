@@ -27,7 +27,7 @@ LEVELS={'surface':'Surface','200':'0–200 m','200_500':'200–500 m'}
 
 def load_config(path):
     path=Path(path).resolve();c=json.loads(path.read_text())
-    for name in ['dominance_config','model_root','sigma_depths','product_dir','output_dir']:
+    for name in ['dominance_config','model_root','sigma_depths','product_dir','output_dir','figure_dir']:
         p=Path(c[name]).expanduser();c[name]=str(p if p.is_absolute() else path.parent/p)
     a=c['calculation']
     if (a['upper_depth_m'],a['deep_depth_m'])!=(200,500):
@@ -234,7 +234,8 @@ def run(config_path=None):
         fig,colour_limit=background_plots.plot(samples[primary],stats[stats.window_days.eq(primary)],
             grid,dc['water_depth_threshold_m'],c['plot'])
     out=Path(c['output_dir']);out.mkdir(parents=True,exist_ok=True)
-    for ext in ['png','pdf']:fig.savefig(out/f'plan_back_flow.{ext}',dpi=c['plot']['dpi'],bbox_inches='tight')
+    figure_dir=Path(c['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
+    fig.savefig(figure_dir/f'plan_back_flow.png',dpi=c['plot']['dpi'],bbox_inches='tight')
     stats.to_csv(out/'flow_summary.csv',index=False);contrasts.to_csv(out/'window_comparison.csv',index=False)
     coverage.to_csv(out/'monthly_coverage.csv',index=False)
     audit.to_csv(out/'sample_audit.csv',index=False)

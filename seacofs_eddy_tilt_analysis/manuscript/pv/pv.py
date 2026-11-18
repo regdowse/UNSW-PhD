@@ -47,7 +47,7 @@ def load_config(path):
         for k, value in c[section].items():
             p = Path(value).expanduser()
             c[section][k] = str(p if p.is_absolute() else path.parent/p)
-    for k in ['product_dir', 'output_dir']:
+    for k in ['product_dir', 'output_dir','figure_dir']:
         p = Path(c[k]).expanduser()
         c[k] = str(p if p.is_absolute() else path.parent/p)
     a = c['calculation']
@@ -203,8 +203,8 @@ def run(config_path=None, build=False, rebuild=False):
     for ax, label in zip(axes, ['a)', 'b)']):
         ax.text(-.06,1.05,label,transform=ax.transAxes,ha='left',va='top',fontsize=12,fontweight='bold')
     out = Path(c['output_dir']);out.mkdir(parents=True,exist_ok=True)
-    for ext in ['png','pdf']:
-        fig.savefig(out/f'pv_measurement_demo.{ext}',dpi=f['dpi'],bbox_inches='tight')
+    figure_dir=Path(c['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
+    fig.savefig(figure_dir/'pv_measurement_demo.png',dpi=f['dpi'],bbox_inches='tight')
     cols = KEYS+['Cyc','PV_grad_mag','PV_grad_theta','PV_grad_mean_local_mag','PV_grad_coherence',
                 'PV_footprint_n','w_surface','w_peak_signed_s1','w_peak_depth_m']
     examples = selected[cols].copy();examples['local_arrow_reference'] = references

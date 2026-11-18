@@ -38,6 +38,8 @@ def load_config(path):
         config['inputs'][name] = str(p if p.is_absolute() else path.parent / p)
     out = Path(config['output_dir']).expanduser()
     config['output_dir'] = str(out if out.is_absolute() else path.parent / out)
+    figures = Path(config['figure_dir']).expanduser()
+    config['figure_dir'] = str(figures if figures.is_absolute() else path.parent / figures)
     if config['direction_min_tilt_km'] < 0:
         raise ValueError('Direction threshold must be nonnegative')
     width = config['plot']['direction_bin_width_deg']
@@ -262,6 +264,8 @@ def run(config_path=None):
     config = load_config(path)
     out = Path(config['output_dir'])
     out.mkdir(parents=True, exist_ok=True)
+    figure_dir = Path(config['figure_dir'])
+    figure_dir.mkdir(parents=True, exist_ok=True)
     grid = load_grid(config['inputs']['grid'])
     data = prepare(pd.read_parquet(config['inputs']['surface']),
                    pd.read_parquet(config['inputs']['tilt']), grid, config)
@@ -314,8 +318,7 @@ def run(config_path=None):
     with plt.rc_context(matplotlib.rcParamsDefault):
         figures['sectioned_rose'] = plot_regional(direction, grid, config)
     for name, fig in figures.items():
-        for ext in ['png', 'pdf']:
-            fig.savefig(out/f'{name}.{ext}', dpi=config['plot']['dpi'], bbox_inches='tight')
+        fig.savefig(figure_dir/f'{name}.png', dpi=config['plot']['dpi'], bbox_inches='tight')
     lines = ['# Census results', '',
              f'Dataset: {len(data):,} eddy-days from {data.Eddy.nunique():,} eddies; '
              f'{len(magnitude):,} valid tilt estimates.', '',

@@ -15,10 +15,12 @@ Use a Python environment with NumPy, pandas, SciPy, Matplotlib, netCDF4 and pyar
 Jupyter/nbformat/nbclient are needed for notebook use. The existing Katana kernel
 `myenv310` has these dependencies.
 
-`census/outputs/` contains Figures 4–6 (PNG/PDF), CSV tables, a concise `report.md`
-for manuscript updates and `manifest.json` with the effective configuration and
-source/code hashes. Each run replaces these files. Copy the folder to retain a run.
-Generated outputs are local artifacts, excluded from Git; source and config are tracked.
+All topics save final figures as **PNG only** in `manuscript/figures/`, set by
+`figure_dir: "../figures"` in each topic JSON. The folder is Git-ignored. Existing
+Figure 1 is copied there from the paper repository; it has no analysis generator.
+Tables, `report.md` and `manifest.json` remain in each topic's `outputs/` folder.
+Each run replaces its PNGs and topic outputs; copy both to retain a run. Generated
+artifacts are excluded from Git; source and configuration are tracked.
 
 All summaries use one shared region definition. Primary distributions weight
 eddy-days equally; per-eddy panels remain comparisons. Directions require tilt
@@ -41,8 +43,8 @@ once with `python pv/pv.py --build`; subsequent runs use `python pv/pv.py` or th
 notebook. Input/config/code hashes are checked before loading the scratch product.
 Only scientific dependencies invalidate that product; plot/report edits do not.
 Figure 2 rotates geographic arrows into model-grid coordinates for display.
-An intentional replacement requires `--build --rebuild`. Figure 2 and its writing
-report are in `pv/outputs/`. Both surface PV and auxiliary peak-vorticity fields
+An intentional replacement requires `--build --rebuild`. Figure 2 is in `figures/`; its writing
+report is in `pv/outputs/`. Both surface PV and auxiliary peak-vorticity fields
 are saved; only surface vorticity enters the PV calculation.
 
 PV dominance: run `pv_dominance/dominance.ipynb`, or
@@ -58,12 +60,12 @@ reclassifying excluded days as mixed.
 
 Controls: run `controls/controls.ipynb`, or `python controls/controls.py` from
 manuscript. Exact depths, QC, bootstrap and plotting settings are in `controls.json`.
-Figures 13–16 and CSV estimates, support/audits and writing report are in
-`controls/outputs/`. Reads existing source fits and validated PV; no legacy imports
+Figures 13–16 are in `figures/`; CSV estimates, support/audits and writing report
+are in `controls/outputs/`. Reads existing source fits and validated PV; no legacy imports
 or new scratch builds. Axis alignment uses day weighting and whole-track CIs.
 
 Composites: run `composites/composites.ipynb`, or `python composites/composites.py`
-from manuscript. Settings are in `composites.json`. Figure 17, depthwise means/CIs
+from manuscript. Settings are in `composites.json`. Figure 17 is in `figures/`; depthwise means/CIs
 and support, selection audit, constituent centres and writing report are in
 `composites/outputs/`. Uses shared dominance/depth selections and actual fitted
 centres within 0–1000 m, referenced to each day's own surface centre. Means weight
@@ -75,7 +77,7 @@ Background flow: settings `background/background.json`, notebook
 from manuscript; the notebook or `python background/background.py` validates and
 loads the independent scratch product. A matching interrupted build resumes its
 new partitions; changed scientific inputs/code require a new `product_dir`.
-The primary Figure 11, layer summaries, matched internal 31/61/91-day checks,
+The primary Figure 11 is in `figures/`. Layer summaries, matched internal 31/61/91-day checks,
 selection audit and writing report go to `background/outputs/`. This topic uses
 monthly climatological model fields and the shared deep-planetary selection.
 The archive build additionally uses joblib for file-level parallel processing.
@@ -84,7 +86,7 @@ Tilt method: run `tilt_method/tilt_method.ipynb`, or
 `python tilt_method/tilt_method.py` from manuscript. Settings are in the matching
 JSON. Figure 3 pins Eddy 2191 / Day 7923, recomputes the five-day delta fit from
 confirmed centres and compares it with saved tilt. Original plotting style is
-retained. Figure, concise writing report and calculation-step tables are in
+retained. The PNG is in `figures/`; concise writing report and calculation-step tables are in
 `tilt_method/outputs/`. No scratch build or legacy/production imports are needed.
 All requested figure workflows (Figures 2–17) are now available by topic.
 

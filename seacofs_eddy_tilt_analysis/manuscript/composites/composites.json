@@ -1,6 +1,7 @@
 {
   "dominance_config": "../pv_dominance/dominance.json",
   "output_dir": "outputs",
+  "figure_dir": "../figures",
   "max_profile_depth_m": 1000.0,
   "bootstrap_replicates": 500,
   "seed": 731,

@@ -24,5 +24,6 @@
     ],
     "dpi": 600
   },
-  "output_dir": "outputs"
+  "output_dir": "outputs",
+  "figure_dir": "../figures"
 }

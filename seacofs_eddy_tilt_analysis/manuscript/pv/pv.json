@@ -6,6 +6,7 @@
   },
   "product_dir": "/srv/scratch/z5297792/eddy_tilt_manuscript/surface_pv/surface_fit_v1",
   "output_dir": "outputs",
+  "figure_dir": "../figures",
   "calculation": {
     "footprint_fraction": 1.0,
     "vorticity_amplitude": "surface",

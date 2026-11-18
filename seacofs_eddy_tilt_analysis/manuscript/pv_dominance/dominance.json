@@ -2,6 +2,7 @@
   "pv_config": "../pv/pv.json",
   "census_config": "../census/census.json",
   "output_dir": "outputs",
+  "figure_dir": "../figures",
   "dominance_factor": 2.0,
   "direction_min_tilt_km": 5.0,
   "shelf_longitude_deg": 154.75,

@@ -28,7 +28,7 @@ KEYS=['Eddy','Day']
 
 def load_config(path):
     path=Path(path).resolve();c=json.loads(path.read_text())
-    for name in ['pv_config','census_config','output_dir']:
+    for name in ['pv_config','census_config','output_dir','figure_dir']:
         p=Path(c[name]).expanduser();c[name]=str(p if p.is_absolute() else path.parent/p)
     for name in ['structure_depths_m','ellipse_depths_m']:
         z=np.asarray(c[name],float)
@@ -135,8 +135,9 @@ def run(config_path=None):
             ax.set_xticklabels([f'{z:.0f}' for z in c['ellipse_depths_m']])
     figures=dict(eddy_tilt_control=raw,eddy_tilt_control_Rc=normalised,ellipse_tilt2=ellipse,env_tilt_control=fig)
     out=Path(c['output_dir']);out.mkdir(parents=True,exist_ok=True)
+    figure_dir=Path(c['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
     for name,figure in figures.items():
-        for ext in ['png','pdf']:figure.savefig(out/f'{name}.{ext}',dpi=plot['dpi'],bbox_inches='tight')
+        figure.savefig(figure_dir/f'{name}.png',dpi=plot['dpi'],bbox_inches='tight')
     environment_bins=pd.concat(env_bins,ignore_index=True)
     fits=fit_table(environment_bins)
     tables=dict(structure_bins=structure_bins,structure_normalised_bins=structure_norm_bins,

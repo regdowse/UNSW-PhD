@@ -28,7 +28,7 @@ REGIMES = ['planetary','mixed','topographic','unclassified']
 
 def load_config(path):
     path=Path(path).resolve();c=json.loads(path.read_text())
-    for key in ['pv_config','census_config','output_dir']:
+    for key in ['pv_config','census_config','output_dir','figure_dir']:
         p=Path(c[key]).expanduser();c[key]=str(p if p.is_absolute() else path.parent/p)
     if not np.isfinite(c['dominance_factor']) or c['dominance_factor']<=1:
         raise ValueError('Dominance factor must be finite and >1')
@@ -172,8 +172,9 @@ def run(config_path=None):
                        plan_dom_rose=dominance_plots.plot_planetary(planetary,grid,settings),
                        topo_dom_dtheta=dominance_plots.plot_topographic(topographic,grid,settings))
     out=Path(config['output_dir']);out.mkdir(parents=True,exist_ok=True)
+    figure_dir=Path(config['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
     for name,fig in figures.items():
-        for ext in ['png','pdf']:fig.savefig(out/f'{name}.{ext}',dpi=config['plot']['dpi'],bbox_inches='tight')
+        fig.savefig(figure_dir/f'{name}.png',dpi=config['plot']['dpi'],bbox_inches='tight')
     audit=data[KEYS+['Cyc','Region','regime','h','target_population','depth_selection_status',
                    'shelf_class','direction_valid','valid_pv_direction','topo_plan_ratio']]
     audit.to_csv(out/'sample_audit.csv',index=False)

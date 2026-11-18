@@ -5,6 +5,7 @@
     "grid": "/srv/scratch/z3533156/26year_BRAN2020/outer_avg_01461.nc"
   },
   "output_dir": "outputs",
+  "figure_dir": "../figures",
   "direction_min_tilt_km": 5.0,
   "regions": {
     "latitude_split_deg": -33.0,

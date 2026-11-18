@@ -26,7 +26,7 @@ REGIMES=['planetary','mixed','topographic']
 
 def load_config(path):
     path=Path(path).resolve();c=json.loads(path.read_text())
-    for name in ['dominance_config','output_dir']:
+    for name in ['dominance_config','output_dir','figure_dir']:
         p=Path(c[name]).expanduser();c[name]=str(p if p.is_absolute() else path.parent/p)
     if not np.isfinite(c['max_profile_depth_m']) or c['max_profile_depth_m']<=0:
         raise ValueError('Need positive finite depth cap')
@@ -108,7 +108,8 @@ def run(config_path=None):
             min_eddies=c['plot']['min_eddies'],sparse_eddies=c['plot']['sparse_eddies'],
             figsize=c['plot']['size_inches'])
     out=Path(c['output_dir']);out.mkdir(parents=True,exist_ok=True)
-    for ext in ['png','pdf']:fig.savefig(out/f'composites.{ext}',dpi=c['plot']['dpi'],bbox_inches='tight')
+    figure_dir=Path(c['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
+    fig.savefig(figure_dir/f'composites.png',dpi=c['plot']['dpi'],bbox_inches='tight')
     stats.to_csv(out/'centre_statistics.csv',index=False);inventory.to_csv(out/'inventory.csv',index=False)
     members.to_parquet(out/'members.parquet',index=False)
     audit_cols=KEYS+['Cyc','regime','target_population','h','direction_valid','depth_selection_status',

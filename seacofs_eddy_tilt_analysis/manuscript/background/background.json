@@ -4,6 +4,7 @@
   "sigma_depths": "/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular/z_r.npy",
   "product_dir": "/srv/scratch/z5297792/eddy_tilt_manuscript/background_flow/monthly_v1",
   "output_dir": "outputs",
+  "figure_dir": "../figures",
   "calculation": {
     "upper_depth_m": 200.0,
     "deep_depth_m": 500.0,

@@ -777,3 +777,15 @@ from silently defining source outcomes. Preserve source and derived h/w meanings
    old analysis directories. Only then consider user's later archive step.
 
 No implementation, cache rebuild, archiving, commit or push performed in this pass.
+
+## Figure outputs (2026-11-18)
+
+Final PNGs now go to `manuscript/figures/` via each topic's `figure_dir` setting.
+Moved 16 existing PNGs unchanged, added the existing conceptual Figure 1, and
+removed the 16 generated figure PDFs. All seven generators now save PNG only.
+Topic outputs retain numerical tables, reports and run manifests. Historic
+manifests still describe their original run; no scientific calculation or scratch
+cache was rebuilt. Manuscript/latexdiff PDFs and assets inside the independent
+text repositories were retained. The shared figures folder is Git-ignored.
+Verified all seven configured export destinations, unchanged hashes for the moved
+PNGs, no remaining topic figure PNG/PDF copies, and 49 passing existing tests.
