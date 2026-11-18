@@ -1,0 +1,10 @@
+{
+  "main-paper": {
+    "commit": "0f173bb43d600aef318633eddeba0d4ca42415ee",
+    "checkout": "text/main-paper"
+  },
+  "supplement": {
+    "commit": "3c211760c70a61c11b0876a3cb8c66fd963639dc",
+    "checkout": "text/supplement"
+  }
+}

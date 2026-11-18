@@ -14,15 +14,13 @@ merged the paper revision into `main`; originals are retained under the
 - [Supervisor exports](reviews/overleaf-comments/): original files, retained unchanged and Git-ignored.
 - [Backups](backups/README.md): original source/PDF/ZIP snapshots and their status.
 
-## Before a manuscript task
+## Manuscript workflow
 
-Push the latest source from **each relevant Overleaf project to GitHub**
-(Integrations → GitHub → Push Overleaf changes). Tell Codex when this is done.
-Codex should then fetch GitHub, check for local edits, and update the corresponding
-checkout in `manuscript/text/` before editing, compiling or comparing versions.
-These local checkouts do not synchronise automatically with Overleaf. Record the
-commit used; if the latest Overleaf push is unconfirmed, describe it as the latest
-GitHub version, not necessarily the latest Overleaf version.
+Follow [Overleaf and local manuscript workflow](revision/overleaf_workflow.md).
+Push the latest relevant Overleaf source to GitHub before local work. Review uses
+cumulative Git diffs against [the pinned baseline](revision/review_baselines.json).
+Generate latexdiff PDFs only on explicit request. Keep the detailed operating rules
+in that workflow note to avoid duplication.
 
 The supplementary methods should describe the code/configuration that produced
 the dataset. Check that provenance before treating the latest repository as the
