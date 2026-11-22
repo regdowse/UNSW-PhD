@@ -789,3 +789,33 @@ cache was rebuilt. Manuscript/latexdiff PDFs and assets inside the independent
 text repositories were retained. The shared figures folder is Git-ignored.
 Verified all seven configured export destinations, unchanged hashes for the moved
 PNGs, no remaining topic figure PNG/PDF copies, and 49 passing existing tests.
+
+## Land-cell region fallback (2026-11-18)
+
+`census.prepare` retains its nearest-grid-cell lookup. Only when the selected
+cell is land, it uses the wet cell closest to that land cell in model x/y, rather
+than searching from the fitted eddy centre. Missing centres remain unassigned.
+A regression case distinguishes those two search origins. All 51 tests pass.
+
+Full-source comparison: only AE Eddy 2990 / Day 10265 changes, from unassigned to
+U2/Upstream. Source U2 AE-days become 11,686 (total 26,280); unassigned days become
+zero. Every valid-tilt and directional row, all tilt tables, and all other regional
+assignments are identical. This day has valid PV direction, so Figure 7's regional
+AE sample increases from 67,247 to 67,248 and its U2 rose gains one observation.
+Only `pv_gradient_rose.png` changes; all other PNGs are byte-identical.
+
+Census and PV-dominance notebooks were re-executed on compute node k001 by PBS
+job 9821282 (exit 0). Reports, tables and manifests are refreshed; scratch products
+were reused. Other workflows do not use the changed regional membership in their
+calculations and were not rerun. Verification and before-run outputs are retained
+in `context/revision/outputs/region-fix/`.
+
+The paper review branch updates its source-population table and Figure 7 asset;
+no prose or scientific interpretation changes. Cumulative diff is in
+`context/revision/outputs/review/main-paper.diff`, against the latest-pull baseline
+`0f173bb`. Changes remain local for review; no PDF was requested or generated.
+
+Region correction publication: user approved the manuscript push on 2026-11-18.
+Committed table/Figure 7 updates as `cbd1c3e37d160708063fbfeed64da543d8154eed` and pushed
+to GitHub `main`. Local checkout is clean; review baseline remains unchanged
+until Overleaf synchronisation is confirmed.

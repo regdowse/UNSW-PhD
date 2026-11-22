@@ -103,6 +103,16 @@ def prepare(surface, tilt, grid, config):
     finite_xy = np.isfinite(d[['xc', 'yc']]).all(axis=1)
     tree = cKDTree(np.c_[grid.X_grid.ravel(), grid.Y_grid.ravel()])
     _, index = tree.query(d.loc[finite_xy, ['xc', 'yc']].to_numpy())
+    # Preserve wet-cell matches. For land matches, search from the matched grid
+    # point (not the fitted eddy centre) to the closest wet grid point.
+    land = grid.mask_rho.ravel()[index] == 0
+    if land.any():
+        wet = np.flatnonzero(grid.mask_rho.ravel() == 1)
+        if not len(wet):
+            raise ValueError('Cannot assign regions: grid has no wet cells')
+        xy = np.c_[grid.X_grid.ravel(), grid.Y_grid.ravel()]
+        _, nearest_wet = cKDTree(xy[wet]).query(xy[index[land]])
+        index[land] = wet[nearest_wet]
     codes = np.zeros(len(d), dtype=int)
     codes[finite_xy] = region_grid(grid, config['regions']).ravel()[index]
     d['Region'] = pd.Series(codes).map(dict(enumerate(REGIONS, 1)))
@@ -360,7 +370,7 @@ def run(config_path=None):
               'these displayed census summaries. Coverage uses all source eddy-days; no '
               'assumed first/last-day eligibility correction is imposed.', '',
               f'Unassigned regions: {data.Region.isna().sum():,} days. '
-              'Land grid cells do not receive region labels. '
+              'Nearest land-cell matches use the wet cell closest to that land cell. '
               f'Valid tilt days without positive finite Rc: '
               f'{(data.valid_tilt & ~data.valid_radius).sum():,}. '
               'See sample_audit.csv for row-level exclusions; counts.csv for polarity counts.', '',

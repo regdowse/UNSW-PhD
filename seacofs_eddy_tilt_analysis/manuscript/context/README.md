@@ -17,10 +17,11 @@ merged the paper revision into `main`; originals are retained under the
 ## Manuscript workflow
 
 Follow [Overleaf and local manuscript workflow](revision/overleaf_workflow.md).
-Push the latest relevant Overleaf source to GitHub before local work. Review uses
-cumulative Git diffs against [the pinned baseline](revision/review_baselines.json).
-Generate latexdiff PDFs only on explicit request. Keep the detailed operating rules
-in that workflow note to avoid duplication.
+As agreed on 2026-11-20, the user implements all manuscript/supplement edits.
+Codex provides suggestions and uses the text repositories as read-only references;
+pull the user's latest GitHub push only when asked. No direct text-repository edits,
+commits, merges or pushes. Comparisons are on request; latexdiff PDFs require an
+explicit request. Earlier manuscript-editing approvals are historical.
 
 The supplementary methods should describe the code/configuration that produced
 the dataset. Check that provenance before treating the latest repository as the

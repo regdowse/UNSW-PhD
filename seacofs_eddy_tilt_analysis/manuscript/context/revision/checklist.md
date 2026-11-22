@@ -1,5 +1,14 @@
 # Coordinated manuscript revision
 
+Latest local revision (2026-11-18): land-cell region fallback verified for exactly
+one eddy-day. Paper table corrected and Figure 7 refreshed on
+`revision/region-assignment-2026-11-18`; approved and pushed to `main` as
+`cbd1c3e37d160708063fbfeed64da543d8154eed`. Awaiting Overleaf pull confirmation. Review the
+[cumulative Git diff](outputs/review/main-paper.diff) or
+[review note](outputs/review/main-paper-review.md). Baseline remains `0f173bb`.
+See [verification](outputs/region-fix/verification.json) and workflow review for
+the full-source comparison, 51 passing tests and completed notebook refresh.
+
 Status: coordinated revision drafts prepared on 2026-11-17, following user approval.
 Both text repositories use `revision/analysis-refresh-2026-11-17`; publication and
 validation status are recorded below. This is the single working checklist for the

@@ -27,11 +27,13 @@ Local workspace: `/home/z5297792/UNSW-PhD`.
   not a separate Git checkout of the supplementary manuscript.
 - Main-paper editing checkout: `manuscript/text/main-paper/`.
 - Supplementary-text editing checkout: `manuscript/text/supplement/`.
-  These are independent Git repositories; the paper checkout is now on `main`
-  at `0f173bb43d600aef318633eddeba0d4ca42415ee`.
+  These are independent Git repositories; the paper checkout is clean on `main`
+  at `61bc963a442745dc5a91344cad62ad661679f3c2`, fetched and fast-forwarded
+  on user request on 2026-11-23. It is a read-only reference under the current
+  manuscript workflow; previous review baselines are historical records.
   The supplement checkout is on `main` at
-  `3c211760c70a61c11b0876a3cb8c66fd963639dc`. Both were fetched and
-  fast-forwarded on 2026-11-18; both working trees are clean.
+  `3c211760c70a61c11b0876a3cb8c66fd963639dc` (last fetched 2026-11-18).
+  The supplement was not updated in the 2026-11-23 paper-only pull.
   `manuscript/text/` is ignored by the
   enclosing analysis repository. Both live on shared storage. Never keep the
   sole editing checkout in node-local `/tmp`.

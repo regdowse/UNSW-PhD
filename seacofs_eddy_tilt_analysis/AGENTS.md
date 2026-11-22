@@ -1,5 +1,14 @@
 # SEACOFS eddy tilt: agent context and navigation
 
+## Manuscript editing policy (2026-11-20)
+
+The user now makes all paper and supplementary-text edits themselves. Treat
+`manuscript/text/` checkouts as read-only references: fetch/pull the user's pushed
+versions only when asked. Provide suggested wording in conversation; do not edit,
+commit, merge or push these text repositories, including figure assets. Earlier
+manuscript-editing authorisations below are historical. Analysis/code work remains
+separate. See `manuscript/context/revision/overleaf_workflow.md`.
+
 ## Current layout (2026-11-17; takes precedence over historical notes below)
 
 - `manuscript/` is the destination for the independent manuscript workflow.

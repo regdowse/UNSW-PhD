@@ -3,36 +3,33 @@
 Applies separately to the main paper and supplement. Repository locations are in
 [resources.md](../resources.md).
 
-## Synchronise before work
+## Current agreement (2026-11-20)
 
-1. User pushes the latest relevant Overleaf source to GitHub and confirms it.
-2. Codex checks for local edits, fetches GitHub and updates the local checkout in
-   `manuscript/text/`, preserving any pending work.
-3. Record the source commit. Unconfirmed Overleaf changes are not assumed present
-   in GitHub or the local checkout.
+The user implements all changes to the main manuscript and supplementary text.
+Codex provides analysis, checks, explanations and proposed wording in conversation;
+Codex must not directly edit, commit, merge or push manuscript text or assets in
+these text repositories. Earlier authorisations to revise/push manuscripts are
+historical and do not apply to future work.
 
-## Edit and review
+## Synchronise on request
 
-- Keep changes focused; discuss substantive scientific changes before applying them.
-- After manuscript edits, provide a cumulative, readable Git diff against the latest
-  confirmed pull, pinned in [review_baselines.json](review_baselines.json).
-- Include all pending changes, whether committed or uncommitted, and new manuscript
-  source files. Describe figure/binary changes separately.
-- Save review diffs under `context/revision/outputs/review/`, identifying the baseline,
-  current commit and working-tree status. Link the relevant diff in the handoff.
-- Generate a text-only latexdiff PDF **only when explicitly requested**. Do not
-  routinely compile PDFs for review; compile when requested or needed to validate
-  a change that could affect compilation.
-- GitHub updates do not create native Overleaf Reviewing suggestions. Use the
-  cumulative diff to review changes before pulling them into Overleaf.
+1. When the user wants Codex to see updated text, they push Overleaf to GitHub
+   and ask Codex to pull locally.
+2. Codex checks for local changes, fetches GitHub and updates the relevant checkout
+   in `manuscript/text/`, preserving any pending work. Record the fetched commit.
+3. Treat the checkout as a read-only reference between requested updates. Do not
+   assume it includes later Overleaf edits or fetch routinely without a request.
 
-## Advance the baseline
+## Suggestions and comparisons
 
-Do not reset it after individual edits, commits, pushes or routine fetches. Advance
-it after the user confirms the reviewed changes were pulled into Overleaf and the
-next synchronised source has been pulled locally. Retain the previous review diff.
-If remote changes arrive while local revisions are pending, reconcile them explicitly.
-The original pre-refresh tags remain separate recovery points.
+- Present discrepancies and exact suggested replacements for the user to implement.
+- Analysis/code work does not authorise changing manuscript text or copying updated
+  figures into the text repositories. Report outputs and affected passages instead.
+- The former automatic cumulative-diff workflow is retired. Preserve existing
+  baselines and review artifacts as historical records; do not regenerate routinely.
+- Provide Git comparisons when requested. Generate text-only latexdiff PDFs only
+  on explicit request; do not routinely compile review PDFs.
+- Original pre-refresh tags remain recovery points.
 
 ## Preserve feedback
 
