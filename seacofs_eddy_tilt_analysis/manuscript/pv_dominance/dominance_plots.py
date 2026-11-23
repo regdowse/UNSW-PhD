@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.ticker import PercentFormatter
 from scipy.stats import binned_statistic_2d
 import census_plots as tilt
 
@@ -44,7 +45,6 @@ def _nice_step(h, base):
 
 def plot_map(data, grid, settings):
     df_eddies = data
-    from matplotlib.colors import LinearSegmentedColormap
 
     cmap=LinearSegmentedColormap.from_list("orange_green",["forestgreen","white","darkorange"])
     d=df_eddies.dropna(subset=['topo_plan_ratio','xc','yc'])
@@ -259,42 +259,77 @@ def plot_planetary(data, grid, settings):
     return fig
 
 
+def _relative_mean(values):
+    theta = np.deg2rad(np.asarray(values))
+    vector = np.mean(np.exp(1j*theta))
+    return np.rad2deg(np.angle(vector)) % 360, abs(vector)
+
+
 def plot_topographic(data, grid, settings):
-    topographic = data
-    MAX_DEPTH_m=settings['context_isobath_m']
-    SHELF_LON=settings['shelf_longitude_deg']
-    ALIGNMENT_DEG=settings['alignment_tolerance_deg']
-    fig,axs=plt.subplots(1,5,figsize=settings['figure12_size_inches'],width_ratios=[1,1,.8,.8,.3],constrained_layout=True)
+    """Maps and signed PV-relative tilt roses for shallow topographic eddy-days.
 
-    for ax,cyc in zip(axs[:2],['AE','CE']):
-        d=topographic[topographic.Cyc==cyc]
-        bath=ax.contourf(grid.X_grid,grid.Y_grid,np.where(grid.mask_rho,grid.h/1e3,np.nan),cmap='Greys_r')
-        ax.scatter(d.xc,d.yc,s=3,c='r' if cyc=='AE' else 'dodgerblue',alpha=.5,edgecolors='none',zorder=3)
-        ax.contour(grid.X_grid,grid.Y_grid,grid.h,levels=[MAX_DEPTH_m],colors='yellow',zorder=2)
-        tilt.lat_lon_contours(ax,grid); ax.set(xlabel='x (km)',aspect='equal')
-    axs[0].set_ylabel('y (km)'); axs[1].set_yticklabels([])
-
-    bins=np.arange(0,181,10)
-    for ax,(name,d) in zip(axs[2:4],[('on-shelf',topographic[topographic.lon<SHELF_LON]),('off-shelf',topographic[topographic.lon>=SHELF_LON])]):
-        for cyc,c in [('AE','tab:red'),('CE','tab:blue')]:
-            x=d.loc[d.Cyc==cyc,'dtheta_PV_grad'].dropna()
-
-            ax.hist(x,bins=bins,weights=np.full(len(x),100/max(len(x),1)),histtype='step',lw=2,color=c,label=f'{cyc} {name}')
-        ax.set(xlim=(-5,185),xticks=[0,45,90,135,180],xlabel=r'$|\theta_{\rm tilt}-\theta_{\nabla\rm PV}|$ (°)')
-        ax.axvspan(180-ALIGNMENT_DEG,180,color='grey',alpha=.2); ax.axvline(90,lw=.5,alpha=.5,c='k'); ax.grid(False)
-        ax.legend(frameon=False,loc='upper left' if name=='on-shelf' else 'lower center')
-    axs[2].set_ylabel('Percentage (%)'); axs[3].set_yticklabels([])
-
-    ax=axs[4]
-    bp=ax.boxplot([topographic.loc[topographic.Cyc==c,'PV_grad_mag'].dropna() for c in ['AE','CE']],
-                  tick_labels=['AE','CE'],showfliers=False,patch_artist=True,widths=.5)
-    for b,c in zip(bp['boxes'],['tab:red','tab:blue']): b.set(facecolor=c,alpha=.5)
-    for m in bp['medians']: m.set(color='k',lw=2)
-    ax.set_ylabel(r'$|\nabla \mathrm{PV}|$'); ax.grid(False)
-
-    for ax,l in zip(axs,'abcde'): ax.text(-.3 if l=='e' else -.15,1,f'{l})',transform=ax.transAxes,fontweight='bold',fontsize=12)
-
-    fig.colorbar(bath,ax=axs,orientation='vertical',fraction=.025,pad=.02,label='Depth (km)')
-
+    Zero follows each day's PV gradient, clockwise is positive. Roses show
+    percentages within each polarity, stacked by tilt distance; magenta arrows
+    are circular mean relative bearings, with a fixed display length.
+    """
+    sample = data.copy()
+    sample['relative_bearing_deg'] = (sample.TiltDir-sample.PV_grad_theta+180)%360-180
+    edges = [settings['direction_min_tilt_km'],10,20,30,40,np.inf]
+    width = settings['topographic_angular_bin_width_deg']
+    counts = {}
+    for cyc in ['AE','CE']:
+        d = sample[sample.Cyc.eq(cyc)]
+        counts[cyc] = tilt.windrose_counts(d.relative_bearing_deg,d.TiltDis,
+            mag_bins=edges,dir_bins=np.arange(0,360+width,width),dir_shift=width/2)[0]
+        if counts[cyc].sum() != len(d):
+            raise ValueError('Topographic rose bins do not cover all selected eddy-days')
+    step = settings['topographic_radial_tick_step_pct']
+    limit = max(2*step,step*np.ceil(max(c.sum(axis=0).max()*100/c.sum()
+                                     for c in counts.values())/step))
+    fig = plt.figure(figsize=settings['figure12_size_inches'],constrained_layout=True)
+    axes = [fig.add_subplot(1,4,k+1,projection='polar' if k%2 else None) for k in range(4)]
+    for i,cyc in enumerate(['AE','CE']):
+        ax,rose = axes[2*i:2*i+2]
+        d = sample[sample.Cyc.eq(cyc)]
+        cmap = 'Reds' if cyc=='AE' else 'Blues'
+        colours = plt.get_cmap(cmap)(np.linspace(.15,1,len(edges)-1))
+        bath = ax.contourf(grid.X_grid,grid.Y_grid,
+            np.where(grid.mask_rho,grid.h/1000,np.nan),cmap='Greys_r')
+        ax.scatter(d.xc,d.yc,s=3,c='r' if cyc=='AE' else 'dodgerblue',
+                   alpha=.5,edgecolors='none',zorder=3)
+        ax.contour(grid.X_grid,grid.Y_grid,grid.h,
+                   levels=[settings['context_isobath_m']],colors='yellow',zorder=2)
+        ax.set(xlabel='x (km)',ylabel='y (km)',
+               xlim=(grid.X_grid.min(),grid.X_grid.max()),
+               ylim=(grid.Y_grid.min(),grid.Y_grid.max()),aspect='equal')
+        ax.set_axisbelow(True)
+        ax.grid(True)
+        # Exact overlay routine used in Figure 8c.
+        tilt.lat_lon_contours(ax,grid)
+        percent = counts[cyc]*100/len(d)
+        assert np.isclose(percent.sum(),100)
+        centres = np.deg2rad(np.arange(counts[cyc].shape[1])*width)
+        bottom = np.zeros(len(centres))
+        for j,(values,colour) in enumerate(zip(percent,colours)):
+            hi = 'inf' if np.isinf(edges[j+1]) else f'{edges[j+1]:g}'
+            rose.bar(centres,values,width=np.deg2rad(width),bottom=bottom,
+                     color=colour,edgecolor=(0,0,0,.2),label=f'[{edges[j]:g}–{hi})')
+            bottom += values
+        rose.set_theta_zero_location('N');rose.set_theta_direction(-1)
+        rose.set_xticks(np.deg2rad(np.arange(0,360,45)),
+            ['0°\n'+r'$\nabla\mathrm{PV}$','45°','90°','135°','180°','−135°','−90°','−45°'])
+        rose.set_yticks(np.arange(step,limit+.1,step));rose.set_ylim(0,limit)
+        rose.yaxis.set_major_formatter(PercentFormatter(100,decimals=0))
+        rose.set_rlabel_position(225 if cyc=='AE' else 315)
+        mean,_ = _relative_mean(d.relative_bearing_deg)
+        if np.isfinite(mean):
+            rose.annotate('',xy=(np.deg2rad(mean),.9*limit),xytext=(np.deg2rad(mean),0),
+                arrowprops=dict(arrowstyle='->',lw=2.5,color='magenta'))
+        rose.legend(title=f'{cyc}\ntilt dist. (km)',loc='upper left',
+                    bbox_to_anchor=(1.,1.25),frameon=False)
+    colourbar = fig.colorbar(bath,ax=axes,orientation='vertical',fraction=.02,pad=.01)
+    colourbar.set_label('Depth (km)')
+    for ax,label in zip(axes,['a)','b)','c)','d)']):
+        ax.text(-.1,1.01,label,transform=ax.transAxes,ha='left',va='top',
+                fontsize=12,fontweight='bold')
     return fig
-

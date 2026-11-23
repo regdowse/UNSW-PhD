@@ -20,6 +20,8 @@
     "figure10_size_inches": [14, 4],
     "planetary_radial_tick_step": 50,
     "planetary_min_radial_limits": {"AE": 270, "CE": 170},
-    "figure12_size_inches": [12.5, 4]
+    "figure12_size_inches": [14, 4],
+    "topographic_angular_bin_width_deg": 15,
+    "topographic_radial_tick_step_pct": 5
   }
 }

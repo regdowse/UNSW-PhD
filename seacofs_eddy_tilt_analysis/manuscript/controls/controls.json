@@ -56,6 +56,16 @@
       0,
       0.6
     ],
-    "figure13_expand_to_iqr": true
+    "figure13_expand_to_iqr": true,
+    "ellipse_orientation": {
+      "size_inches": [
+        9,
+        3
+      ],
+      "line_width": 1.7,
+      "line_alpha": 1.0,
+      "interval_width": 0.8,
+      "band_alpha": 0.1
+    }
   }
 }

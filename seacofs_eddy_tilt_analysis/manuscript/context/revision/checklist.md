@@ -192,3 +192,42 @@ has been marked resolved in Overleaf.
 - Latest Overleaf push was not confirmed for this task: this compares the latest
   fetched GitHub version. Before future manuscript tasks, follow the push reminder
   in [context README](../README.md).
+
+## Read-only main-paper review, 2026-11-23
+
+Baseline: `70e1b2daed87ddac15116bdb71a757f43e9601a2` (user-requested pull). No text-repository edits.
+Checked all active figure paths and LaTeX reference/bibliography keys: none missing;
+all 16 referenced PNGs match the corresponding current local renders. Numerical
+spot checks against census, dominance, controls and composite outputs agree.
+
+Corrections to suggest in Overleaf:
+- Gaussian streamfunction prefactor needs Rc squared, matching ESP
+  `psi0_opt = -0.5 * Omega_opt * Rc_opt**2`; current text has Rc.
+- Environmental PV proxy cannot equal the full gradient of (f+zeta)/h when the
+  internal grad(zeta)/h contribution is deliberately omitted. Define the proxy
+  explicitly with that term subtracted or use approximation notation.
+- Delta SVD numerical coordinate units (horizontal km, depth m) and epsilon units
+  are missing; scaling is part of the implemented estimator.
+- Environment caption still says negative latitude denotes south; plot uses
+  positive degrees south, decreasing to the right.
+- Normalised medians are dimensionless tilt/Rc, not numerical values times Rc.
+- Ellipse caption should restore AR<=5 and explain identical-day matching in c
+  versus separate qualifying surface/AR-class samples.
+- Topographic rose caption should identify within-polarity percentages and
+  tilt-distance colour classes.
+- Remove active draft placeholders in Eddy dataset heading/intro and replace
+  Overleaf project URL with a publication-appropriate SI cross-reference.
+
+Discussion/conclusion suggestions: include the AE perpendicular component in
+shallow topographic composites; connect planetary eastward components to the
+background contrast without claiming isolated advection; keep mixed panels
+PV-relative rather than calling them meridional; remove stale reference to an
+eastern longitude group now absent from the main figure; describe potential
+weak-net-gradient/cancellation sensitivity as untested, with bootstrap bands not
+propagating PV-bearing uncertainty. No scientific rerun authorised in this review.
+
+Workflow follow-up: manuscript now uses eddy_tilt_control_twin_axes.png, but the
+standard controls workflow still emits the two older raw/normalised figures.
+Its renderer/settings remain in ignored figure_experiments; integration is
+needed before claiming the manuscript figures are fully reproduced by the
+tracked workflow. Canonical ellipse/topographic/environment updates are integrated.

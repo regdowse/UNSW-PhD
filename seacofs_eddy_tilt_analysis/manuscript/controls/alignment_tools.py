@@ -125,59 +125,46 @@ def _panel(ax, letter):
     ax.grid(axis='y', color='.92', linewidth=.5)
     ax.set_axisbelow(True)
 
-def _line_interval(ax, x, g, colour):
-    ax.fill_between(x, g.low.to_numpy(float), g.high.to_numpy(float), color=colour, alpha=.16, lw=0)
-    ax.plot(x, g.estimate, '-o', color=colour, ms=4)
-    ax.vlines(x, g.low, g.high, color=colour, lw=.8)
-
-def plot_direction(data):
-    """Six panels: rows=polarity, columns=surface distribution, AR, depth."""
+def plot_direction(data, settings=None):
+    """Three panels overlay polarity: surface distribution, AR and matched depth."""
+    options = dict(size_inches=[9,3], line_width=1.7, line_alpha=1.0,
+                   interval_width=.8, band_alpha=.10)
+    if settings is not None:
+        options.update(settings)
     with plt.rc_context(STYLE):
-        fig, axes = plt.subplots(2, 3, figsize=(7.2, 5.0), layout='constrained')
-        score_rows = pd.concat([data['ar'], data['depth']])
-        finite = score_rows[['low','high']].to_numpy(float)
+        fig, axes = plt.subplots(1,3,figsize=options['size_inches'],layout='constrained')
+        axes[2].sharey(axes[1])
+        finite = pd.concat([data['ar'],data['depth']])[['low','high']].to_numpy(float)
         finite = finite[np.isfinite(finite)]
-        ymin, ymax = (min(-.03, finite.min()-.04), max(.4, finite.max()+.05)) if len(finite) else (-.05, .6)
-        histmax = max([12] + [h.high.max() for h in data['histograms'].values() if h.high.notna().any()]) * 1.12
-        for row, (cyc, colour) in enumerate(et.COLOURS.items()):
-            ax = axes[row, 0]
+        ymax = max(.4,finite.max()+.05) if len(finite) else .6
+        histmax = max([12]+[h.high.max() for h in data['histograms'].values()
+                            if h.high.notna().any()])*1.12
+        for cyc,colour in et.COLOURS.items():
             h = data['histograms'][cyc]
-            edges = np.arange(0, 91, 5)
-            ax.stairs(h.estimate, edges, fill=True, color=colour, alpha=.24, linewidth=0)
-            ax.plot(h.angle, h.estimate, color=colour)
-            ax.fill_between(h.angle, h.low, h.high, color=colour, alpha=.2, lw=0)
-            ax.axhline(100/18, ls='--', color='.4', lw=.8)
-            n = data['coverage'].query("Cyc == @cyc and sample == 'surface'").eddies.iloc[0]
-            # ax.text(.96, .94, f'{cyc} · n = {n:,}', ha='right', va='top', transform=ax.transAxes, color=colour)
-            ax.set(xlim=(0,90), ylim=(0,histmax), xticks=[0,30,60,90],
-                   xlabel='Tilt–major-axis angle (°)', ylabel='Probability (%)')# per 5° bin (%)')
-            # Column titles intentionally hidden.
-            g = data['ar'].loc[data['ar'].Cyc.eq(cyc)]
-            ax = axes[row, 1]
-            # Equally spaced categorical classes avoid implying a fitted continuous curve.
-            x = np.arange(len(g))
-            _line_interval(ax, x, g, colour)
-            ax.set(xticks=x, xticklabels=[f'[{r.lower:g},{r.upper:g})' for r in g.itertuples()],
-                   ylim=(ymin,ymax), xlabel='Surface axis-ratio class', ylabel='Major-axis alignment score')
-            ax.tick_params(axis='x', labelsize=6.5)
-            ax.axhline(0, color='.4', ls='--', lw=.8)
-            # Column titles intentionally hidden.
-            # for xi, r in zip(x, g.itertuples()):
-                # if np.isfinite(r.estimate):
-                    # ax.annotate(f'{r.eddies:,}', (xi,r.high), xytext=(0,5), textcoords='offset points',
-                    #             ha='center', fontsize=6, color='.35')
+            axes[0].plot(h.angle,h.estimate,color=colour,lw=options['line_width'],
+                         alpha=options['line_alpha'],label=cyc)
+            g = data['ar'].loc[data['ar'].Cyc.eq(cyc)].reset_index(drop=True)
+            labels = [r'$\geq2$' if np.isinf(r.upper) else f'[{r.lower:g},{r.upper:g})'
+                      for r in g.itertuples()]
+            axes[1].set(xticks=np.arange(len(g)),xticklabels=labels)
             d = data['depth'].loc[data['depth'].Cyc.eq(cyc)]
-            ax = axes[row, 2]
-            _line_interval(ax, d.depth.to_numpy(), d, colour)
-            ax.set(xticks=data['settings']['depths'], ylim=(ymin,ymax),
-                   xlabel='Ellipse depth (m)', ylabel='Major-axis alignment score')
-            ax.axhline(0, color='.4', ls='--', lw=.8)
-            n = data['coverage'].query("Cyc == @cyc and sample == 'all-depth matched'").eddies.iloc[0]
-            label_y = .12 if d.estimate.mean() > (ymin+ymax)/2 else .94
-            # ax.text(.96,label_y,f'Matched n = {n:,}', transform=ax.transAxes,
-            #         va='top', ha='right', fontsize=7,
-            #         bbox=dict(facecolor='white', edgecolor='none', alpha=.85, pad=1))
-            # Column titles intentionally hidden.
-        for letter, ax in zip(string.ascii_lowercase, axes.flat):
-            _panel(ax, letter)
+            for ax,x,table in [(axes[1],np.arange(len(g)),g),
+                               (axes[2],d.depth.to_numpy(),d)]:
+                ax.fill_between(x,table.low.to_numpy(float),table.high.to_numpy(float),
+                                color=colour,alpha=options['band_alpha'],lw=0)
+                ax.plot(x,table.estimate,color=colour,lw=options['line_width'],
+                        alpha=options['line_alpha'])
+                ax.vlines(x,table.low,table.high,color=colour,lw=options['interval_width'])
+        axes[0].set(xlim=(0,90),ylim=(0,histmax),xticks=[0,30,60,90],
+                    xlabel='Tilt–major-axis angle (°)',ylabel='Probability (%)')
+        axes[0].axhline(100/18,ls='--',color='.4',lw=.8)
+        axes[0].legend(loc='upper right',frameon=False)
+        axes[1].set(xlabel='Surface axis-ratio class',ylabel='Major-axis alignment score',
+                    ylim=(0,ymax))
+        axes[1].tick_params(axis='x',labelsize=6.5)
+        axes[2].set(xlabel='Ellipse depth (m)',ylabel='Major-axis alignment score',
+                    xticks=data['settings']['depths'])
+        axes[2].set_xticklabels([f'{z:.0f}' for z in data['settings']['depths']])
+        for ax,letter in zip(axes,'abc'):
+            _panel(ax,letter)
         return fig

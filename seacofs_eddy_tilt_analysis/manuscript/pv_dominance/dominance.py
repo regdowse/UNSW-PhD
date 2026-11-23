@@ -169,8 +169,9 @@ def run(config_path=None):
                  'beta_dom_map':dominance_plots.plot_map(data,grid,settings)}
     with plt.style.context('seaborn-v0_8-whitegrid'):
         figures.update(topo_plan_ratio=dominance_plots.plot_distribution(data,grid,settings),
-                       plan_dom_rose=dominance_plots.plot_planetary(planetary,grid,settings),
-                       topo_dom_dtheta=dominance_plots.plot_topographic(topographic,grid,settings))
+                       plan_dom_rose=dominance_plots.plot_planetary(planetary,grid,settings))
+    with plt.rc_context(matplotlib.rcParamsDefault):
+        figures['topo_dom_dtheta']=dominance_plots.plot_topographic(topographic,grid,settings)
     out=Path(config['output_dir']);out.mkdir(parents=True,exist_ok=True)
     figure_dir=Path(config['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
     for name,fig in figures.items():
@@ -250,8 +251,11 @@ def run(config_path=None):
         'above. Original map/rose layout. Radial limits expand only where necessary to '
         'avoid clipping counts. Green/magenta arrows are circular mean PV/tilt directions.',
         '- 12: shallow topographic-dominated days only, with the water-depth and directional '
-        'criteria above. Original map/mismatch/boxplot layout. On/off-shelf remains a '
-        f'geographic longitude split at {config["shelf_longitude_deg"]:g}°E; equality is off-shelf. '
+        'criteria above. AE map/relative rose (a/b), CE map/relative rose (c/d). '
+        'Roses show polarity-specific percentages by tilt-distance class. Zero is each '
+        "day's PV-gradient bearing; positive angles are clockwise. Magenta arrows show "
+        'circular mean relative tilt bearings, with fixed display length. No longitude '
+        'split is plotted; the numerical tables retain the longitude groups. '
         f'The {config["water_depth_threshold_m"]:g} m isobath marks the common depth threshold; '
         'selection uses footprint-mean h rather than the contour at the centre position.','',
         'These are descriptive associations. Repeated days are not independent eddies; no '

@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.ticker import FuncFormatter
 from scipy.stats import spearmanr
 
 KEYS = ['Eddy', 'Day']
@@ -128,6 +129,28 @@ def selected_depth_figure(d,selected,bins=8,min_eddies=20,outcome='TiltDis'):
             ax.set_ylim(bottom=0)
     return fig,pd.concat(tables,ignore_index=True)
 
+def environment_panel(ax, table, metric, linear_fit=True):
+    """Draw saved environmental summaries; latitude ticks/equations use degrees south.
+
+    Input bin coordinates and numerical fit tables retain signed degrees north.
+    """
+    curve(ax,table,metric,shade=True)
+    if metric == 'lat':
+        ax.xaxis.set_major_formatter(FuncFormatter(lambda value, position: f'{-value:g}'))
+        ax.set_xlabel('Latitude (°S)')
+    if linear_fit:
+        for cyc,color in [('AE','darkred'),('CE','navy')]:
+            q=table[table.Cyc.eq(cyc)].dropna(subset=['x','median'])
+            p=np.polyfit(q.x,q['median'],1);yhat=np.polyval(p,q.x)
+            r2=1-np.sum((q['median']-yhat)**2)/np.sum((q['median']-q['median'].mean())**2)
+            def fmt(v):
+                if v==0:return '0'
+                e=int(np.floor(np.log10(abs(v))));a=v/10**e
+                return fr'{a:.2f}\times10^{{{e}}}' if abs(e)>=3 else f'{v:.2f}'
+            ax.plot(q.x,yhat,'--',color=color,lw=1.5,
+                    label=fr'$y={fmt(-p[0] if metric == "lat" else p[0])}x{p[1]:+.2f}$, $R^2={r2:.2f}$')
+        ax.legend(frameon=False,loc='upper left')
+
 def environment_figure2(d,axs=None,bins=8,min_eddies=20,linear_fit=True,outcome='TiltDis'):
     style();tables=[]
     if axs is None:
@@ -137,20 +160,8 @@ def environment_figure2(d,axs=None,bins=8,min_eddies=20,linear_fit=True,outcome=
 
     for i,(ax,metric) in enumerate(zip(axs,['lat','beta','log10_PV_grad_mag'])):
         t=median_table(d,metric,bin_edges(d,metric,bins),min_eddies,outcome=outcome)
-        curve(ax,t,metric,shade=True);tables.append(t.assign(metric=metric))
-
-        if linear_fit:# and i<2:
-            for cyc,color in [('AE','darkred'),('CE','navy')]:
-                q=t[t.Cyc.eq(cyc)].dropna(subset=['x','median'])
-                p=np.polyfit(q.x,q['median'],1);yhat=np.polyval(p,q.x)
-                r2=1-np.sum((q['median']-yhat)**2)/np.sum((q['median']-q['median'].mean())**2)
-                def fmt(v):
-                    if v==0:return '0'
-                    e=int(np.floor(np.log10(abs(v))));a=v/10**e
-                    return fr'{a:.2f}\times10^{{{e}}}' if abs(e)>=3 else f'{v:.2f}'
-                ax.plot(q.x,yhat,'--',color=color,lw=1.5,
-                        label=fr'$y={fmt(p[0])}x{p[1]:+.2f}$, $R^2={r2:.2f}$')
-            ax.legend(frameon=False,loc='upper left')
+        environment_panel(ax,t,metric,linear_fit=linear_fit)
+        tables.append(t.assign(metric=metric))
 
     axs[0].set_ylabel('Tilt distance / surface $R_c$' if outcome=='tilt_over_surface_Rc' else 'Tilt distance (km)')
 

@@ -28,11 +28,11 @@ Local workspace: `/home/z5297792/UNSW-PhD`.
 - Main-paper editing checkout: `manuscript/text/main-paper/`.
 - Supplementary-text editing checkout: `manuscript/text/supplement/`.
   These are independent Git repositories; the paper checkout is clean on `main`
-  at `61bc963a442745dc5a91344cad62ad661679f3c2`, fetched and fast-forwarded
+  at `70e1b2daed87ddac15116bdb71a757f43e9601a2`, fetched and fast-forwarded
   on user request on 2026-11-23. It is a read-only reference under the current
   manuscript workflow; previous review baselines are historical records.
   The supplement checkout is on `main` at
-  `3c211760c70a61c11b0876a3cb8c66fd963639dc` (last fetched 2026-11-18).
+  `3c211760c70a61c11b0876a3cb8c66fd963639dc` (last fetched 2026-11-23; already up to date).
   The supplement was not updated in the 2026-11-23 paper-only pull.
   `manuscript/text/` is ignored by the
   enclosing analysis repository. Both live on shared storage. Never keep the
@@ -132,3 +132,19 @@ The user reports saving the Overleaf version to GitHub and downloading the origi
 source ZIP. The checked paper revision above is a recovery reference; its alignment
 with the feedback export and downloaded ZIP remains to be verified. The ZIP has
 not been located in `context/`; see [backups status](backups/README.md).
+
+### Pipeline archive checked 2026-11-23
+
+User-provided DOI 10.5281/zenodo.24272876 is the version-specific v0.1.0
+archive (zip prefix regdowse-ocean-eddy-pipeline-ab41f9c). It documents ESP
+v1.01, paths.esp_zonodo and /home/z5297792/ESP_zonodo. Current local pipeline
+0.1.1 and SI describe ESP v1.1, paths.esp_root and the intended ESP checkout.
+Archive checksum verified; 19 shared Python files are identical. Changes include
+ESP adapter/config dependency selection, version metadata, README and runner
+notebook. This is not an exact archived reproduction of the current dependency
+setup. Publish the matching pipeline release before citing that DOI as v0.1.1.
+The live local config still matches the previously recorded SHA256 and import
+checks resolve both ESP functions to the intended checkout. README's statement
+that the v0.1.1 dataset has not yet been generated is historical/stale relative
+to the successful run log. Audit/metadata saved in revision/outputs. No pipeline
+code/config or manuscript text was changed during this read-only review.

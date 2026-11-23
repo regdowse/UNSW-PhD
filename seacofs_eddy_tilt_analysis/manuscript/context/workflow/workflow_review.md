@@ -819,3 +819,141 @@ Region correction publication: user approved the manuscript push on 2026-11-18.
 Committed table/Figure 7 updates as `cbd1c3e37d160708063fbfeed64da543d8154eed` and pushed
 to GitHub `main`. Local checkout is clean; review baseline remains unchanged
 until Overleaf synchronisation is confirmed.
+
+## Experimental topographic relative-direction roses (2026-11-23)
+
+User requested two candidates in the Git-ignored
+`manuscript/figure_experiments/topographic_relative_direction/`: combined AE/CE
+maps and roses (2×2), and maps plus separate western/eastern roses (2×3). Both
+retain model x/y maps and omit the old gradient-magnitude panel. Script and JSON
+settings are local to that folder; PNG output only. No manuscript repository edits.
+
+Use the unchanged shallow-topographic directional selection: raw factor-two
+topographic dominance, footprint-mean depth ≤3000 m, tilt ≥5 km and valid bearings.
+Each day is rotated by its own geographic PV bearing: wrap(tilt−PV) to [-180,180).
+Graphical north is PV direction, not geographic north; clockwise angles are
+positive. Uniform 15° sectors and original tilt-distance colour classes are used,
+with percentages of each displayed group and a shared radial limit across variants.
+Western/eastern groups retain the 154.75°E longitude split, not a bathymetric split.
+
+Sample counts match the canonical analysis: combined AE 5,574 days/346 eddies,
+CE 8,855/615; western AE 755/76, CE 2,936/303; eastern AE 4,819/270,
+CE 5,919/313. Eddy counts across groups can overlap. Signed-angle wraparound,
+clockwise sign, rotation invariance and rose count conservation checks pass.
+The experiment writes membership, rose-bin and sample-summary CSVs plus a manifest;
+it reuses the validated PV cache and checks that the canonical figure hash is unchanged.
+
+Combined-candidate layout update: user selected the combined plot for further
+refinement. `render_combined.py` now renders it in the same horizontal 1×4 layout,
+14×4 inch size, colours, legend positions, panel labels and colourbar arrangement
+as `plan_dom_rose`. Maps a/c use model x/y with the exact Figure 8c longitude/latitude
+overlay routine; roses b/d use signed PV-relative bearings, percentages and a shared
+radial limit. Only the mean relative tilt direction is drawn in magenta; no green
+arrow. Zero is labelled as the PV-gradient reference. The yellow 3 km context
+contour and far-right depth colourbar are retained. No extra title or sample-count
+headings were added, matching the planetary styling.
+
+The plot-only renderer reuses validated `members.csv`; run it through
+`run_combined.pbs` for this selected layout. PBS job 9863902 completed successfully.
+The rendered PNG was visually checked, its membership hash verified unchanged,
+and both canonical figures and the split experiment verified byte-identical.
+The old `experiment.py` retains the initial candidate-generation code; its combined
+layout is superseded by `render_combined.py`. All remain ignored local experiments.
+
+Combined display refinement: regular x/y grid moved behind filled bathymetry,
+hist2d density overlay removed (direct population scatter only), and the 0° rose
+label changed to `\nabla PV`. Longitude/latitude contours remain in front. Rerendered
+with PBS job 9863926 and visually checked. Membership, split PNG and canonical
+figure hashes remain unchanged.
+
+### Standard topographic figure (2026-11-23)
+
+User approved promoting the combined experiment to `figures/topo_dom_dtheta.png`.
+`pv_dominance/dominance_plots.py::plot_topographic` now owns this layout; future
+script/notebook runs need no experimental files. Panels a/c show AE/CE model-x/y
+locations, geographic contours and bathymetry; scatter is above the yellow 3 km
+isobath and the regular grid is below filled bathymetry. Panels b/d show 15-degree
+signed relative bearings `wrap(TiltDir - PV_grad_theta)` as percentages within
+polarity, stacked by tilt-distance class. Zero is labelled `\nabla PV`; positive
+angles are clockwise. Magenta arrows show circular mean relative directions with
+fixed display length, not mean tilt distances. A shared percentage radial scale
+and far-right depth colourbar retain the selected experimental styling.
+
+Same shallow-topographic directional sample and alignment/opposition definitions;
+folding these signed bearings recovers the previous absolute-angle statistic.
+Longitude-split numerical tables remain available, although the new figure pools
+the two longitude groups. No manuscript text or text-repository figures edited;
+the user must update the caption and any panel references in Overleaf.
+
+Executed/checked: PBS 9863960 completed successfully (existing PV product reused),
+refreshing the standard PNG, dominance notebook, report and provenance manifest.
+Verified identical sample keys (5,574 AE-days; 8,855 CE-days), identical rose counts
+against the validated experiment, and byte-identical other canonical PNGs and all
+existing numerical CSVs. Six dominance tests passed. Final PNG visually checked.
+
+### Experimental controls twin axes (2026-11-23)
+
+User requested a 2x3 controls figure combining raw and radius-normalised tilt:
+angular velocity above, axis ratio below; fitted depths 0/181/515 m in columns.
+Local experiment: `figure_experiments/structure_twin_axes/`, ignored by Git.
+Renderer reads existing `structure_bins.csv` and `structure_normalised_bins.csv`,
+checking identical bin supports. Raw medians/IQR retain existing styling;
+normalised medians use the same polarity colours, dash-dot lines and alpha 0.65,
+without shading. No legend. Single outer-left raw ylabel and outer-right
+`Tilt distance / surface Rc` ylabel; only outer columns show y tick labels.
+Uniform raw and normalised limits across panels are configurable in settings.json.
+No standard figure or manuscript text changes are requested for this experiment.
+Rendered successfully on compute node (PBS 9864068); PNG visually checked.
+Preservation hashes confirm standard PNGs and all controls outputs unchanged.
+Twin-axis refinement: normalised linewidth reduced to 1.1 and marker size to 3
+(configurable); alpha remains 0.65. PBS 9864090 completed, PNG visually checked,
+and preservation checks passed. Legend still omitted pending discussion.
+User approved a compact black line-style key in axes[0,2] (top-right): solid
+"Tilt distance", dash-dot "Normalised tilt". Experimental PNG rerendered and
+visually checked; standard figure/output preservation checks passed. Lightweight
+plot scripts may run on login nodes; reserve notebook execution and substantial
+analysis for compute nodes per user clarification.
+
+### Experimental ellipse-orientation merge (2026-11-23)
+
+Created ignored `figure_experiments/ellipse_orientation/` with render.py and
+settings.json, using existing alignment summary CSVs only. A 1x3 layout overlays
+AE/CE: surface-angle probability (a), surface-axis-ratio alignment (b), and
+matched-depth alignment (c). Existing fonts/colours/reference lines retained;
+lines 1.2 pt, alpha 0.85, no markers or legend. No shading in a; b/c retain
+whole-eddy confidence bars and lighter bands (alpha 0.10), shared score y-axis.
+Last axis-ratio label is >=2; fitted depths remain 0/49/106/181/327 m. Rendered
+on login node and visually checked. Standard PNG and numerical-output hashes
+verified unchanged. This is an experiment, not yet the standard workflow.
+
+### Standard ellipse-orientation figure (2026-11-23)
+
+User approved the merged 1x3 layout as `figures/ellipse_tilt2.png`, adding a simple
+AE/CE legend upper-right in a and restoring the alignment-score ylabel/ticks in c.
+Both b/c now start at 0.0 and omit dashed zero-reference lines; a retains the
+uniform-probability reference. The production renderer is now
+`controls/alignment_tools.py::plot_direction`, with display settings in
+`controls/controls.json` under plot.ellipse_orientation. `controls.py` calls it
+without six-panel indexing; future script/notebook runs reproduce the new layout
+without experimental dependencies. Experiment render.py now delegates to this
+production function. Existing numerical summaries were reused (no bootstrap or
+cache rebuild); figure-only provenance is in outputs/ellipse_figure_manifest.json.
+Seven controls tests pass, final PNG visually checked, other canonical figures
+and numerical CSV hashes unchanged. Text repos remain untouched.
+Standard ellipse curves increased to 1.7 pt and alpha 1.0, matching raw curves in
+the twin-axis controls plot. Production defaults/config and experimental settings
+updated; standard and experimental PNGs regenerated from unchanged summaries.
+Confidence-band alpha remains 0.10; no statistical changes.
+
+### Environmental figure latitude display (2026-11-23)
+
+Figure env_tilt_control.png latitude panels now display positive degrees south,
+decreasing left-to-right so the equatorward rise retains its original orientation.
+Displayed regression slopes are sign-reversed for this coordinate; intercepts,
+predictions and R2 unchanged. Original signed-north input/bin/fit CSVs remain
+unchanged (explicitly documented in the production report). Production helper
+control_tools.environment_panel is used by environment_figure2, so future runs
+retain this convention. Standard PNG refreshed from existing environment_bins,
+visually checked; seven controls tests pass, equivalent fit predictions verified,
+and all numerical CSVs/other PNG hashes unchanged. Figure-only provenance is
+outputs/environment_figure_manifest.json. No text-repository changes.

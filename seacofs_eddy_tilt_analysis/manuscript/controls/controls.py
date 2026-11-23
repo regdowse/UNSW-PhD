@@ -129,10 +129,7 @@ def run(config_path=None):
             for ax in axs[row]:ax.set_ylim(limits)
         for ax,label in zip(axs.flat,['a)','b)','c)','d)','e)','f)']):
             ax.text(-.1,1.09,label,transform=ax.transAxes,ha='left',va='top',fontsize=11,fontweight='bold')
-        ellipse=at.plot_direction(alignment)
-        # Actual fitted levels are labelled to the nearest metre for legibility.
-        for ax in [ellipse.axes[2],ellipse.axes[5]]:
-            ax.set_xticklabels([f'{z:.0f}' for z in c['ellipse_depths_m']])
+        ellipse=at.plot_direction(alignment,plot['ellipse_orientation'])
     figures=dict(eddy_tilt_control=raw,eddy_tilt_control_Rc=normalised,ellipse_tilt2=ellipse,env_tilt_control=fig)
     out=Path(c['output_dir']);out.mkdir(parents=True,exist_ok=True)
     figure_dir=Path(c['figure_dir']);figure_dir.mkdir(parents=True,exist_ok=True)
@@ -175,8 +172,14 @@ def run(config_path=None):
         f'whole eddies ({a["bootstrap_replicates"]} replicates, seed {a["seed"]}). Score cos(2φ) '
         'is +1 parallel and −1 perpendicular. Its zero reference is not an environment-matched '
         'independence test. Surface geometry is processed upstream; deeper geometry uses the '
-        'existing fitted levels. Their smoothing/uncertainty can differ.','',
-        'Figure 16 uses the current source latitude and fresh surface-fit PV, without dominance '
+        'existing fitted levels. Their smoothing/uncertainty can differ. '
+        'The three panels overlay AE/CE: surface-angle probability, surface-axis-ratio '
+        'alignment, and matched-depth alignment. Panel a shows curves without shading; '
+        'b/c retain confidence bands/bars without markers and start at zero.','',
+        'Figure 16 displays latitude in positive degrees south, decreasing towards the right; '
+        'displayed latitude-fit slopes use this coordinate. Numerical bin/fit tables retain '
+        'the original signed degrees north. It uses current source latitude and fresh '
+        'surface-fit PV, without dominance '
         'or water-depth selection. Fits and R² describe displayed binned medians, not adjusted '
         'individual-day regressions or causal effects. Beta is df/dy, not beta/h; PV uses log10 '
         'of magnitude in m⁻² s⁻¹. '
