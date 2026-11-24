@@ -231,3 +231,153 @@ standard controls workflow still emits the two older raw/normalised figures.
 Its renderer/settings remain in ignored figure_experiments; integration is
 needed before claiming the manuscript figures are fully reproduced by the
 tracked workflow. Canonical ellipse/topographic/environment updates are integrated.
+
+## Dataset release audit, 2026-11-24 (steps 1–2)
+
+Source: `/srv/scratch/z5297792/SEACOFS_26yr_eddy_dataset_modular`.
+Pipeline DOI 10.5281/zenodo.24457378 archive checksum verified; archived commit
+143b9a3 matches local checkout, all 21 shared Python files and supplied config.
+No source data, code/config, manuscript or supplementary text edited.
+Audit scripts, file SHA256 inventory, archived YAML and results are in
+`outputs/dataset_release_audit/` (ignored). This is an inspection of existing
+products, not a regeneration or independent validation of extraction algorithms.
+
+Verified:
+- 928 files, 720,598,921 bytes. All three partitioned stages cover the same
+  307 model files without missing/extra partitions; one schema per stage.
+- 414,949 detections and surface-fit rows; surface rows include failed fits.
+  Tracked rows: 260,761. Processed: 133,038 days / 3,097 eddies, with no null
+  stored fields, unique Eddy/Day keys, contiguous daily tracks and >=21-day span.
+- Raw profiles: 3,003,294 rows; confirmed: 2,994,569 rows / 126,681 days.
+  Confirmed keys exactly reproduce raw >=3-recorded-level QC; no duplicate
+  Eddy/Day/Depth keys, no orphan days and every confirmed profile has surface.
+- All available profile surface seeds match processed xc/yc, w, Omega, Rc,
+  psi0, R and Q components. Confirmed subsurface Omega/Rc can remain missing
+  (62,054 rows); recorded centres are not equivalent to complete outer fits.
+- Tilt: 120,348 unique rows, 106,865 valid estimates. Tilt keys exactly match
+  the confirmed-profile temporal-window eligibility interval, including missing
+  reference days. Other processed days are absent, not encoded as zero tilt.
+  Saved analysis summary agrees with tilt counts and median.
+- Dates match days since 1990-01-01, spanning 1994-01-02 to 2019-02-28.
+  Reference NetCDF time units agree. z_r is (272,317,30), with 29 default
+  subsurface target depths; profile levels match these plus the surface.
+  Full profile data extend to 4748.92 m; the 1000 m cap applies only to Delta.
+
+README must explain (supplement is broadly consistent with extraction code):
+- Processed IDs are renumbered after tracking/filtering; do not join tracked
+  IDs directly to final IDs. Detection/surface tables precede final IDs.
+- Age is total processed-track day count, not per-row elapsed age.
+- Day is absolute day index, Date is timestamp, fnumber is model-file label;
+  fname is a machine-local original path, not a portable data URL.
+- Surface preprocessing includes Q smoothing and daily parameter gap filling;
+  final table does not provide a per-variable observed/interpolated flag.
+- R is mean available directional peak-speed radius, distinct from Gaussian Rc;
+  psi0 retains m km/s units while Omega/w are rescaled to 1/s.
+- Profile QC is recorded-level count, not complete finite-parameter screening.
+- analysis/profile_tilt_summaries is raw surface-relative profile geometry,
+  not Delta; tilt missing rows versus absent rows have different meanings.
+- Depth is positive physical reference depth; z is a reference-level index;
+  x/y in km, ic/jc refer to the transposed model grid. The reference NetCDF
+  angle is -20 degrees; stored tilt bearings include the configured +20 offset.
+- min_track_length_days appears in YAML but compute_tilt does not consume it;
+  do not describe it as an additional applied filter.
+
+Remaining release/documentation decisions: whether to include small static grid
+metadata so x/y, ic/jc and z_r can be interpreted without retrieving the original
+model reference file; dataset author list/licence/version before publication.
+Otherwise link the exact model reference file/DOI and explain reconstruction.
+Preserve the recorded ESP v1.1 generation evidence; the v1.2 computational file
+is identical. The run log does not pin all historical package/config hashes.
+No README, ZIP or Zenodo draft created yet: return audit findings for discussion.
+
+## Dataset documentation/static-grid preparation, 2026-11-24
+
+User approved a small static grid and proceeding with README/reference files.
+Created dataset_release/README.md (~2,200 words), variables.csv (130 file/field
+definitions), generation_config.yaml (exact archived copy), and prepare_metadata.py.
+README adapts Text S1 into an independent dataset guide: all extraction/QC stages,
+file roles, coordinates, units, joins, interpolation/failure semantics, Delta
+settings, dependencies/provenance and reuse/citation. Supplement/text repositories
+remain unchanged. Author list, dataset licence/version and DOI remain review items.
+
+Generated dataset_release/outputs/review/static_grid.nc (949,722 bytes): original
+rho-grid lon/lat, bathymetry, mask/full angle, exact pipeline x/y coordinate
+vectors, scalar reference angle and profile-level/depth lookup. x/y orientation
+and every copied array exactly match the production grid loader. z_r remains
+a separate original input; no duplicate 3-D depth array or velocities in NetCDF.
+README distinguishes the uppermost native velocity level from the surface's
+Depth=0 label. Metadata includes the reference filename and source/pipeline DOIs.
+
+Generated release_manifest.json and checksums.sha256 in the same ignored review
+output directory. All 928 original source-file SHA256 values agree with audit;
+variable definitions cover every stored Parquet field and every static variable.
+No data regeneration, source edits, ZIP, upload, publication, commit or push.
+Next: review documentation and creator/licence choices, then assemble final archive.
+
+Dataset README clarification (2026-11-24): added an early ESP/DOPPIO-versus-Delta
+explanation, separate ESP methods/software and pipeline DOI links, and explicit
+XXXX placeholder for the forthcoming Delta manuscript DOI. Updated review
+manifest/checksums for the documentation change; data/grid unchanged.
+
+## Dataset archive assembly, 2026-11-24
+
+Created dataset_release/package_release.py and local ignored draft archive
+outputs/seacofs_eddy_dataset_v1.0.0.zip (672,580,431 bytes; 934 members).
+Includes all 928 audited source files and README, variable dictionary, archived
+configuration, static grid, release manifest and checksum list. Source hashes
+checked during writing; every ZIP member read back with SHA256/CRC verification.
+Primary Parquet tables, NumPy depths and NetCDF grid also read successfully from
+the archive, with matching horizontal dimensions. External ZIP SHA256 and package
+verification report saved alongside/in outputs/review. README/variables/config
+copied to review outputs for separate upload/preview if desired. All generated
+files remain ignored. No upload/publication/commit/push or source modifications.
+Await dataset creators/order and licence; version 1.0.0 remains proposed and
+README explicitly marks the package as a local draft. Manuscript DOI XXXX remains
+an intentional placeholder. Rebuild after metadata choices before publishing.
+
+Dataset metadata confirmed by user (2026-11-24): sole creator Reg W. Dowse;
+CC BY 4.0 selected explicitly. Added dataset_release/CITATION.cff (dataset,
+version 1.0.0) and LICENSE.txt; README/manifest now record the creator/licence.
+Source model record 12703063 confirms CC BY 4.0 and credits Junde Li, Colette
+Kerry and Moninya Roughan; this attribution is retained for static geometry/depths
+without adding them as creators of the derived eddy dataset. Preparation and
+packaging scripts include both new files; archive rebuilt with 936 members.
+Dataset DOI remains to be reserved/inserted before publication; Delta manuscript
+XXXX remains intentional. Nothing uploaded or published.
+
+Dataset DOI reserved by user (2026-11-24): 10.5281/zenodo.24486070.
+Added to README citation, CITATION.cff and release manifest. Preparation and
+packaging scripts preserve this DOI and distinguish preparation from publication.
+README uses publication-ready version/creator/licence wording; provenance and
+verification records retain local/unpublished status. Delta manuscript XXXX is
+unchanged and refers to a different forthcoming paper. Archive rebuilt with the
+same 936 members; user must upload this latest build rather than earlier ZIPs.
+No external upload or publication performed.
+
+## Supplement workflow rewrite, 2026-11-24
+
+User explicitly granted a one-off text-edit/commit/push exception. Pulled supplement
+main from 3c21176 to b8fdfa9, then revised only main.tex around velocity inputs,
+surface detection/ESP mapping, temporal tracking/processing, downward following,
+and released products/Delta eligibility. Kept both literature citations and
+software provenance; added dataset DOI 10.5281/zenodo.24486070 (user upload still
+in progress). Simplified settings table and deferred implementation details to
+the release README/configuration. Cross-checked tracking, surface processing and
+vertical reconstruction against pipeline v0.1.1 code/configuration. No analysis,
+source data, release package or main-paper text changed.
+
+LaTeX/BibTeX compilation passed using texlive/20220321: four pages, no unresolved
+citations/references or layout warnings; git diff --check passed. Review PDF/log
+are ignored outputs/supplement-review-20261124/main.{pdf,log}. Commit a327d2f
+pushed successfully to supplement origin/main; user can pull into Overleaf.
+One-off authorisation is complete; standard read-only text policy resumes.
+
+## Requested manuscript refresh, 2026-11-24
+
+Pulled main-paper main 70e1b2d -> 2b210b0 and supplement main a327d2f ->
+4291227; both fast-forward with clean starting worktrees. Read updated Text S1
+and main Eddy dataset subsection. Proposed replacement in conversation only: brief
+VG/ESP extraction, retained track/profile population and dataset documentation
+links, with detailed workflow left in S1. Flagged Overleaf URL for removal and
+stale Open Research archive-pending statement for update after publication.
+No manuscript text edited, committed or pushed.

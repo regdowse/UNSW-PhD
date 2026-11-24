@@ -1,0 +1,23 @@
+SEACOFS mesoscale eddy dataset
+Creator: Reg W. Dowse
+Copyright 2026 Reg W. Dowse for the derived eddy dataset and its documentation.
+
+This dataset and its documentation are licensed under the Creative Commons
+Attribution 4.0 International licence (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+Full legal terms: https://creativecommons.org/licenses/by/4.0/legalcode
+
+Reuse, adaptation and redistribution are permitted, including commercially,
+subject to the licence terms, including appropriate attribution, a link to the
+licence and an indication of changes. Cite the version-specific dataset DOI when
+available. No endorsement by the creator is implied.
+
+Source attribution: static model geometry in static_grid.nc and the reference
+depths in z_r.npy originate from the SEACOFS model resource by Junde Li,
+Colette Kerry and Moninya Roughan, distributed under CC BY 4.0:
+https://doi.org/10.5281/zenodo.12703063
+static_grid.nc transposes the reference arrays and adds pipeline coordinate and
+depth lookups. z_r.npy is retained as supplied to the pipeline. These source
+creators are credited for their model resource; they are not listed as creators
+of this derived eddy dataset. The separate software archives retain their own
+licences.

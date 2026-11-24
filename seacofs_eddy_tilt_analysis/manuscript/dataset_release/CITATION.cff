@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "Please cite this dataset using the metadata below."
+type: dataset
+title: "SEACOFS mesoscale eddy dataset"
+authors:
+  - family-names: Dowse
+    given-names: Reg W.
+version: 1.0.0
+license: CC-BY-4.0
+doi: 10.5281/zenodo.24486070
+url: "https://doi.org/10.5281/zenodo.24486070"
+abstract: >-
+  Velocity-defined mesoscale eddy detections, processed surface tracks,
+  fitted vertical profiles and Delta tilt estimates for the East Australian
+  Current region in daily SEACOFS model output, 1994-2019.

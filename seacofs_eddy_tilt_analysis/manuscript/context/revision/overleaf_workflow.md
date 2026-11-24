@@ -11,6 +11,11 @@ Codex must not directly edit, commit, merge or push manuscript text or assets in
 these text repositories. Earlier authorisations to revise/push manuscripts are
 historical and do not apply to future work.
 
+One-off exception completed 2026-11-24: the user explicitly authorised editing,
+committing and pushing the supplement's dataset-construction narrative. Baseline
+`b8fdfa9` was revised to `a327d2f` and pushed to supplement `main`. This permission
+was limited to that update; the read-only policy resumes for both text checkouts.
+
 ## Synchronise on request
 
 1. When the user wants Codex to see updated text, they push Overleaf to GitHub

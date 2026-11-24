@@ -1,0 +1,131 @@
+file,variable,dtype,units,description,notes
+detections/*.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+detections/*.parquet,nxc,double,km,Initial vector-geometry centre x coordinate,Model-aligned regular detection-grid coordinate.
+detections/*.parquet,nyc,double,km,Initial vector-geometry centre y coordinate,Model-aligned regular detection-grid coordinate.
+detections/*.parquet,Cyc,string,1,"Eddy cyclonicity: AE anticyclonic, CE cyclonic",Southern Hemisphere AE vorticity positive; CE negative. At detection stage this is the vector-geometry classification.
+detections/*.parquet,nic,int64,1,Original model x-grid index nearest initial detection,Zero-based index into static_grid.nc x dimension; not a regular 1 km-grid index.
+detections/*.parquet,njc,int64,1,Original model y-grid index nearest initial detection,Zero-based index into static_grid.nc y dimension.
+detections/*.parquet,fnumber,int64,1,Integer suffix identifying source outer_avg_NNNNN.nc,Also encoded in partition filename; not a day or eddy identifier.
+surface_eddies/*.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+surface_eddies/*.parquet,fnumber,int64,1,Integer suffix identifying source outer_avg_NNNNN.nc,Also encoded in partition filename; not a day or eddy identifier.
+surface_eddies/*.parquet,nxc,double,km,Initial vector-geometry centre x coordinate,Model-aligned regular detection-grid coordinate.
+surface_eddies/*.parquet,nyc,double,km,Initial vector-geometry centre y coordinate,Model-aligned regular detection-grid coordinate.
+surface_eddies/*.parquet,nCyc,string,1,Original vector-geometry cyclonicity,AE or CE; retained before final processing.
+surface_eddies/*.parquet,nic,int64,1,Original model x-grid index nearest initial detection,Zero-based index into static_grid.nc x dimension; not a regular 1 km-grid index.
+surface_eddies/*.parquet,njc,int64,1,Original model y-grid index nearest initial detection,Zero-based index into static_grid.nc y dimension.
+surface_eddies/*.parquet,xc,double,km,Fitted centre model-x coordinate,Surface processing can smooth/interpolate parameters; profile centres are followed at each reference depth.
+surface_eddies/*.parquet,yc,double,km,Fitted centre model-y coordinate,Model coordinates defined in static_grid.nc; not longitude/latitude.
+surface_eddies/*.parquet,w,double,s-1,Central eddy relative vorticity,Not vertical water velocity. Final processed surface w = Omega*(q11+q22); deeper profiles retain core-fit w.
+surface_eddies/*.parquet,q11,double,1,"Q[0,0] symmetric ellipse shape-matrix component",rho squared = q11*dx squared + 2*q12*dx*dy + q22*dy squared. Surface Q is processed before profile following.
+surface_eddies/*.parquet,q12,double,1,"Q[0,1] = Q[1,0] symmetric shape-matrix component",Smaller eigenvalue corresponds to major-axis direction.
+surface_eddies/*.parquet,q22,double,1,"Q[1,1] symmetric ellipse shape-matrix component",Aspect ratio = sqrt(lambda_max/lambda_min) for positive-definite Q.
+surface_eddies/*.parquet,Omega0,double,s-1,Inner-core DOPPIO angular-velocity parameter,Missing by construction in the seeded surface row of profile tables; not retained in final processed surface table.
+surface_eddies/*.parquet,Omega,double,s-1,Outer Gaussian angular-velocity parameter,Processed surface may fall back to Omega0/interpolation. A recorded subsurface core centre may have missing Omega.
+surface_eddies/*.parquet,Rc,double,km,Outer Gaussian characteristic radius,Distinct from directional mean R. Can be missing despite available profile centre.
+surface_eddies/*.parquet,psi0,double,m km s-1,Fitted Gaussian streamfunction amplitude in stored implementation units,Multiply by 1000 to express m2 s-1; numerical screening threshold is in stored units.
+surface_eddies/*.parquet,R,double,km,Mean available radius to directional tangential-speed peak,Four model-grid directions attempted; unavailable directions omitted. Not Gaussian Rc.
+tracked/eddy_tracks.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+tracked/eddy_tracks.parquet,fnumber,int64,1,Integer suffix identifying source outer_avg_NNNNN.nc,Also encoded in partition filename; not a day or eddy identifier.
+tracked/eddy_tracks.parquet,nxc,double,km,Initial vector-geometry centre x coordinate,Model-aligned regular detection-grid coordinate.
+tracked/eddy_tracks.parquet,nyc,double,km,Initial vector-geometry centre y coordinate,Model-aligned regular detection-grid coordinate.
+tracked/eddy_tracks.parquet,nCyc,string,1,Original vector-geometry cyclonicity,AE or CE; retained before final processing.
+tracked/eddy_tracks.parquet,nic,int64,1,Original model x-grid index nearest initial detection,Zero-based index into static_grid.nc x dimension; not a regular 1 km-grid index.
+tracked/eddy_tracks.parquet,njc,int64,1,Original model y-grid index nearest initial detection,Zero-based index into static_grid.nc y dimension.
+tracked/eddy_tracks.parquet,xc,double,km,Fitted centre model-x coordinate,Surface processing can smooth/interpolate parameters; profile centres are followed at each reference depth.
+tracked/eddy_tracks.parquet,yc,double,km,Fitted centre model-y coordinate,Model coordinates defined in static_grid.nc; not longitude/latitude.
+tracked/eddy_tracks.parquet,w,double,s-1,Central eddy relative vorticity,Not vertical water velocity. Final processed surface w = Omega*(q11+q22); deeper profiles retain core-fit w.
+tracked/eddy_tracks.parquet,q11,double,1,"Q[0,0] symmetric ellipse shape-matrix component",rho squared = q11*dx squared + 2*q12*dx*dy + q22*dy squared. Surface Q is processed before profile following.
+tracked/eddy_tracks.parquet,q12,double,1,"Q[0,1] = Q[1,0] symmetric shape-matrix component",Smaller eigenvalue corresponds to major-axis direction.
+tracked/eddy_tracks.parquet,q22,double,1,"Q[1,1] symmetric ellipse shape-matrix component",Aspect ratio = sqrt(lambda_max/lambda_min) for positive-definite Q.
+tracked/eddy_tracks.parquet,Omega0,double,s-1,Inner-core DOPPIO angular-velocity parameter,Missing by construction in the seeded surface row of profile tables; not retained in final processed surface table.
+tracked/eddy_tracks.parquet,Omega,double,s-1,Outer Gaussian angular-velocity parameter,Processed surface may fall back to Omega0/interpolation. A recorded subsurface core centre may have missing Omega.
+tracked/eddy_tracks.parquet,Rc,double,km,Outer Gaussian characteristic radius,Distinct from directional mean R. Can be missing despite available profile centre.
+tracked/eddy_tracks.parquet,psi0,double,m km s-1,Fitted Gaussian streamfunction amplitude in stored implementation units,Multiply by 1000 to express m2 s-1; numerical screening threshold is in stored units.
+tracked/eddy_tracks.parquet,R,double,km,Mean available radius to directional tangential-speed peak,Four model-grid directions attempted; unavailable directions omitted. Not Gaussian Rc.
+tracked/eddy_tracks.parquet,err,double,km,Distance between vector-geometry and DOPPIO centres,Screened using an upper threshold derived from median/scaled MAD of log1p(err).
+tracked/eddy_tracks.parquet,Omega0_abs,double,s-1,Absolute core angular-velocity parameter used during surface cleaning,Diagnostic retained in tracked intermediate table.
+tracked/eddy_tracks.parquet,Cyc,string,1,"Eddy cyclonicity: AE anticyclonic, CE cyclonic",Southern Hemisphere AE vorticity positive; CE negative. At detection stage this is the vector-geometry classification.
+tracked/eddy_tracks.parquet,eddy_idx,int64,1,Within-day detection index used by tracking,Not a persistent final track identifier.
+tracked/eddy_tracks.parquet,Eddy,int64,1,Track identifier,Final ID in processed/profile/tilt/analysis products; a different pre-processing namespace in tracked. Not a cross-release identifier.
+tracked/eddy_tracks.parquet,next_num,int64,1,Next unused tracking identifier after the tracking call,Internal tracking bookkeeping; not an eddy attribute.
+processed/eddy_dataset_processed.parquet,Eddy,int64,1,Track identifier,Final ID in processed/profile/tilt/analysis products; a different pre-processing namespace in tracked. Not a cross-release identifier.
+processed/eddy_dataset_processed.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+processed/eddy_dataset_processed.parquet,Cyc,string,1,"Eddy cyclonicity: AE anticyclonic, CE cyclonic",Southern Hemisphere AE vorticity positive; CE negative. At detection stage this is the vector-geometry classification.
+processed/eddy_dataset_processed.parquet,lon,double,degrees_east,Processed fitted centre longitude,Interpolated from original model rho-point grid.
+processed/eddy_dataset_processed.parquet,lat,double,degrees_north,Processed fitted centre latitude,Negative values denote south.
+processed/eddy_dataset_processed.parquet,ic,int64,1,Nearest original model x-grid index for fitted centre,"Zero-based, transposed analysis-array orientation."
+processed/eddy_dataset_processed.parquet,jc,int64,1,Nearest original model y-grid index for fitted centre,"Zero-based, transposed analysis-array orientation."
+processed/eddy_dataset_processed.parquet,xc,double,km,Fitted centre model-x coordinate,Final surface centre after gap filling; model coordinates in static_grid.nc.
+processed/eddy_dataset_processed.parquet,yc,double,km,Fitted centre model-y coordinate,Model coordinates defined in static_grid.nc; not longitude/latitude.
+processed/eddy_dataset_processed.parquet,w,double,s-1,Central eddy relative vorticity,Not vertical water velocity. Final processed surface w = Omega*(q11+q22); deeper profiles retain core-fit w.
+processed/eddy_dataset_processed.parquet,Omega,double,s-1,Outer Gaussian angular-velocity parameter,Processed surface may fall back to Omega0/interpolation. A recorded subsurface core centre may have missing Omega.
+processed/eddy_dataset_processed.parquet,q11,double,1,"Q[0,0] symmetric ellipse shape-matrix component",rho squared = q11*dx squared + 2*q12*dx*dy + q22*dy squared. Surface Q is processed before profile following.
+processed/eddy_dataset_processed.parquet,q12,double,1,"Q[0,1] = Q[1,0] symmetric shape-matrix component",Smaller eigenvalue corresponds to major-axis direction.
+processed/eddy_dataset_processed.parquet,q22,double,1,"Q[1,1] symmetric ellipse shape-matrix component",Aspect ratio = sqrt(lambda_max/lambda_min) for positive-definite Q.
+processed/eddy_dataset_processed.parquet,Rc,double,km,Outer Gaussian characteristic radius,Distinct from directional mean R. Can be missing despite available profile centre.
+processed/eddy_dataset_processed.parquet,psi0,double,m km s-1,Fitted Gaussian streamfunction amplitude in stored implementation units,Multiply by 1000 to express m2 s-1; numerical screening threshold is in stored units.
+processed/eddy_dataset_processed.parquet,AR,double,1,Major-to-minor ellipse axis ratio,Recalculated from processed Q; final processed filtering/gap filling described in README.
+processed/eddy_dataset_processed.parquet,R,double,km,Mean available radius to directional tangential-speed peak,Four model-grid directions attempted; unavailable directions omitted. Not Gaussian Rc.
+processed/eddy_dataset_processed.parquet,Age,int64,days,Total number of processed daily records in the track,"Constant within a track, including inserted days. Not elapsed age on the row date."
+processed/eddy_dataset_processed.parquet,Date,timestamp[ns],calendar timestamp,1990-01-01 plus Day days,Timestamp has no timezone offset; follows source model proleptic Gregorian calendar.
+processed/eddy_dataset_processed.parquet,fname,string,1,Original machine-local model-file path,Use basename and source archive on other installations; not a portable download URL.
+vertical_profiles/*.parquet,Eddy,int64,1,Track identifier,Final ID in processed/profile/tilt/analysis products; a different pre-processing namespace in tracked. Not a cross-release identifier.
+vertical_profiles/*.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+vertical_profiles/*.parquet,fnumber,int64,1,Integer suffix identifying source outer_avg_NNNNN.nc,Also encoded in partition filename; not a day or eddy identifier.
+vertical_profiles/*.parquet,Depth,double,m,Positive-down physical reference depth,"0 is seeded fitted surface; deeper levels use abs(z_r[150,150,1:]), not local sigma depths."
+vertical_profiles/*.parquet,z,int64,1,Profile reference-level index,"0 surface; 1 first subsurface target, etc. Matches static_grid.nc profile_level; not local native sigma coordinate."
+vertical_profiles/*.parquet,xc,double,km,Fitted centre model-x coordinate,Surface processing can smooth/interpolate parameters; profile centres are followed at each reference depth.
+vertical_profiles/*.parquet,yc,double,km,Fitted centre model-y coordinate,Model coordinates defined in static_grid.nc; not longitude/latitude.
+vertical_profiles/*.parquet,ic,int64,1,Nearest original model x-grid index for fitted centre,"Zero-based, transposed analysis-array orientation."
+vertical_profiles/*.parquet,jc,int64,1,Nearest original model y-grid index for fitted centre,"Zero-based, transposed analysis-array orientation."
+vertical_profiles/*.parquet,w,double,s-1,Central eddy relative vorticity,Not vertical water velocity. Final processed surface w = Omega*(q11+q22); deeper profiles retain core-fit w.
+vertical_profiles/*.parquet,q11,double,1,"Q[0,0] symmetric ellipse shape-matrix component",rho squared = q11*dx squared + 2*q12*dx*dy + q22*dy squared. Surface Q is processed before profile following.
+vertical_profiles/*.parquet,q12,double,1,"Q[0,1] = Q[1,0] symmetric shape-matrix component",Smaller eigenvalue corresponds to major-axis direction.
+vertical_profiles/*.parquet,q22,double,1,"Q[1,1] symmetric ellipse shape-matrix component",Aspect ratio = sqrt(lambda_max/lambda_min) for positive-definite Q.
+vertical_profiles/*.parquet,Omega0,double,s-1,Inner-core DOPPIO angular-velocity parameter,Missing by construction in the seeded surface row of profile tables; not retained in final processed surface table.
+vertical_profiles/*.parquet,Omega,double,s-1,Outer Gaussian angular-velocity parameter,Processed surface may fall back to Omega0/interpolation. A recorded subsurface core centre may have missing Omega.
+vertical_profiles/*.parquet,Rc,double,km,Outer Gaussian characteristic radius,Distinct from directional mean R. Can be missing despite available profile centre.
+vertical_profiles/*.parquet,psi0,double,m km s-1,Fitted Gaussian streamfunction amplitude in stored implementation units,Multiply by 1000 to express m2 s-1; numerical screening threshold is in stored units.
+vertical_profiles/*.parquet,R,double,km,Mean available radius to directional tangential-speed peak,Four model-grid directions attempted; unavailable directions omitted. Not Gaussian Rc.
+vertical_profiles_confirmed/profiles.parquet,Eddy,int64,1,Track identifier,Final ID in processed/profile/tilt/analysis products; a different pre-processing namespace in tracked. Not a cross-release identifier.
+vertical_profiles_confirmed/profiles.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+vertical_profiles_confirmed/profiles.parquet,fnumber,int64,1,Integer suffix identifying source outer_avg_NNNNN.nc,Also encoded in partition filename; not a day or eddy identifier.
+vertical_profiles_confirmed/profiles.parquet,Depth,double,m,Positive-down physical reference depth,"0 is seeded fitted surface; deeper levels use abs(z_r[150,150,1:]), not local sigma depths."
+vertical_profiles_confirmed/profiles.parquet,z,int64,1,Profile reference-level index,"0 surface; 1 first subsurface target, etc. Matches static_grid.nc profile_level; not local native sigma coordinate."
+vertical_profiles_confirmed/profiles.parquet,xc,double,km,Fitted centre model-x coordinate,Surface processing can smooth/interpolate parameters; profile centres are followed at each reference depth.
+vertical_profiles_confirmed/profiles.parquet,yc,double,km,Fitted centre model-y coordinate,Model coordinates defined in static_grid.nc; not longitude/latitude.
+vertical_profiles_confirmed/profiles.parquet,ic,int64,1,Nearest original model x-grid index for fitted centre,"Zero-based, transposed analysis-array orientation."
+vertical_profiles_confirmed/profiles.parquet,jc,int64,1,Nearest original model y-grid index for fitted centre,"Zero-based, transposed analysis-array orientation."
+vertical_profiles_confirmed/profiles.parquet,w,double,s-1,Central eddy relative vorticity,Not vertical water velocity. Final processed surface w = Omega*(q11+q22); deeper profiles retain core-fit w.
+vertical_profiles_confirmed/profiles.parquet,q11,double,1,"Q[0,0] symmetric ellipse shape-matrix component",rho squared = q11*dx squared + 2*q12*dx*dy + q22*dy squared. Surface Q is processed before profile following.
+vertical_profiles_confirmed/profiles.parquet,q12,double,1,"Q[0,1] = Q[1,0] symmetric shape-matrix component",Smaller eigenvalue corresponds to major-axis direction.
+vertical_profiles_confirmed/profiles.parquet,q22,double,1,"Q[1,1] symmetric ellipse shape-matrix component",Aspect ratio = sqrt(lambda_max/lambda_min) for positive-definite Q.
+vertical_profiles_confirmed/profiles.parquet,Omega0,double,s-1,Inner-core DOPPIO angular-velocity parameter,Missing by construction in the seeded surface row of profile tables; not retained in final processed surface table.
+vertical_profiles_confirmed/profiles.parquet,Omega,double,s-1,Outer Gaussian angular-velocity parameter,Processed surface may fall back to Omega0/interpolation. A recorded subsurface core centre may have missing Omega.
+vertical_profiles_confirmed/profiles.parquet,Rc,double,km,Outer Gaussian characteristic radius,Distinct from directional mean R. Can be missing despite available profile centre.
+vertical_profiles_confirmed/profiles.parquet,psi0,double,m km s-1,Fitted Gaussian streamfunction amplitude in stored implementation units,Multiply by 1000 to express m2 s-1; numerical screening threshold is in stored units.
+vertical_profiles_confirmed/profiles.parquet,R,double,km,Mean available radius to directional tangential-speed peak,Four model-grid directions attempted; unavailable directions omitted. Not Gaussian Rc.
+tilt/tilt_dataset.parquet,Eddy,int64,1,Track identifier,Final ID in processed/profile/tilt/analysis products; a different pre-processing namespace in tracked. Not a cross-release identifier.
+tilt/tilt_dataset.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+tilt/tilt_dataset.parquet,TiltDis,double,km,Delta fitted horizontal endpoint separation,"Deep-to-shallow axis geometry; NaN denotes unavailable estimate, not zero tilt."
+tilt/tilt_dataset.parquet,TiltDir,double,degree,Delta deep-to-shallow geographic compass bearing,"Clockwise from north, 0 north and 90 east; includes configured +20-degree bearing offset. Missing when unavailable."
+analysis/tilt_summary.parquet,n_tilt_rows,int64,1,Number of rows in tilt/tilt_dataset.parquet,Includes temporal-window evaluation rows with missing estimates.
+analysis/tilt_summary.parquet,n_valid_tilts,int64,1,Number of rows with finite TiltDis and TiltDir,"Finite-estimate count, before manuscript directional-distance filtering."
+analysis/tilt_summary.parquet,median_tilt_distance_km,double,km,Median finite Delta tilt distance,Computed over rows with both finite distance and direction.
+analysis/tilt_summary.parquet,mean_tilt_distance_km,double,km,Mean finite Delta tilt distance,"Eddy-day weighted, not equal-track weighted."
+analysis/profile_tilt_summaries.parquet,Eddy,int64,1,Track identifier,Final ID in processed/profile/tilt/analysis products; a different pre-processing namespace in tracked. Not a cross-release identifier.
+analysis/profile_tilt_summaries.parquet,Day,int64,days since 1990-01-01,Integer calendar-day index,Join final products with Eddy and Day together.
+analysis/profile_tilt_summaries.parquet,tilt_slope,double,km m-1,Linear slope of raw surface-relative radial offset against Depth,Raw per-profile diagnostic; not Delta axis slope. May be negative for curved profiles.
+analysis/profile_tilt_summaries.parquet,max_tilt_distance,double,km,Maximum radial centre offset from shallowest recorded profile level,Surface for confirmed profiles; not maximum pairwise separation or Delta TiltDis.
+analysis/profile_tilt_summaries.parquet,max_depth,double,m,Maximum contributing depth in raw profile-offset summary,Profile support can exceed the Delta 1000 m cap.
+z_r.npy,z_r,float64,m,"Signed native model-level physical depth, negative below sea level","Shape (272,317,30): x,y,native_level; uppermost native level first. First native level is not the fitted surface."
+static_grid.nc,x,float64,km,Cumulative model-x coordinate,ic and nic are zero-based indices into this vector.
+static_grid.nc,y,float64,km,Cumulative model-y coordinate,jc and njc are zero-based indices into this vector.
+static_grid.nc,lon_rho,float64,degrees_east,"Original rho-grid longitude in x,y order","Transposed from model y,x array."
+static_grid.nc,lat_rho,float64,degrees_north,"Original rho-grid latitude in x,y order",Negative south.
+static_grid.nc,h,float64,m,Original model bathymetric water depth,Positive downward; not eddy footprint-mean bathymetry.
+static_grid.nc,mask_rho,float64,1,Original model water/land mask,1 wet; 0 land.
+static_grid.nc,angle,float64,radian,"Full original model grid-angle array in x,y order",Provided for context; extraction uses the single pipeline_reference_angle instead.
+static_grid.nc,pipeline_reference_angle,float64,radian,"Single original model angle[0,0] used for extraction",Approximately -pi/9 radians. Input-to-model velocity rotation is specified in README.
+static_grid.nc,profile_level,int32,1,Profile z labels,0 surface plus 29 fixed subsurface reference levels.
+static_grid.nc,profile_depth,float64,m,Positive-down physical depth corresponding to profile_level,"0 plus abs(z_r[150,150,1:]); varies by reference label, not horizontal cell."
