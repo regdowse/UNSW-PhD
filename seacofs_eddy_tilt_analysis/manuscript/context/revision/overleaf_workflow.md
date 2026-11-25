@@ -16,6 +16,13 @@ committing and pushing the supplement's dataset-construction narrative. Baseline
 `b8fdfa9` was revised to `a327d2f` and pushed to supplement `main`. This permission
 was limited to that update; the read-only policy resumes for both text checkouts.
 
+Second one-off exception completed 2026-11-25: after reviewing the latexdiff,
+the user authorised applying its approved supplementary source and pushing it.
+Only main.tex changed, from baseline `dc9b106` to `f0bb769`, pushed to supplement
+`main`. The reviewed source omits rectangular preselection details and retains
+Q smoothing. This permission is now complete; the standard read-only policy
+again applies to both text checkouts.
+
 ## Synchronise on request
 
 1. When the user wants Codex to see updated text, they push Overleaf to GitHub

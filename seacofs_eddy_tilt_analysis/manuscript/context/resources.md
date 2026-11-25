@@ -148,3 +148,15 @@ checks resolve both ESP functions to the intended checkout. README's statement
 that the v0.1.1 dataset has not yet been generated is historical/stale relative
 to the successful run log. Audit/metadata saved in revision/outputs. No pipeline
 code/config or manuscript text was changed during this read-only review.
+
+### Published eddy dataset, verified 2026-11-25
+
+SEACOFS mesoscale eddy dataset for the East Australian Current region
+(1994–2019), version 1.0.0: https://doi.org/10.5281/zenodo.24486070.
+Zenodo API confirms submitted=true/state=done, publication date 2026-11-24,
+CC BY 4.0, creator Dowse, Reg (ORCID 0009-0000-6856-3115). One uploaded ZIP:
+seacofs_eddy_dataset_v1.0.0.zip, 672,582,360 bytes, server MD5
+f5975036bc7ea4311541333633d02e6e. Size matches the prepared final package;
+no download/content re-audit performed. Dataset is now published, superseding
+earlier reserved-DOI/upload-pending notes. Main-paper Open Research statement
+needs the user to replace its processed-dataset archive-pending wording.

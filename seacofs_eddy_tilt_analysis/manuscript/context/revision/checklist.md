@@ -381,3 +381,42 @@ VG/ESP extraction, retained track/profile population and dataset documentation
 links, with detailed workflow left in S1. Flagged Overleaf URL for removal and
 stale Open Research archive-pending statement for update after publication.
 No manuscript text edited, committed or pushed.
+
+## Dataset publication verified, 2026-11-25
+
+Public Zenodo API confirms dataset 10.5281/zenodo.24486070 is published,
+version 1.0.0, dated 2026-11-24, CC BY 4.0; ZIP size 672,582,360 bytes
+matches final local package. Metadata snapshot /tmp/eddy-dataset-published-24486070.json.
+No manuscript, release package or published metadata changed. Suggested dataset
+citation/Open Research wording supplied in conversation for user implementation.
+
+Requested text refresh 2026-11-25: main-paper: bbc45f0 (main, clean); supplement: 9a47149 (main, clean). Both fast-forward pulled from origin/main; no manuscript edits.
+
+Requested supplement refresh 2026-11-25: 9a47149 -> dc9b106, fast-forward
+from origin/main. Read updated draft for discussion of publication-level review:
+ESP inner/outer terminology, directional radius definition, missing outer-fit
+settings in Table S1, gap-filling scope, and ordered acceptance/termination
+conditions. No manuscript edits. Full code/paper cross-check remains pending.
+
+Publication-focused supplement audit 2026-11-25: see
+supplement_scientific_review.md. Verified archived ESP v1.1 checksum and
+computational-file identity, pipeline science/config unchanged since release,
+and tracked/processed source hashes. Discuss radius/normalised-velocity distinction,
+processed Q determinant, stage-specific vorticity provenance and effective sample
+requirements before drafting. User wants only text-only latexdiff after decisions;
+no clean final PDF. No manuscript/code/data edits or PDF generation.
+
+Supplement review delivered 2026-11-25: user retained Q smoothing/interpolation
+and accepted explanatory qualification. Separate proposed source plus requested
+text-only latexdiff against dc9b106 in ignored outputs/supplement-review-20261125/.
+Diff PDF 7 pages, compiled with citations/references resolved and no overfull
+boxes; one minor table-spacing warning. Citation keys/bibliography preserved,
+selected math/table pages visually checked. No clean PDF, manuscript edits,
+commit/push or code/data changes. See supplement_scientific_review.md.
+
+Approved supplement applied/pushed 2026-11-25 under explicit one-off permission.
+Reviewed source copied exactly to main.tex, baseline dc9b106 confirmed unchanged
+on origin before edit. Bibliography and assets unchanged. Clean-source LaTeX/
+BibTeX compile passed (6 pages), no unresolved references/citations or overfull
+boxes; one underfull table-spacing warning. Commit f0bb769 pushed to origin/main;
+working tree clean. User can pull into Overleaf. Standard read-only policy resumes.
