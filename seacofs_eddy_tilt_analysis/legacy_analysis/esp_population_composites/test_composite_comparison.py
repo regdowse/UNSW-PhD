@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'seacofs_eddy_dataset_modular'/'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite_comparison_tools as cc
 from test_breakdown_centrelines import analytic_backend,model
 from test_topographic_composite import fixture

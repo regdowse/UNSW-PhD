@@ -9,6 +9,31 @@ HEAD `bb1d6c6` (figure tags), with user's uncommitted `manuscript/info.md` updat
 This document records the investigation and decisions. Historical planning-only
 statements below are superseded by the current implementation status here.
 
+
+## Legacy dataset-code cleanup (2026-11-26)
+
+At the user's request, removed the old `UNSW-PhD/seacofs_eddy_dataset_modular/`
+working folder after extracting only the legacy workflows' required functions
+and their helpers into
+`legacy_analysis/legacy_seacofs_eddy_dataset_modular_functions/`. Source
+provenance and the exact retained definitions are recorded in that folder's
+README. The old unused notebooks remain available in Git history.
+
+Updated affected legacy imports, notebook discovery and tests to use the local
+subset; no dependency on the installed production pipeline remains. All 11
+extracted function bodies/signatures are identical to their originals. Changed
+notebook cells compile; saved outputs and metadata are preserved. With imports
+of the production package deliberately blocked, 17 tilt tests and 51 composite
+tests passed. One composite notebook test has a pre-existing `surface` NameError,
+confirmed in the unchanged source; two additional test modules could not import
+because pytest is not installed. No unrelated numerical fixes were included.
+
+The maintained pipeline remains in `/home/z5297792/ocean-eddy-pipeline`.
+Manuscript scientific code/text, scratch products and data paths are unchanged;
+no cache or dataset regeneration is required for this relocation. Existing
+notebook kernels should be restarted before using the new setup cells. External
+ESP, scientific-library and scratch-data requirements remain in place.
+
 ## Dataset refresh (2026-11-17)
 
 User requested clearing and rerunning all seven manuscript notebooks after the

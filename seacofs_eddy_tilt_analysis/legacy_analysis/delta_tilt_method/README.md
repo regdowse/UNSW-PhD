@@ -27,7 +27,7 @@ Both notebooks now exclude intervals not supported by the reference day **before
 
 The interpolation and upper-interval labels are retained: a profile from 0 to 200 m supplies intervals labelled 0 to 190 m. It therefore fails the unchanged 200 m minimum fit-label range and yields no estimate. The maximum-depth control remains an additional cap. Existing interpolation between fitted levels is retained, with no extrapolation outside the measured range.
 
-The main pipeline in `seacofs_eddy_dataset_modular` now uses this restriction too. Tests compare production against the notebook helper with varying depth ranges, shallow references and missing days. Regenerate the saved climatology by rerunning `compute_tilt` and then `analyse_tilt` with `parallel.skip_existing: false`; existing files do not change merely by updating the code. The production default remains five days with Gaussian sigma = one day, while the sensitivity experiment retains its explicitly configured seven-day windows.
+The maintained `ocean-eddy-pipeline` uses this restriction too. Legacy tests compare the frozen local helper subset in `../legacy_seacofs_eddy_dataset_modular_functions/` against the notebook helper with varying depth ranges, shallow references and missing days. Regenerate the saved climatology by rerunning `compute_tilt` and then `analyse_tilt` with `parallel.skip_existing: false`; existing files do not change merely by updating the code. The production default remains five days with Gaussian sigma = one day, while the sensitivity experiment retains its explicitly configured seven-day windows.
 
 ## Largest schematic differences
 

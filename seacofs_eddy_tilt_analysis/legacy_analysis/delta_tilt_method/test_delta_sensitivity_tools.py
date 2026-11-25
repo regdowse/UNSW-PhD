@@ -6,10 +6,10 @@ from pathlib import Path
 from unittest.mock import patch
 import numpy as np
 import pandas as pd
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'seacofs_eddy_dataset_modular' / 'src'))
-from seacofs_eddy_dataset.core.tilt import compute_weighted_tilt
-from seacofs_eddy_dataset.config import PipelineConfig
-from seacofs_eddy_dataset.stages import tilt as tilt_stage
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from legacy_seacofs_eddy_dataset_modular_functions.tilt import compute_weighted_tilt
+from legacy_seacofs_eddy_dataset_modular_functions.config import PipelineConfig
+from legacy_seacofs_eddy_dataset_modular_functions import tilt_stage
 from delta_sensitivity_tools import increments, fit_snapshot, lifetime, maximum_span, scan_projected_extent_differences
 
 

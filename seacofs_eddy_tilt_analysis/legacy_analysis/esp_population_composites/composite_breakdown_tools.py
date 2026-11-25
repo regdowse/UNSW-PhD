@@ -64,7 +64,7 @@ def fit_composite(X,Y,u_ave,v_ave,depths,counts,esp,*,transect_radius_km=30.,
     SI reconstruction. Output Rc,xc,yc,R are km, w/Omega0/Omega are s^-1 and
     psi0 is m^2/s. Return every requested depth, including failed fits.
     """
-    from seacofs_eddy_dataset.core.doppio import find_directional_radii
+    from legacy_seacofs_eddy_dataset_modular_functions.geometry import find_directional_radii
     X,Y=np.asarray(X,float),np.asarray(Y,float)
     depths=np.asarray(depths,float)
     if X.shape!=Y.shape or X.ndim!=2 or u_ave.shape!=(*X.shape,len(depths)) or v_ave.shape!=u_ave.shape or counts.shape!=u_ave.shape:

@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 import unittest
 import sys
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'seacofs_eddy_dataset_modular'/'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite_comparison_tools as ccomp
 import numpy as np
 import pandas as pd

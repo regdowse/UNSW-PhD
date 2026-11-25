@@ -10,7 +10,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
 
-sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'seacofs_eddy_dataset_modular'/'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite_breakdown_tools as cbt
 
 

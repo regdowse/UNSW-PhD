@@ -11,10 +11,6 @@ def ensure_dir(path: str | Path) -> Path:
     return directory
 
 
-def partition_path(root: str | Path, stage: str, key: str, suffix: str = ".parquet") -> Path:
-    return Path(root) / stage / f"{key}{suffix}"
-
-
 def write_partition(df: pd.DataFrame, path: str | Path) -> Path:
     out_path = Path(path)
     ensure_dir(out_path.parent)
@@ -22,10 +18,3 @@ def write_partition(df: pd.DataFrame, path: str | Path) -> Path:
     df.to_parquet(tmp_path, index=False)
     tmp_path.replace(out_path)
     return out_path
-
-
-def read_partitions(paths: list[str | Path]) -> pd.DataFrame:
-    frames = [pd.read_parquet(path) for path in paths]
-    if not frames:
-        return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)

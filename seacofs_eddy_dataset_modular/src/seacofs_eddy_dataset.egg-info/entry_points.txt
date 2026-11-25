@@ -1,2 +1,0 @@
-[console_scripts]
-seacofs-eddy = seacofs_eddy_dataset.cli:main

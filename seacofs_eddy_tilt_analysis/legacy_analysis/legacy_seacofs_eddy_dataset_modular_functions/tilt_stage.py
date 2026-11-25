@@ -3,9 +3,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from seacofs_eddy_dataset.config import PipelineConfig
-from seacofs_eddy_dataset.core.tilt import compute_weighted_tilt, summarise_tilt
-from seacofs_eddy_dataset.io import write_partition
+from .config import PipelineConfig
+from .tilt import compute_weighted_tilt, summarise_tilt
+from .io import write_partition
 
 
 def _profiles_path(config: PipelineConfig):

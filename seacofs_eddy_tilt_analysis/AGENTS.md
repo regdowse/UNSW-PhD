@@ -23,10 +23,19 @@ separate. See `manuscript/context/revision/overleaf_workflow.md`.
   a reference snapshot. Consult/adapt it as needed; update legacy code only when
   needed for an explicit task. Do not bulk-repair notebook paths or regenerate
   its caches as part of the relocation.
+- Dataset-code cleanup (2026-11-26): the old sibling
+  `seacofs_eddy_dataset_modular/` has been removed. Only the functions used by
+  legacy workflows/tests are frozen under
+  `legacy_analysis/legacy_seacofs_eddy_dataset_modular_functions/`; read its
+  README for provenance and checks. The maintained pipeline is now the separate
+  `/home/z5297792/ocean-eddy-pipeline` repository. Legacy code uses the frozen
+  subset, not runtime imports from that repository. The older AVISO workflow
+  is archived on its `archive/aviso-tasman-sea-1994-2019` branch.
 - The historical workflow paths below (e.g. `census/`, `seacofs_tilt_tools.py`)
   now live under `legacy_analysis/`. References to sibling dataset projects such
-  as `../seacofs_eddy_dataset_modular/` remain relative to this AGENTS.md directory,
-  not relative to `legacy_analysis/`. Absolute scratch input/cache paths are unchanged.
+  as `../seacofs_eddy_dataset_modular/` in historical notes describe the old layout;
+  use the frozen subset above for current legacy imports. Absolute scratch
+  input/cache paths are unchanged.
 - Keep new manuscript code independent of legacy imports. No archiving of the
   base datasets or scratch products was performed.
 - Preserve the original tagged manuscript figures' plotting style for every
@@ -67,15 +76,15 @@ eddy geometry, lifecycle and vertical velocity. Case studies and ESP composites
 help interpret population patterns. Associations and mechanistic consistency
 are not automatically causal evidence.
 
-The upstream sibling `../seacofs_eddy_dataset_modular/` performs:
+The maintained upstream `/home/z5297792/ocean-eddy-pipeline` performs:
 
 `detect_nencioli → fit_doppio_surface → track_eddies → process_tracked_dataset
 → compute_vertical_profiles → qc_vertical_profiles → compute_tilt → analyse_tilt`.
 
 Its `src/seacofs_eddy_dataset/core/` holds science kernels; `stages/` orchestrates
 I/O and processing. Read its README, `config/local.yaml` and relevant kernel
-when a request changes dataset construction. `../aviso_eddy_dataset/` is a
-separate observational workflow; do not interchange its inputs with SEACOFS.
+when a request changes dataset construction. The archived AVISO observational
+workflow uses separate inputs; do not interchange them with SEACOFS.
 
 ## Data contracts and conventions that must survive edits
 
