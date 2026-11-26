@@ -6,6 +6,17 @@ Dataset version 1.0.0.
 **Licence:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).  
 **Dataset DOI:** [10.5281/zenodo.24486070](https://doi.org/10.5281/zenodo.24486070).
 
+**Producing software:** [Ocean Eddy Pipeline v0.1.1](https://doi.org/10.5281/zenodo.24457378).
+
+**Code:** [Tagged v0.1.1 source](https://github.com/regdowse/ocean-eddy-pipeline/tree/v0.1.1) · [Maintained repository](https://github.com/regdowse/ocean-eddy-pipeline).
+
+The dataset and pipeline software are separate publications with independent
+versions and DOIs: dataset **1.0.0** and producing software **0.1.1**. Cite the
+dataset DOI when using these tables, and the producing software and ESP versions
+when describing their construction. The maintained repository may contain later
+development and documentation updates; the software DOI and tagged source above
+identify the archived generation implementation.
+
 This dataset contains velocity-defined mesoscale eddy detections, tracked and
 processed surface fits, fitted vertical centre profiles, and Delta tilt estimates
 for the East Australian Current region. It was extracted from daily SEACOFS model

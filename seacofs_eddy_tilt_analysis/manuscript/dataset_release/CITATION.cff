@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-message: "Please cite this dataset using the metadata below."
+message: "Please cite this dataset using the metadata below. Cite the producing pipeline and ESP separately when describing construction, as documented in the README."
 type: dataset
 title: "SEACOFS mesoscale eddy dataset"
 authors:
@@ -13,3 +13,21 @@ abstract: >-
   Velocity-defined mesoscale eddy detections, processed surface tracks,
   fitted vertical profiles and Delta tilt estimates for the East Australian
   Current region in daily SEACOFS model output, 1994-2019.
+references:
+  - type: software
+    title: "Ocean Eddy Pipeline: SEACOFS application"
+    authors:
+      - family-names: Dowse
+        given-names: Reg
+    version: 0.1.1
+    doi: 10.5281/zenodo.24457378
+    repository-code: "https://github.com/regdowse/ocean-eddy-pipeline"
+    url: "https://github.com/regdowse/ocean-eddy-pipeline/tree/v0.1.1"
+  - type: software
+    title: "Elliptical Streamfunction Parametrisation (ESP)"
+    authors:
+      - family-names: Dowse
+        given-names: Reg
+    version: v1.1
+    doi: 10.5281/zenodo.24182671
+    repository-code: "https://github.com/regdowse/elliptical_streamfunction_parametrisation"
